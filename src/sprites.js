@@ -1,0 +1,313 @@
+// L1 -- may import L0 (util, state, data).
+//
+// Compiles the character-grid pixel maps in data/shapes.js into ONE texture atlas at boot.
+//
+// Three things make this fast enough to never think about again:
+//  1. The whole atlas is built as a single ImageData through a Uint32Array view and written with
+//     one putImageData -- not one putImageData per sprite.
+//  2. Every variant is BAKED, never applied at draw time. Left-facing sprites are rasterised
+//     mirrored, and hit-flash sprites are rasterised pre-whitened. So drawing an entity is always
+//     one drawImage with no save/restore, no ctx.scale(-1,1) and no ctx.filter.
+//  3. Frame lookup in the hot path is an array index, never a string or a Map get.
+
+import { SHAPES, PALETTES } from './data/art.js';
+import { FONT, FONT_COLORS, GLYPH_W, GLYPH_H, B32 } from './data/font.js';
+
+const ATLAS_W = 1024;
+const ATLAS_H = 1024;
+
+export const ATLAS = document.createElement('canvas');
+export const FRAMES = [];          // { sx, sy, w, h, ox, oy } indexed by numeric frame id
+
+const registry = new Map();        // "shape:palette" -> { base, nf, w, h, ox, oy }
+const fontIndex = new Map();       // "color" -> base frame id of that colour's glyph block
+const glyphOrder = Object.keys(FONT);
+const glyphSlot = new Map(glyphOrder.map((ch, i) => [ch, i]));
+
+let built = false;
+
+// '.' is transparent; '1'-'9' are 1-9 and 'a'-'v' are 10-31, so a palette can hold 31 colours.
+const CHARMAP = new Int8Array(128).fill(0);
+for (let i = 1; i <= 9; i++) CHARMAP[48 + i] = i;
+for (let i = 0; i < 22; i++) CHARMAP[97 + i] = 10 + i;
+
+/** '#rrggbb' -> packed little-endian 0xAABBGGRR, which is what a Uint32Array view expects. */
+function packColor(hex, alpha = 255) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  return ((alpha << 24) | (b << 16) | (g << 8) | r) >>> 0;
+}
+
+function lerpToWhite(hex, t) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.round(((n >> 16) & 255) + (255 - ((n >> 16) & 255)) * t);
+  const g = Math.round(((n >> 8) & 255) + (255 - ((n >> 8) & 255)) * t);
+  const b = Math.round((n & 255) + (255 - (n & 255)) * t);
+  return ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
+}
+
+/** Build a palette lookup as packed ints. `flash` whitens everything but keeps the silhouette. */
+function packPalette(name, flash) {
+  const src = PALETTES[name];
+  if (!src) throw new Error(`sprites: unknown palette "${name}"`);
+  const out = new Uint32Array(32);
+  for (let i = 1; i < src.length; i++) {
+    out[i] = flash ? lerpToWhite(src[i], 0.85) : packColor(src[i]);
+  }
+  return out;
+}
+
+// --- Shelf packer -----------------------------------------------------------
+// Sprites are tiny and similar in height, so a shelf packer wastes almost nothing and is 20 lines.
+
+function shelfPacker(w, h) {
+  let shelfY = 0, shelfH = 0, penX = 0;
+  return function alloc(iw, ih) {
+    if (penX + iw > w) { shelfY += shelfH; penX = 0; shelfH = 0; }
+    if (shelfY + ih > h) throw new Error('sprites: atlas full -- raise ATLAS_W/ATLAS_H');
+    const r = { sx: penX, sy: shelfY };
+    penX += iw;
+    if (ih > shelfH) shelfH = ih;
+    return r;
+  };
+}
+
+// --- Registration -----------------------------------------------------------
+
+/**
+ * Declare that a (shape, palette) pair is needed. Must be called before buildAtlas().
+ * Returns a handle whose `base` is only valid after the build.
+ *
+ * Frame ids for a pair are laid out so the hot path can do plain arithmetic:
+ *     id = base + flash * (nf * 2) + frame * 2 + dir      (dir: 0 = left, 1 = right)
+ */
+export function registerSprite(shape, palette, rot = 0) {
+  const key = `${shape}:${palette}`;
+  let e = registry.get(key);
+  if (!e) {
+    const s = SHAPES[shape];
+    if (!s) throw new Error(`sprites: unknown shape "${shape}"`);
+    // rot = 0 means the usual left/right pair. rot = N bakes N evenly spaced angles instead,
+    // which is how a leaf missile or a boomerang can point anywhere without a ctx transform.
+    e = {
+      key, shape, palette, base: -1,
+      nf: s.frames.length, nd: rot || 2, rot,
+      w: s.w, h: s.h, ox: s.ox, oy: s.oy,
+    };
+    registry.set(key, e);
+  } else if (rot && e.rot !== rot) {
+    throw new Error(`sprites: "${key}" registered with conflicting rotation counts`);
+  }
+  return e;
+}
+
+/** Direction slot count for a registered pair: 2 for left/right, or the baked rotation count. */
+export function spriteDirs(shape, palette) {
+  const e = registry.get(`${shape}:${palette}`);
+  return e ? e.nd : 2;
+}
+
+/** Map a heading in radians to a baked rotation slot. `nd` must be a power of two. */
+export function angleSlot(angle, nd) {
+  return Math.round(angle / (Math.PI * 2) * nd) & (nd - 1);
+}
+
+/** Look up a registered pair after the build. Throws rather than silently drawing the wrong thing. */
+export function spriteBase(shape, palette) {
+  const e = registry.get(`${shape}:${palette}`);
+  if (!e || e.base < 0) throw new Error(`sprites: "${shape}:${palette}" was not registered before buildAtlas()`);
+  return e.base;
+}
+
+export function spriteInfo(shape, palette) {
+  return registry.get(`${shape}:${palette}`);
+}
+
+// --- The compiler -----------------------------------------------------------
+
+export function buildAtlas() {
+  if (built) return;
+  const t0 = performance.now();
+
+  ATLAS.width = ATLAS_W;
+  ATLAS.height = ATLAS_H;
+  const actx = ATLAS.getContext('2d', { willReadFrequently: false });
+  const img = actx.createImageData(ATLAS_W, ATLAS_H);
+  const buf = new Uint32Array(img.data.buffer);
+  const alloc = shelfPacker(ATLAS_W, ATLAS_H);
+
+  for (const e of registry.values()) {
+    const shape = SHAPES[e.shape];
+    e.base = FRAMES.length;
+
+    // A rotated sprite needs a square box big enough for its diagonal, or the corners clip.
+    const box = e.rot ? Math.ceil(Math.hypot(shape.w, shape.h) / 2) * 2 : 0;
+
+    for (let flash = 0; flash < 2; flash++) {
+      const pal = packPalette(e.palette, flash === 1);
+      for (let f = 0; f < e.nf; f++) {
+        const rows = shape.frames[f];
+        for (let d = 0; d < e.nd; d++) {
+          if (e.rot) {
+            const { sx, sy } = alloc(box, box);
+            blitRot(buf, rows, shape, sx, sy, pal, (d / e.nd) * Math.PI * 2, box);
+            FRAMES.push({ sx, sy, w: box, h: box, ox: box >> 1, oy: box >> 1 });
+          } else {
+            const mirror = d === 0;                 // d 0 = left = mirrored source
+            const { sx, sy } = alloc(shape.w, shape.h);
+            blit(buf, rows, shape.w, shape.h, sx, sy, pal, mirror);
+            FRAMES.push({
+              sx, sy, w: shape.w, h: shape.h,
+              // Mirroring flips the origin too, or a flipped sprite drifts sideways as it turns.
+              ox: mirror ? shape.w - 1 - shape.ox : shape.ox,
+              oy: shape.oy,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  buildFont(buf, alloc);
+  buildShadow(buf, alloc);
+
+  actx.putImageData(img, 0, 0);
+  built = true;
+
+  const ms = performance.now() - t0;
+  if (FRAMES.length > 4000) console.warn(`sprites: ${FRAMES.length} frames is a lot`);
+  return { frames: FRAMES.length, ms };
+}
+
+/** Rasterise one pixel-map frame into the atlas buffer. Rows may omit trailing transparency. */
+function blit(buf, rows, w, h, dx, dy, pal, mirror) {
+  for (let y = 0; y < h; y++) {
+    const row = rows[y] || '';
+    const len = row.length;
+    const dst = (dy + y) * ATLAS_W + dx;
+    for (let x = 0; x < w; x++) {
+      const srcX = mirror ? w - 1 - x : x;
+      if (srcX >= len) continue;                     // padded transparency
+      const idx = CHARMAP[row.charCodeAt(srcX)] | 0;
+      if (idx) buf[dst + x] = pal[idx];
+    }
+  }
+}
+
+/**
+ * Rasterise one frame rotated by `angle` into a `box` x `box` cell. Nearest-neighbour by inverse
+ * mapping -- chunky, which is exactly right for pixel art, and it happens once at boot.
+ */
+function blitRot(buf, rows, shape, dx, dy, pal, angle, box) {
+  const cos = Math.cos(angle), sin = Math.sin(angle);
+  const c = box / 2;
+  for (let y = 0; y < box; y++) {
+    const oy = y + 0.5 - c;
+    const dst = (dy + y) * ATLAS_W + dx;
+    for (let x = 0; x < box; x++) {
+      const ox = x + 0.5 - c;
+      // Inverse-rotate the destination offset back into source space.
+      const u = ox * cos + oy * sin + shape.ox;
+      const v = -ox * sin + oy * cos + shape.oy;
+      const sxI = Math.floor(u), syI = Math.floor(v);
+      if (sxI < 0 || syI < 0 || sxI >= shape.w || syI >= shape.h) continue;
+      const row = rows[syI] || '';
+      if (sxI >= row.length) continue;
+      const idx = CHARMAP[row.charCodeAt(sxI)] | 0;
+      if (idx) buf[dst + x] = pal[idx];
+    }
+  }
+}
+
+// --- Font -------------------------------------------------------------------
+
+function buildFont(buf, alloc) {
+  for (const [name, hex] of Object.entries(FONT_COLORS)) {
+    const color = packColor(hex);
+    fontIndex.set(name, FRAMES.length);
+    for (const ch of glyphOrder) {
+      const enc = FONT[ch];
+      const { sx, sy } = alloc(GLYPH_W, GLYPH_H);
+      for (let y = 0; y < GLYPH_H; y++) {
+        const bits = B32.indexOf(enc[y]);
+        const dst = (sy + y) * ATLAS_W + sx;
+        for (let x = 0; x < GLYPH_W; x++) {
+          if (bits & (1 << (GLYPH_W - 1 - x))) buf[dst + x] = color;
+        }
+      }
+      FRAMES.push({ sx, sy, w: GLYPH_W, h: GLYPH_H, ox: 0, oy: 0 });
+    }
+  }
+}
+
+// --- Shared shadow ----------------------------------------------------------
+// One translucent ellipse under every entity, rather than a shadow variant per sprite.
+
+export let SHADOW = -1;
+
+function buildShadow(buf, alloc) {
+  const w = 12, h = 5;
+  const { sx, sy } = alloc(w, h);
+  const col = packColor('#000000', 70);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const dx = (x - (w - 1) / 2) / (w / 2), dy = (y - (h - 1) / 2) / (h / 2);
+      if (dx * dx + dy * dy <= 1) buf[(sy + y) * ATLAS_W + sx + x] = col;
+    }
+  }
+  SHADOW = FRAMES.length;
+  FRAMES.push({ sx, sy, w, h, ox: w >> 1, oy: h >> 1 });
+}
+
+// --- Drawing ----------------------------------------------------------------
+
+/** Draw a registered frame with its origin at (x, y). One drawImage, no state changes. */
+export function drawSprite(ctx, id, x, y) {
+  const f = FRAMES[id];
+  if (!f) return;
+  ctx.drawImage(ATLAS, f.sx, f.sy, f.w, f.h, (x - f.ox) | 0, (y - f.oy) | 0, f.w, f.h);
+}
+
+/** Draw a frame scaled about its origin -- used for pop/scale FX only, not the bulk entities. */
+export function drawSpriteScaled(ctx, id, x, y, k) {
+  const f = FRAMES[id];
+  if (!f) return;
+  const w = f.w * k, h = f.h * k;
+  ctx.drawImage(ATLAS, f.sx, f.sy, f.w, f.h, Math.round(x - f.ox * k), Math.round(y - f.oy * k), w, h);
+}
+
+export function drawShadow(ctx, x, y, k = 1) {
+  if (k === 1) drawSprite(ctx, SHADOW, x, y);
+  else drawSpriteScaled(ctx, SHADOW, x, y, k);
+}
+
+// --- Text -------------------------------------------------------------------
+
+export const textWidth = (str, spacing = 1) => str.length * (GLYPH_W + spacing) - spacing;
+
+/**
+ * Draw a string of the pixel font. Unknown characters fall back to space, and lowercase maps to
+ * uppercase so callers never have to think about it.
+ */
+export function drawText(ctx, str, x, y, color = 'white', spacing = 1) {
+  const base = fontIndex.get(color);
+  if (base === undefined) return;
+  let px = x | 0;
+  const py = y | 0;
+  for (let i = 0; i < str.length; i++) {
+    let ch = str[i];
+    if (!glyphSlot.has(ch)) {
+      const up = ch.toUpperCase();
+      ch = glyphSlot.has(up) ? up : ' ';
+    }
+    const f = FRAMES[base + glyphSlot.get(ch)];
+    // Skip blank glyphs entirely -- a space is a third of typical text.
+    if (ch !== ' ') ctx.drawImage(ATLAS, f.sx, f.sy, f.w, f.h, px, py, f.w, f.h);
+    px += GLYPH_W + spacing;
+  }
+  return px - x - spacing;
+}
+
+export function drawTextCentered(ctx, str, cx, y, color = 'white', spacing = 1) {
+  drawText(ctx, str, Math.round(cx - textWidth(str, spacing) / 2), y, color, spacing);
+}

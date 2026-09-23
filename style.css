@@ -1,0 +1,62 @@
+/* Letterbox shell. The canvas is sized entirely from JS (render.js resize()) so that every
+   game pixel maps to an integer number of DEVICE pixels -- see the note in render.js. */
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #0a0a12;
+  color: #e8f4ff;
+  font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+}
+
+body {
+  display: grid;
+  place-items: center;
+}
+
+#stage {
+  position: relative;
+  line-height: 0;          /* kills the inline-element descender gap under the canvas */
+}
+
+#view {
+  display: block;
+  image-rendering: pixelated;          /* belt and braces; JS already guarantees integer scale */
+  image-rendering: crisp-edges;
+  background: #0a0a12;
+}
+
+/* DOM screens (title, select, shop, level-up, pause, summary) overlay the canvas and are
+   positioned/scaled to match it exactly; render.js sets --scale and the pixel box. */
+#screens {
+  position: absolute;
+  inset: 0;
+  line-height: normal;
+  pointer-events: none;
+}
+
+#screens > * { pointer-events: auto; }
+
+.fatal {
+  max-width: 44rem;
+  margin: 4rem auto;
+  padding: 2rem;
+  line-height: 1.5;
+  background: #141425;
+  border: 2px solid #3a6bd0;
+  border-radius: 8px;
+}
+.fatal h1 { margin-top: 0; color: #77b4ff; }
+.fatal pre {
+  background: #0a0a12;
+  padding: 0.6rem 0.9rem;
+  border-radius: 4px;
+  border-left: 3px solid #5fd35f;
+  overflow-x: auto;
+}
+.fatal code { color: #ffd166; }

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Poke Survivor</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <noscript><div class="fatal">This game needs JavaScript enabled.</div></noscript>
+
+  <!-- file:// guard: ES modules cannot load over file://, which fails silently as a black page. -->
+  <div id="filewarn" class="fatal" hidden>
+    <h1>Serve this over HTTP</h1>
+    <p>You opened this file directly from disk (<code>file://</code>). Browsers refuse to load
+       ES modules that way, so the game cannot start.</p>
+    <p>Open a terminal in this folder and run <b>one</b> of these:</p>
+    <pre>npx serve .</pre>
+    <pre>python -m http.server 8000</pre>
+    <p>Then visit the address it prints (usually <code>http://localhost:3000</code>
+       or <code>http://localhost:8000</code>).</p>
+  </div>
+
+  <div id="stage">
+    <canvas id="view"></canvas>
+    <div id="screens"></div>
+  </div>
+
+  <script>
+    if (location.protocol === 'file:') {
+      document.getElementById('filewarn').hidden = false;
+      document.getElementById('stage').hidden = true;
+    }
+  </script>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
