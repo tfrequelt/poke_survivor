@@ -12,7 +12,7 @@ import { ctx, VW, VH } from './render.js';
 import {
   drawText, drawTextCentered, textWidth, drawSprite, drawSpriteScaled, drawShadow,
 } from './sprites.js';
-import { clamp } from './util.js';
+import { clamp, hash2 } from './util.js';
 
 export const ui = {
   cursor: 0,        // selected card index
@@ -136,32 +136,44 @@ function drawFooter() {
 
 // --- Title ------------------------------------------------------------------
 
+const HORIZON = 196;        // where the grass starts -- the starters stand ON this line
+
 export function drawTitle(starters, t) {
-  ctx.fillStyle = '#12202a';
-  ctx.fillRect(0, 0, VW, VH);
-
-  // A soft horizon so the title screen is not a flat rectangle.
-  ctx.fillStyle = '#1b3448';
-  ctx.fillRect(0, 180, VW, VH - 180);
+  // Sky, distant treeline, then grass. The starters' feet sit on the horizon so they read as
+  // standing in the world rather than floating in front of a backdrop.
+  ctx.fillStyle = '#16283a';
+  ctx.fillRect(0, 0, VW, HORIZON);
+  ctx.fillStyle = '#1d4430';
+  ctx.fillRect(0, HORIZON - 10, VW, 10);
   ctx.fillStyle = '#2f7a3a';
-  ctx.fillRect(0, 232, VW, VH - 232);
+  ctx.fillRect(0, HORIZON, VW, VH - HORIZON);
 
-  drawTextCentered(ctx, 'POKE SURVIVOR', VW / 2, 74, 'gold');
-  drawTextCentered(ctx, 'SURVIVE TWENTY MINUTES', VW / 2, 92, 'dim');
+  // Scattered tufts, same deterministic hash the in-game ground uses.
+  for (let i = 0; i < 90; i++) {
+    const h = hash2(i * 7 + 1, 3);
+    const x = (h * VW) | 0;
+    const y = (HORIZON + hash2(i, 11) * (VH - HORIZON)) | 0;
+    ctx.fillStyle = h > 0.5 ? '#3f9a4a' : '#276a32';
+    ctx.fillRect(x, y, 2, 1);
+  }
 
-  // The three starters lined up, bobbing out of phase.
+  drawTextCentered(ctx, 'POKE SURVIVOR', VW / 2, 56, 'gold');
+  drawTextCentered(ctx, 'SURVIVE TWENTY MINUTES', VW / 2, 74, 'dim');
+
+  // The three starters lined up on the horizon, bobbing out of phase.
   for (let i = 0; i < starters.length; i++) {
     const c = starters[i];
-    const x = VW / 2 + (i - 1) * 76;
-    const bob = Math.sin(t * 2.2 + i * 1.5) * 3;
-    drawShadow(ctx, x, 214, 1.6);
-    drawSpriteScaled(ctx, c.sprId + (((t * 5 + i) | 0) & 1) * 2 + 1, x, 214 + bob, 2);
+    const x = VW / 2 + (i - 1) * 78;
+    const bob = Math.sin(t * 2.2 + i * 1.5) * 2;
+    drawShadow(ctx, x, HORIZON + 2, 1.7);
+    drawSpriteScaled(ctx, c.sprId + (((t * 5 + i) | 0) & 1) * 2 + 1, x, HORIZON + bob, 2);
   }
 
-  if (((t * 1.6) | 0) & 1) {
-    drawTextCentered(ctx, 'PRESS ANY KEY', VW / 2, 280, 'white');
+  // Visible most of the time rather than a hard 50/50 blink, which reads as broken.
+  if ((t * 1.4) % 1 < 0.72) {
+    drawTextCentered(ctx, 'PRESS ANY KEY', VW / 2, 268, 'white');
   }
-  drawTextCentered(ctx, 'WASD MOVE    ESC PAUSE    F FULLSCREEN', VW / 2, VH - 18, 'dim');
+  drawTextCentered(ctx, 'WASD MOVE    SPACE ABILITY    ESC PAUSE    F FULLSCREEN', VW / 2, VH - 16, 'dim');
 }
 
 // --- Character select -------------------------------------------------------

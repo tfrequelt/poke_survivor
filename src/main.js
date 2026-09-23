@@ -4,7 +4,7 @@
 
 import { G, MODES, SIM_MODES, setMode, resetRunState } from './state.js';
 import { mulberry32, formatTime } from './util.js';
-import { initInput, endFrame, onKey, consumeAnyKey } from './input.js';
+import { initInput, endFrame, onKey } from './input.js';
 import {
   initRender, ctx, present, drawBackground, drawDebugOverlay,
   updateCamera, snapCamera, toScreenX, toScreenY, addShake, scale, VW, VH,
@@ -106,6 +106,7 @@ function boot() {
     window.__dbg = {
       G,
       stress: (n) => stressSpawn(n),
+      menuTime: () => menuTime,
       perf: () => ({
         fps: +fps.toFixed(1), frameMs: +frameMs.toFixed(3),
         simMs: +simMs.toFixed(3), drawMs: +drawMs.toFixed(3),
