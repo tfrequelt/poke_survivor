@@ -205,7 +205,7 @@ export function drawTitle(starters, t) {
     ctx.fillRect(x, y, 2, 1);
   }
 
-  drawLogo(ctx, 'POKE SURVIVOR', VW / 2, 40, 3, 'gold', 'dark');
+  drawLogo(ctx, 'POKEMON DRACULA EDITION', VW / 2, 40, 3, 'gold', 'dark');
   drawTextCentered(ctx, 'SURVIVE TWENTY MINUTES', VW / 2, 74, 'white');
 
   // A pokeball either side of the subtitle.

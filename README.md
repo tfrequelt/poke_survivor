@@ -1,4 +1,4 @@
-# Poke Survivor
+# Poke Dracula Edition
 
 ## Credits
 
