@@ -25,6 +25,7 @@ python -m http.server 8000  # -> http://localhost:8000
 | `R` | Reroll on level-up, restart otherwise |
 | `B` / `S` | Banish / skip a level-up (press `B` twice to confirm) |
 | `Q` (paused / after a run) | Back to partner select |
+| `M` | Mute |
 | `F` | Fullscreen -- 640x360 is an exact 3x fit for 1080p |
 
 The game opens on a title screen; any key goes to partner select, where you pick Wooper, Eevee or
@@ -51,6 +52,31 @@ guaranteed to appear within three level-ups; the second unlocks when you evolve 
 
 Both abilities level 1-5 through further level-up draws. The HUD shows each slot's icon, its key,
 and a cooldown that drains as it recharges.
+
+## Pickups and systems
+
+Enemies, destructible scenery and mini-bosses drop items you walk over:
+
+| Item | Effect |
+|---|---|
+| **Magnet** | Vacuums every XP orb and coin on the field |
+| **Sitrus Berry** | Heals 30% of max HP |
+| **Blast Seed** | Clears the screen |
+| **Treasure** | Evolves a maxed weapon (if you hold its paired item), and pays gold |
+
+XP orbs come in four tiers by value, differing in size and colour -- a Cragfist visibly out-drops
+a Rattail. Mini-bosses arrive at 5:00, 10:00 and 15:00, with the final boss at 20:00.
+
+**Weapon evolution:** take a weapon to max level, hold its paired passive item, then open a
+treasure chest. Mud Shot + Mystic Water becomes Quagmire; Swift Star + Silk Scarf becomes Star
+Barrage; Leaf Arrow + Sharp Beak becomes Spirit Shackle.
+
+## Audio
+
+All music and sound is synthesised at runtime with Web Audio -- there are no audio files. A title
+theme, a route theme that layers up as the run escalates, a boss theme, an evolution fanfare and
+~20 sound effects. Browsers require a real keypress before audio can start, so the first key you
+press on the title screen unlocks it.
 
 ## Debug keys
 

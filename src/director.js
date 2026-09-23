@@ -7,7 +7,7 @@
 import { G } from './state.js';
 import { enemies } from './world.js';
 import { ENEMIES } from './data/enemies.js';
-import { spawnAtRing, spawnEnemy, SPAWN_MIN, SPAWN_MAX } from './enemies.js';
+import { spawnAtRing, spawnEnemy, combatantCount, SPAWN_MIN, SPAWN_MAX } from './enemies.js';
 import { pickWeighted, TAU, clamp } from './util.js';
 
 export const RUN_LENGTH = 20 * 60;        // seconds; the boss spawns at 20:00
@@ -113,7 +113,7 @@ export function updateDirector(dt) {
     spawnDebt += c.sps * SPAWN_INTERVAL;
     const want = Math.floor(spawnDebt);
     spawnDebt -= want;
-    const room = Math.max(0, c.cap - enemies.length);
+    const room = Math.max(0, c.cap - combatantCount());
     const n = Math.min(want, room);
     for (let i = 0; i < n; i++) {
       const def = rollEnemy(m, rng);

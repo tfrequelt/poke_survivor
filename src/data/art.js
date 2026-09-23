@@ -11,15 +11,15 @@ export { SHAPES } from './shapes.js';
 
 export const PALETTES = {
   // --- starters ---
-  wooper:   ['.', '#16395e', '#3a7fb8', '#69b8e0', '#a5dcf2', '#101018', '#e07ab8', '#ffffff', '#2a5f8a'],
-  quagsire: ['.', '#13324f', '#2f6b96', '#58a0c0', '#93cade', '#101018', '#c46aa8', '#ffffff', '#24506f'],
+  wooper:   ['.', '#16395e', '#3a7fb8', '#69b8e0', '#a5dcf2', '#101018', '#b968c4', '#ffffff', '#2a5f8a'],
+  quagsire: ['.', '#13324f', '#2f6b96', '#58a0c0', '#93cade', '#101018', '#a862b4', '#ffffff', '#24506f'],
   eevee:    ['.', '#3b2415', '#7a4a24', '#b07838', '#f0dcae', '#101018', '#e0a060', '#ffffff', '#5a3418'],
   vaporeon: ['.', '#153a52', '#2f7fa8', '#5ab8d8', '#cfeaf2', '#101018', '#7ad0e0', '#ffffff', '#24607f'],
   jolteon:  ['.', '#4a3a10', '#b09020', '#f0d840', '#fff4a8', '#101018', '#ffffff', '#ffffff', '#6a5418'],
   umbreon:  ['.', '#101018', '#22222e', '#3a3a4a', '#f0d040', '#f0d040', '#f0d040', '#ffffff', '#18181f'],
-  rowlet:   ['.', '#1b3a18', '#3f6b2a', '#74b44a', '#f2f0dc', '#101018', '#e8a02c', '#ffffff', '#4a7a2a'],
-  dartrix:  ['.', '#18331a', '#38602c', '#5f9c44', '#e8e6d0', '#101018', '#e09428', '#ffffff', '#3d6a26'],
-  decidueye:['.', '#15281c', '#2f4a30', '#4a7a44', '#e0dcc4', '#101018', '#d4782a', '#ffffff', '#7a3a2a'],
+  rowlet:   ['.', '#33241a', '#6b4e2e', '#9c7a4a', '#f4f2e8', '#101018', '#e8a02c', '#ffffff', '#4f9a38'],
+  dartrix:  ['.', '#2b2018', '#5c4429', '#8a6c42', '#efeadc', '#101018', '#e09428', '#ffffff', '#3f8a30'],
+  decidueye:['.', '#16241b', '#2c4a32', '#437a45', '#e8e4d2', '#101018', '#d4782a', '#ffffff', '#8a3a2e'],
 
   // --- enemies (same shapes, different colours) ---
   rattail:  ['.', '#3a2450', '#6a4a90', '#9a7ac0', '#d8c0e8', '#101018', '#f0d0a0', '#ffffff', '#4a3060'],
@@ -44,6 +44,7 @@ export const PALETTES = {
   xp_small: ['.', '#0d3a2a', '#2a9a6a', '#4ae0a0', '#c0ffe0', '#101018', '#ffffff', '#ffffff', '#186a48'],
   xp_mid:   ['.', '#0d2a5a', '#2a6ac8', '#4a9ce8', '#c0e0ff', '#101018', '#ffffff', '#ffffff', '#184a8a'],
   xp_big:   ['.', '#5a3a08', '#c89818', '#f0c838', '#fff0a8', '#101018', '#ffffff', '#ffffff', '#7a5410'],
+  xp_huge:  ['.', '#5a1046', '#a8288a', '#e858c0', '#ffd0f0', '#101018', '#ffffff', '#ffffff', '#7a1860'],
   gold:     ['.', '#5a4408', '#c8a018', '#f0d038', '#fff4a8', '#101018', '#ffffff', '#ffffff', '#7a5c10'],
 };
 

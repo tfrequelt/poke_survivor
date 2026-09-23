@@ -68,6 +68,23 @@ export const ENEMIES = [
   },
 ];
 
+// --- Destructible scenery ---------------------------------------------------
+// Modelled as stationary, harmless enemies. `stages: []` keeps the spawn director from ever
+// rolling them -- they are placed by the prop system instead.
+for (const [id, shape, palette, hp, r, coin] of [
+  ['prop_bush', 'prop_bush', 'grass', 14, 8, 0.35],
+  ['prop_rock', 'prop_rock', 'rock', 30, 8, 0.45],
+  ['prop_crate', 'prop_crate', 'vermin', 20, 8, 0.70],
+]) {
+  ENEMIES.push({
+    id, name: id, shape, palette,
+    hp, dmg: 0, speed: 0, r, mass: 99, xp: 0,
+    ai: 'static', coinChance: coin, knockResist: 1,
+    prop: true, harmless: true, noScale: true,
+    stages: [], from: 0, to: 0, weight: 0,
+  });
+}
+
 export const ENEMY_BY_ID = Object.fromEntries(ENEMIES.map((e) => [e.id, e]));
 
 /** Every (shape, palette) pair the enemy roster needs, plus the gold elite recolour of each shape. */

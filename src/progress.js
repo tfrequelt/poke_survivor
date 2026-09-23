@@ -55,7 +55,7 @@ function candidates() {
   }
 
   for (const w of WEAPONS) {
-    if (G.banished.has(w.id)) continue;
+    if (w.hidden || G.banished.has(w.id)) continue;   // evolved forms are earned, not drafted
     const owned = G.weapons.find((x) => x.def.id === w.id);
     if (owned) {
       if (owned.level >= w.levels.length) continue;

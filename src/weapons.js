@@ -297,7 +297,9 @@ const _chainUsed = [];
 export let arcFx = null;
 export let trailFx = null;
 export let impactFx = null;
+export let shotSfx = null;
 export function setWeaponFx(arc, trail, impact) { arcFx = arc; trailFx = trail; impactFx = impact; }
+export function setWeaponSfx(fn) { shotSfx = fn; }
 
 function nearestNotIn(x, y, range, used) {
   const r = cellRange(x, y, range);
@@ -437,6 +439,23 @@ export function addWeapon(defId) {
   return w;
 }
 
+/**
+ * Swap a weapon instance for its evolved form, in place. Keeps the slot, resets the cooldown so
+ * the upgrade fires immediately, and marks it so it can never evolve twice.
+ */
+export function evolveWeapon(w) {
+  const ev = w.def.evolution;
+  if (!ev || w.evolved) return false;
+  const idx = WEAPONS.findIndex((d) => d.id === ev.into);
+  if (idx < 0) return false;
+  w.defIdx = idx;
+  w.def = WEAPONS[idx];
+  w.level = 1;
+  w.evolved = true;
+  w.cd = 0;
+  return true;
+}
+
 export function levelWeapon(w) {
   if (w.level < w.def.levels.length) w.level++;
   return w;
@@ -453,6 +472,7 @@ export function updateWeapons(dt) {
     w.cd -= dt;
     if (w.cd <= 0) {
       const fired = BEHAVIOR[w.def.behavior](w, st, p);
+      if (fired && shotSfx) shotSfx(w.def);
       // Holding the shot when nothing is in range costs a short retry, not the full cooldown.
       w.cd = fired ? st.cooldown : 0.12;
     }

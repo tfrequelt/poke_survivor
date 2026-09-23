@@ -21,30 +21,41 @@ import { initStats, ensureStats, addGrant } from './stats.js';
 import { hooks, damageEnemy, killAll } from './combat.js';
 import { createPlayer, updatePlayer } from './player.js';
 import { initEnemyDefs, updateEnemies, spawnEnemy } from './enemies.js';
+import { ENEMIES } from './data/enemies.js';
 import { ENEMY_BY_ID } from './data/enemies.js';
 import {
   initWeaponDefs, addWeapon, updateWeapons, updateProjectiles, motionIndex, setWeaponFx,
+  evolveWeapon, setWeaponSfx,
 } from './weapons.js';
 import {
   initAbilityDefs, addAbility, fireAbility, updateAbilities, updateZones, fx as abilityFx,
 } from './abilities.js';
 import { abilitySpritePairs } from './data/abilities.js';
-import { initPickupSprites, dropXp, dropCoin, updatePickups } from './pickups.js';
+import {
+  initPickupSprites, initItemSprites, dropXp, dropCoin, updatePickups,
+  updateItems, dropPickup, dropRandomPickup, magnetAll, itemEffects, itemSpritePairs,
+} from './pickups.js';
 import {
   grantXp, grantCoins, initForm, xpToNext, rollOffers, takeOffer,
   rerollOffers, banishOffer, skipOffer, resetPicks, pendingEvolution, applyEvolution,
 } from './progress.js';
 import { updateDirector, resetDirector, catchUpSchedule, stressSpawn } from './director.js';
+import { updateProps, resetProps } from './props.js';
 import { drawEntities } from './entities.js';
 import { drawHud, debugLines } from './hud.js';
 import {
   ui, drawLevelUp, drawPause, drawTitle, drawSelect, drawEvolution, drawEvolutionChoice,
-  EVO_TOTAL,
+  EVO_TOTAL, setBallSprite,
 } from './ui.js';
 import { CHARACTERS, CHARACTER_BY_ID, characterSpritePairs } from './data/characters.js';
 import { enemySpritePairs } from './data/enemies.js';
 import { weaponSpritePairs } from './data/weapons.js';
-import { GROUND } from './data/art.js';
+import { STAGE_BY_ID, STAGES, propSpritePairs } from './data/stages.js';
+import { loadAssets } from './assets.js';
+import {
+  initAudio, audioReady, sfx, playTrack, playOnce, setIntensity, stopTrack,
+  setVolume, toggleMute, settings as audioSettings, TITLE, ROUTE, BOSS, FANFARE,
+} from './audio.js';
 
 const STEP = 1 / 60;
 const MAX_STEPS = 5;
@@ -56,6 +67,7 @@ let atlasView = false;
 let atlasStats = null;
 let bootParams = null;
 let menuTime = 0;
+let assetStats = { loaded: 0, failed: 0 };
 
 // Separation drops to 30Hz under load -- the first lever in the degradation policy.
 let sepTick = 0;
@@ -77,30 +89,39 @@ function parseParams() {
   return q;
 }
 
-function boot() {
+async function boot() {
   const q = parseParams();
   atlasView = q.has('atlas');
 
   initInput();
   initRender();
 
+  // Supplied images must finish decoding before the atlas is rasterised. This never throws:
+  // a missing manifest is the normal case and every sprite falls back to its drawn version.
+  assetStats = await loadAssets();
+
   // Register every sprite pair the data asks for, then compile the atlas once.
   for (const [shape, pal] of characterSpritePairs()) registerSprite(shape, pal);
   for (const [shape, pal] of enemySpritePairs()) registerSprite(shape, pal);
   for (const [shape, pal, rot] of weaponSpritePairs()) registerSprite(shape, pal, rot || 0);
   for (const [shape, pal] of abilitySpritePairs()) registerSprite(shape, pal);
-  for (const pal of ['xp_small', 'xp_mid', 'xp_big']) registerSprite('orb', pal);
+  for (const [shape, pal] of propSpritePairs()) registerSprite(shape, pal);
+  for (const [shape, pal] of itemSpritePairs()) registerSprite(shape, pal);
+  for (const pal of ['xp_small', 'xp_mid', 'xp_big', 'xp_huge']) registerSprite('orb', pal);
   registerSprite('coin', 'gold');
+  registerSprite('pokeball', 'crab');
   atlasStats = buildAtlas();
 
   initEnemyDefs();
   initWeaponDefs();
   initAbilityDefs(motionIndex('homing'));
   initPickupSprites();
+  initItemSprites();
   installHooks();
 
   // Each starter needs a sprite id for the menus to draw it.
   for (const c of CHARACTERS) c.sprId = spriteBase(c.shape, c.palette);
+  setBallSprite(spriteBase('pokeball', 'crab'));
 
   bootParams = q;
   if (q.has('char') && CHARACTER_BY_ID[q.get('char')]) {
@@ -119,6 +140,8 @@ function boot() {
       stress: (n) => stressSpawn(n),
       grantAbility: (id) => addAbility(id),
       grantWeapon: (id) => addWeapon(id),
+      drop: (kind) => dropPickup(G.player.x + 14, G.player.y, kind),
+      props: () => enemies.filter((e) => e.alive && e.prop).length,
       // Spawn a ring of enemies at an exact radius -- the stress spawner uses the 350-430 spawn
       // ring, which sits outside most ability radii and makes them look broken when they are not.
       spawnNear: function (n, r, id) {
@@ -130,6 +153,7 @@ function boot() {
       },
       fire: (slot) => fireAbility(slot),
       menuTime: () => menuTime,
+      orbs: () => orbs.map((o) => ({ v: o.value, tier: o.tier })),
       perf: () => ({
         fps: +fps.toFixed(1), frameMs: +frameMs.toFixed(3),
         simMs: +simMs.toFixed(3), drawMs: +drawMs.toFixed(3),
@@ -140,6 +164,9 @@ function boot() {
 
   lastTime = performance.now();
   requestAnimationFrame(frame);
+  // Boot is async, so the page load event fires before the game is ready. Anything driving the
+  // game from outside (the screenshot harness) must wait for this rather than the load event.
+  window.__booted = true;
 }
 
 /**
@@ -149,18 +176,31 @@ function boot() {
 function installHooks() {
   hooks.onDamage = (e, dealt, crit) => {
     popDamage(e.x, e.y - 12, dealt, crit);
+    sfx(crit ? 'crit' : 'hit');
   };
   hooks.onKill = (e) => {
+    if (e.prop) {
+      // Scenery is not a kill: no XP, no tally. It pays in gold and the occasional pickup.
+      if (G.rngRun() < e.coinChance) dropCoin(e.x, e.y, 1 + ((G.rngRun() * 4) | 0));
+      const pdef = e.def;
+      if (G.rngRun() < (pdef.pickupChance || 0.12)) dropRandomPickup(e.x, e.y);
+      burst(e.x, e.y, 8, '#c8c0ad');
+      return;
+    }
     G.kills++;
     dropXp(e.x, e.y, e.xp);
     if (e.coinChance > 0 && G.rngRun() < e.coinChance) {
       dropCoin(e.x, e.y, G.rngRun() < 0.15 ? 5 : 1);
     }
+    // Elites and bosses always leave something worth walking to.
+    if (e.elite) dropPickup(e.x, e.y, 'chest');
     burst(e.x, e.y, e.elite ? 10 : 5, e.elite ? '#ffd166' : '#ffffff');
+    sfx('kill');
   };
   hooks.onPlayerHit = () => {
     addShake(0.28);
     G.hitstop = 0.04;
+    sfx('hurt');
   };
 
   // abilities.js emits its FX through these rather than importing render/world upward.
@@ -168,6 +208,14 @@ function installHooks() {
   abilityFx.shake = addShake;
   abilityFx.ring = (x, y, r, color, life) => pushFx(0, x, y, r, 0, color, life);
   abilityFx.beam = (x, y, angle, len, width, color, life) => pushFx(1, x, y, len, angle, color, life, width);
+  // Each weapon family gets its own shot sound, picked from the projectile's palette.
+  const SHOT_SFX = {
+    water: 'shoot_water', normal: 'shoot_normal', grass: 'shoot_grass',
+    rock: 'shoot_rock', electric: 'shoot_bolt', poison: 'shoot_water',
+    psychic: 'shoot_normal', ghostly: 'shoot_grass',
+  };
+  setWeaponSfx((def) => sfx(SHOT_SFX[def.palette] || 'shoot_normal'));
+
   // Chain arcs, projectile trails and impact bursts.
   setWeaponFx(
     (x0, y0, x1, y1, color) =>
@@ -191,14 +239,61 @@ function installHooks() {
     const p = G.player;
     if (p) p.hp = Math.min(G.stats.maxHp, p.hp + amount);
   };
+
+  // --- Item pickups ---
+  itemEffects.magnet = () => magnetAll();
+  itemEffects.berry = () => {
+    const p = G.player;
+    if (p) p.hp = Math.min(G.stats.maxHp, p.hp + Math.round(G.stats.maxHp * 0.3));
+  };
+  itemEffects.bomb = () => {
+    killAll(0);
+    addShake(0.9);
+    G.hitstop = 0.08;
+  };
+  itemEffects.chest = () => {
+    // A chest is the weapon-evolution trigger, and pays out gold either way.
+    const evolved = tryEvolveWeapon();
+    grantCoins(20 + ((G.rngRun() * 20) | 0));
+    if (!evolved) G.pendingLevelUps++;
+  };
+  itemEffects.onCollect = (kind, label) => {
+    sfx('pickup');
+    G.banner.text = label;
+    G.banner.sub = '';
+    G.banner.t = 1.6;
+  };
+}
+
+/**
+ * Chest payoff: a weapon at max level whose paired passive you hold evolves in place.
+ * The data for this has existed since the weapons were written; only the step was missing.
+ */
+function tryEvolveWeapon() {
+  for (const w of G.weapons) {
+    const ev = w.def.evolution;
+    if (!ev || w.evolved) continue;
+    if (w.level < w.def.levels.length) continue;
+    if (!G.passives.includes(ev.needPassive)) continue;
+    if (evolveWeapon(w)) {
+      G.banner.text = `${w.def.name.toUpperCase()} EVOLVED!`;
+      G.banner.sub = '';
+      G.banner.t = 2.6;
+      addShake(0.5);
+      return true;
+    }
+  }
+  return false;
 }
 
 function startRun(character, q) {
   clearWorld();
   resetRunState();
   resetDirector();
+  resetProps();
 
-  G.stage = { id: 'grass', name: 'Grass Route', ground: GROUND.grass, hpMult: 1, spsMult: 1 };
+  const stageId = (q && q.get('stage')) || 'grass';
+  G.stage = STAGE_BY_ID[stageId] || STAGES[0];
 
   initStats();
   resetPicks();
@@ -231,11 +326,19 @@ function startRun(character, q) {
   snapCamera(0, 0);
   setMode(MODES.PLAYING);
   resetAccumulator();
+  if (audioReady()) { setIntensity(0); playTrack(ROUTE); }
 }
 
 // --- Input ------------------------------------------------------------------
 
 function handleKey(code) {
+  // The AudioContext cannot start without a user gesture. The title screen already waits for a
+  // keypress, so that is the natural unlock point.
+  if (!audioReady()) {
+    initAudio();
+    if (G.mode === MODES.TITLE) playTrack(TITLE);
+  }
+  if (code === 'KeyM') { toggleMute(); return; }
   if (code === 'KeyF') return toggleFullscreen();
 
   if (G.mode === MODES.TITLE) {
@@ -259,8 +362,8 @@ function handleKey(code) {
   if (code === 'Escape' || code === 'KeyP') return togglePause();
 
   if (G.mode === MODES.PLAYING) {
-    if (code === 'KeyQ') return void fireAbility(0);
-    if (code === 'KeyE') return void fireAbility(1);
+    if (code === 'KeyQ') return void castAbility(0);
+    if (code === 'KeyE') return void castAbility(1);
   }
 
   if (!G.debug.on) return;
@@ -278,6 +381,8 @@ function handleKey(code) {
 function toSelect() {
   ui.cursor = Math.max(0, CHARACTERS.indexOf(G.character));
   setMode(MODES.SELECT);
+  sfx('select');
+  if (audioReady()) playTrack(TITLE);
 }
 
 function selectKey(code) {
@@ -334,6 +439,18 @@ function levelUpKey(code) {
   }
 }
 
+/** Fire an ability and play the sound that matches its effect. */
+function castAbility(slot) {
+  const a = G.abilities[slot];
+  if (!fireAbility(slot)) return false;
+  const byEffect = {
+    shield: 'shield', shockwaveRings: 'quake', drainRings: 'quake',
+    beam: 'beam', jet: 'beam', chain: 'shoot_bolt',
+  };
+  sfx(byEffect[a.def.effect] || 'ability');
+  return true;
+}
+
 function togglePause() {
   if (G.mode === MODES.PLAYING) setMode(MODES.PAUSED);
   else if (G.mode === MODES.PAUSED) { setMode(MODES.PLAYING); resetAccumulator(); }
@@ -386,6 +503,8 @@ function stepSim(dt) {
   G.runTime += dt;
 
   updateDirector(dt);
+  updateProps();
+  drainBossQueue();
   drainSpawnRequests();
 
   // The grid stores INDICES into the enemies array, so it is rebuilt twice: once now, because
@@ -400,13 +519,21 @@ function stepSim(dt) {
   updateZones(dt);
   updateProjectiles(dt);
   updatePlayer(dt);
-  updatePickups(dt, grantXp, grantCoins);
+  updatePickups(dt, (v) => { grantXp(v); sfx('xp'); }, (v) => { grantCoins(v); sfx('coin'); });
+  updateItems(dt);
   updateFx(dt);
+  if (G.banner.t > 0) G.banner.t -= dt;
 
   // Everything killed this tick is recycled here, once, after all collision work is done.
   sweepDead();
 
   heavyLoad = enemies.length > 220;
+
+  // The route theme layers up with the spawn curve rather than looping identically for 20 minutes.
+  if ((G.tick & 63) === 0 && audioReady()) {
+    const m = G.curve.m;
+    setIntensity(m > 11 ? 2 : m > 5 ? 1 : 0);
+  }
 
   // A pending level-up opens the modal, which freezes the simulation. Checked last so the tick
   // that granted the XP completes first.
@@ -414,6 +541,7 @@ function stepSim(dt) {
 }
 
 function openLevelUp() {
+  sfx('levelup');
   rollOffers(3);
   ui.cursor = 0;
   ui.banishArm = false;
@@ -446,17 +574,35 @@ function startEvolution() {
     setMode(MODES.EVOLVE_CHOICE);
     return true;
   }
-  if (ev.crest) {
-    // The level-20 Eevee crest has no new sprite; apply it silently.
+  // An awakening or a crest is the same creature getting stronger -- it gets a banner, not a
+  // two-second cutscene announcing it turned into itself.
+  if (ev.crest || ev.awaken || ev.id === G.form.id) {
     applyEvolution(ev, null);
+    showBanner(`${G.form.name.toUpperCase()} AWAKENED`, ev.title || ev.note || '');
     return false;
   }
   beginCutscene(ev, null);
   return true;
 }
 
+/** A short HUD banner. Does not freeze the game. */
+function showBanner(text, sub) {
+  G.banner.text = text;
+  G.banner.sub = sub;
+  G.banner.t = 3.0;
+}
+
 function beginCutscene(ev, branch) {
   const chosen = branch || ev;
+  // Belt and braces: a data mistake that points an evolution at the current form degrades to a
+  // banner rather than a nonsense "X evolved into X" cutscene.
+  if (chosen.id && chosen.id === G.form.id) {
+    applyEvolution(ev, branch);
+    showBanner(`${G.form.name.toUpperCase()} AWAKENED`, chosen.note || '');
+    setMode(MODES.PLAYING);
+    resetAccumulator();
+    return;
+  }
   const oldName = G.form.name;
   const oldBase = G.player.sprBase;
 
@@ -464,6 +610,8 @@ function beginCutscene(ev, branch) {
   const newBase = spriteBase(G.form.shape, G.form.palette);
   G.player.sprBase = newBase;
 
+  sfx('evolve');
+  if (audioReady()) playOnce(FANFARE);
   evo = {
     t: 0, ev, oldBase, newBase,
     oldName, newName: G.form.name, note: chosen.note || '',
@@ -486,6 +634,57 @@ function updateEvolution(dt) {
   evo = null;
   setMode(MODES.PLAYING);
   resetAccumulator();
+
+  // Chain: crossing several thresholds at once (or jumping levels with ?level=) can leave another
+  // evolution pending. Without this it is silently skipped and its stat grant never applies.
+  startEvolution();
+}
+
+/**
+ * The director sets these and, until now, nothing read them -- so the 5/10/15 minute mini-bosses
+ * and the 20:00 boss were scheduled and never actually appeared.
+ */
+function drainBossQueue() {
+  if (G.pendingMiniboss > 0) {
+    const tier = G.pendingMiniboss;
+    G.pendingMiniboss = 0;
+    spawnMiniboss(tier);
+  }
+  if (G.pendingBoss) {
+    G.pendingBoss = false;
+    spawnMiniboss(4);
+  }
+}
+
+function spawnMiniboss(tier) {
+  const pool = ENEMIES.filter((d) => !d.prop && d.stages.includes(G.stage.id));
+  const def = pool[Math.min(pool.length - 1, 4 + tier)] || pool[pool.length - 1];
+  if (!def) return;
+
+  const p = G.player;
+  const a = G.rngRun() * Math.PI * 2;
+  const e = spawnEnemy(def, p.x + Math.cos(a) * 240, p.y + Math.sin(a) * 240);
+  if (!e) return;
+
+  // A mini-boss is a heavily scaled version of a stage enemy, with a health bar and real weight.
+  const mult = tier >= 4 ? 90 : 14 + tier * 10;
+  e.maxHp = e.hp = Math.round(e.maxHp * mult);
+  e.r = def.r * (tier >= 4 ? 3.2 : 2.2);
+  e.mass = 40;
+  e.speed = def.speed * 0.75;
+  e.dmg = e.dmg * 1.5;
+  e.xp = 60 + tier * 40;
+  e.boss = true;
+  e.knockResist = 0.92;
+  e.coinChance = 1;
+  e.bossTier = tier;
+
+  sfx('boss');
+  if (audioReady() && tier >= 4) playTrack(BOSS);
+  G.banner.text = tier >= 4 ? 'A HUGE SHADOW FALLS' : 'SOMETHING BIG APPROACHES';
+  G.banner.sub = '';
+  G.banner.t = 2.5;
+  addShake(0.6);
 }
 
 function drainSpawnRequests() {
@@ -626,22 +825,22 @@ function drawAtlasShowcase() {
   const dir = ((t * 0.7) | 0) & 1;
   const flash = 0;   // shown deliberately on its own row below, not strobed over everything
 
-  let x = 34, y = 44;
+  let x = 40, y = 54;
   for (const [shape, pal] of characterSpritePairs()) {
     const base = spriteBase(shape, pal);
     drawShadow(ctx, x, y, 1.6);
     drawSprite(ctx, base + flash * 4 + frame * 2 + dir, x, y);
-    drawText(ctx, shape.slice(0, 9), x - 22, y + 6, 'dim');
-    x += 68;
-    if (x > VW - 40) { x = 34; y += 62; }
+    drawText(ctx, shape.slice(0, 9), x - 24, y + 10, 'dim');
+    x += 76;
+    if (x > VW - 44) { x = 40; y += 74; }
   }
   // Hit-flash variants on their own row -- the evolution cutscene depends on these existing.
-  x = 34; y += 54;
-  drawText(ctx, 'FLASH', 4, y - 10, 'dim');
+  x = 40; y += 62;
+  drawText(ctx, 'FLASH', 2, y - 12, 'dim');
   for (const [shape, pal] of characterSpritePairs()) {
     drawSprite(ctx, spriteBase(shape, pal) + 4, x, y);
-    x += 68;
-    if (x > VW - 40) { x = 34; y += 62; }
+    x += 76;
+    if (x > VW - 44) { x = 40; y += 74; }
   }
 
   x = 34; y += 58;
@@ -668,4 +867,15 @@ function drawAtlasShowcase() {
   drawTextCentered(ctx, `ATLAS ${atlasStats.frames} FRAMES IN ${atlasStats.ms.toFixed(1)}MS`, VW / 2, fy + 12, 'green');
 }
 
-boot();
+// Boot is async because supplied images must decode before the atlas is built. A rejection here
+// would leave a blank page with no explanation, so surface it on the canvas instead.
+boot().catch((e) => {
+  console.error(e);
+  const c = document.getElementById("view");
+  if (c) {
+    const x = c.getContext("2d");
+    x.fillStyle = "#101018"; x.fillRect(0, 0, c.width, c.height);
+    x.fillStyle = "#ff6b6b"; x.font = "16px monospace";
+    x.fillText("Boot failed: " + e.message, 16, 32);
+  }
+});

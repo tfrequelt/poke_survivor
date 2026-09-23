@@ -24,9 +24,12 @@ export const CHARACTERS = [
       { atLevel: 10, id: 'quagsire', name: 'Quagsire', shape: 'quagsire', palette: 'quagsire',
         grant: { maxHp: +70, moveSpeed: +6, armor: +2, area: +0.10, regen: +0.40 },
         note: 'Mud Shot gains +1 glob and wider puddles.' },
+      // An AWAKENING, not an evolution: same creature, better stats. Without this flag it takes
+      // the full cutscene path and announces "QUAGSIRE EVOLVED INTO QUAGSIRE".
       { atLevel: 20, id: 'quagsire_unaware', name: 'Quagsire', shape: 'quagsire', palette: 'quagsire',
+        awaken: true, title: 'UNAWARE',
         grant: { armor: +3, area: +0.10 },
-        note: 'Unaware: immune to slows, and puddles weaken enemy attacks.' },
+        note: 'Immune to slows, and puddles weaken enemy attacks.' },
     ],
   },
   {

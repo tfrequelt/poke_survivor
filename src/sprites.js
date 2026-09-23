@@ -12,6 +12,7 @@
 
 import { SHAPES, PALETTES } from './data/art.js';
 import { FONT, FONT_COLORS, GLYPH_W, GLYPH_H, B32 } from './data/font.js';
+import { getOverride } from './assets.js';
 
 const ATLAS_W = 1024;
 const ATLAS_H = 1024;
@@ -138,10 +139,17 @@ export function buildAtlas() {
 
   for (const e of registry.values()) {
     const shape = SHAPES[e.shape];
+    // A supplied image replaces the drawn art for this shape entirely, including its dimensions.
+    const over = getOverride(e.shape);
+    if (over) { e.w = over.w; e.h = over.h; e.ox = over.w >> 1; e.oy = over.h - 2; }
     e.base = FRAMES.length;
 
+    const sw = over ? over.w : shape.w;
+    const sh = over ? over.h : shape.h;
+    const sox = over ? e.ox : shape.ox;
+    const soy = over ? e.oy : shape.oy;
     // A rotated sprite needs a square box big enough for its diagonal, or the corners clip.
-    const box = e.rot ? Math.ceil(Math.hypot(shape.w, shape.h) / 2) * 2 : 0;
+    const box = e.rot ? Math.ceil(Math.hypot(sw, sh) / 2) * 2 : 0;
 
     for (let flash = 0; flash < 2; flash++) {
       const pal = packPalette(e.palette, flash === 1);
@@ -150,17 +158,19 @@ export function buildAtlas() {
         for (let d = 0; d < e.nd; d++) {
           if (e.rot) {
             const { sx, sy } = alloc(box, box);
-            blitRot(buf, rows, shape, sx, sy, pal, (d / e.nd) * Math.PI * 2, box);
+            if (over) blitImageRot(buf, over, sox, soy, sx, sy, (d / e.nd) * Math.PI * 2, box, flash === 1);
+            else blitRot(buf, rows, shape, sx, sy, pal, (d / e.nd) * Math.PI * 2, box);
             FRAMES.push({ sx, sy, w: box, h: box, ox: box >> 1, oy: box >> 1 });
           } else {
             const mirror = d === 0;                 // d 0 = left = mirrored source
-            const { sx, sy } = alloc(shape.w, shape.h);
-            blit(buf, rows, shape.w, shape.h, sx, sy, pal, mirror);
+            const { sx, sy } = alloc(sw, sh);
+            if (over) blitImage(buf, over, sx, sy, mirror, flash === 1);
+            else blit(buf, rows, sw, sh, sx, sy, pal, mirror);
             FRAMES.push({
-              sx, sy, w: shape.w, h: shape.h,
+              sx, sy, w: sw, h: sh,
               // Mirroring flips the origin too, or a flipped sprite drifts sideways as it turns.
-              ox: mirror ? shape.w - 1 - shape.ox : shape.ox,
-              oy: shape.oy,
+              ox: mirror ? sw - 1 - sox : sox,
+              oy: soy,
             });
           }
         }
@@ -190,6 +200,50 @@ function blit(buf, rows, w, h, dx, dy, pal, mirror) {
       if (srcX >= len) continue;                     // padded transparency
       const idx = CHARMAP[row.charCodeAt(srcX)] | 0;
       if (idx) buf[dst + x] = pal[idx];
+    }
+  }
+}
+
+/** Whiten a packed pixel toward white while preserving its alpha -- the hit-flash variant. */
+function whiten(px, t) {
+  const a = px >>> 24;
+  if (a === 0) return 0;
+  const b = (px >>> 16) & 255, g = (px >>> 8) & 255, r = px & 255;
+  const nr = Math.round(r + (255 - r) * t);
+  const ng = Math.round(g + (255 - g) * t);
+  const nb = Math.round(b + (255 - b) * t);
+  return ((a << 24) | (nb << 16) | (ng << 8) | nr) >>> 0;
+}
+
+/** Copy a supplied image into the atlas, optionally mirrored and/or whitened. */
+function blitImage(buf, img, dx, dy, mirror, flash) {
+  for (let y = 0; y < img.h; y++) {
+    const src = y * img.w;
+    const dst = (dy + y) * ATLAS_W + dx;
+    for (let x = 0; x < img.w; x++) {
+      const px = img.data[src + (mirror ? img.w - 1 - x : x)];
+      if ((px >>> 24) === 0) continue;             // fully transparent
+      buf[dst + x] = flash ? whiten(px, 0.85) : px;
+    }
+  }
+}
+
+/** Rotated copy of a supplied image, nearest-neighbour, matching the pixel-map path. */
+function blitImageRot(buf, img, ox, oy, dx, dy, angle, box, flash) {
+  const cos = Math.cos(angle), sin = Math.sin(angle);
+  const c = box / 2;
+  for (let y = 0; y < box; y++) {
+    const oy2 = y + 0.5 - c;
+    const dst = (dy + y) * ATLAS_W + dx;
+    for (let x = 0; x < box; x++) {
+      const ox2 = x + 0.5 - c;
+      const u = ox2 * cos + oy2 * sin + ox;
+      const v = -ox2 * sin + oy2 * cos + oy;
+      const sxI = Math.floor(u), syI = Math.floor(v);
+      if (sxI < 0 || syI < 0 || sxI >= img.w || syI >= img.h) continue;
+      const px = img.data[syI * img.w + sxI];
+      if ((px >>> 24) === 0) continue;
+      buf[dst + x] = flash ? whiten(px, 0.85) : px;
     }
   }
 }
@@ -306,6 +360,46 @@ export function drawText(ctx, str, x, y, color = 'white', spacing = 1) {
     px += GLYPH_W + spacing;
   }
   return px - x - spacing;
+}
+
+/**
+ * Draw text scaled up by an integer factor. Used for the title logo -- authoring a separate
+ * display font for nine letters would be a lot of pixels for very little gain.
+ */
+export function drawTextScaled(ctx, str, x, y, k, color = 'white', spacing = 1) {
+  const base = fontIndex.get(color);
+  if (base === undefined) return 0;
+  let px = x | 0;
+  for (let i = 0; i < str.length; i++) {
+    let ch = str[i];
+    if (!glyphSlot.has(ch)) {
+      const up = ch.toUpperCase();
+      ch = glyphSlot.has(up) ? up : ' ';
+    }
+    if (ch !== ' ') {
+      const f = FRAMES[base + glyphSlot.get(ch)];
+      ctx.drawImage(ATLAS, f.sx, f.sy, f.w, f.h, px, y | 0, f.w * k, f.h * k);
+    }
+    px += (GLYPH_W + spacing) * k;
+  }
+  return px - x;
+}
+
+export const textWidthScaled = (str, k, spacing = 1) =>
+  str.length * (GLYPH_W + spacing) * k - spacing * k;
+
+/** Scaled text with a hard outline, centred -- the logo treatment. */
+export function drawLogo(ctx, str, cx, y, k, fill, outline) {
+  const w = textWidthScaled(str, k);
+  const x = Math.round(cx - w / 2);
+  // Eight-way offset outline, then the fill on top.
+  for (let dy = -k; dy <= k; dy += k) {
+    for (let dx = -k; dx <= k; dx += k) {
+      if (!dx && !dy) continue;
+      drawTextScaled(ctx, str, x + dx, y + dy, k, outline);
+    }
+  }
+  drawTextScaled(ctx, str, x, y, k, fill);
 }
 
 export function drawTextCentered(ctx, str, cx, y, color = 'white', spacing = 1) {

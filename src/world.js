@@ -23,6 +23,7 @@ export const CAP = {
   particles: 320,
   zones: 60,
   shapes: 48,
+  items: 40,
 };
 
 // --- Entity factories -------------------------------------------------------
@@ -39,6 +40,7 @@ const newEnemy = () => ({
   ai: 0, aiT: 0, aiState: 0, aiX: 0, aiY: 0,
   slow: 0, slowT: 0, stunT: 0, weakenT: 0, armor: 0, knockResist: 0,
   coinChance: 0, boss: false, elite: false, flying: false, spawnT: 0,
+  prop: false, harmless: false, propKey: 0, bossTier: 0,
   cell: -1, lastHitId: 0,
 });
 
@@ -64,6 +66,11 @@ const newFxShape = () => ({
   color: '#fff', life: 0, maxLife: 0,
 });
 
+/** Walk-over item pickups: magnet, berry, bomb, chest. */
+const newItem = () => ({
+  alive: false, x: 0, y: 0, vx: 0, vy: 0, kind: 0, sprId: 0, age: 0, bob: 0,
+});
+
 const newZone = () => ({ alive: false, x: 0, y: 0, r: 0, life: 0, maxLife: 0, dps: 0, tick: 0, slow: 0, kind: 0, color: '#fff', hitId: 0 });
 
 // --- Pools and live arrays --------------------------------------------------
@@ -77,6 +84,7 @@ export const pools = {
   particles: new Pool(newParticle, CAP.particles),
   zones: new Pool(newZone, CAP.zones),
   shapes: new Pool(newFxShape, CAP.shapes),
+  items: new Pool(newItem, CAP.items),
 };
 
 export const enemies = [];
@@ -87,16 +95,18 @@ export const damageNumbers = [];
 export const particles = [];
 export const zones = [];
 export const fxShapes = [];
+export const items = [];
 
 const ALL = [
   ['enemies', enemies], ['projectiles', projectiles], ['orbs', orbs], ['coins', coins],
   ['damageNumbers', damageNumbers], ['particles', particles], ['zones', zones],
-  ['shapes', fxShapes],
+  ['shapes', fxShapes], ['items', items],
 ];
 
 // Built once. A literal here would allocate an object on every single spawn.
 const LIVE = {
-  enemies, projectiles, orbs, coins, damageNumbers, particles, zones, shapes: fxShapes,
+  enemies, projectiles, orbs, coins, damageNumbers, particles, zones,
+  shapes: fxShapes, items,
 };
 
 /** Take an entity from a pool and push it live. Returns null when the pool is exhausted. */

@@ -11,9 +11,12 @@
 import { G } from './state.js';
 import { ctx, toScreenX, toScreenY, VW, VH } from './render.js';
 import {
-  enemies, projectiles, orbs, coins, damageNumbers, particles, zones, fxShapes,
+  enemies, projectiles, orbs, coins, damageNumbers, particles, zones, fxShapes, items,
 } from './world.js';
-import { drawSprite, drawShadow, drawText, FRAMES, angleSlot } from './sprites.js';
+import {
+  drawSprite, drawSpriteScaled, drawShadow, drawText, FRAMES, angleSlot,
+} from './sprites.js';
+import { tierScale } from './pickups.js';
 
 const MARGIN = 28;                    // draw a little beyond the edge so nothing pops in visibly
 
@@ -29,6 +32,7 @@ export function drawEntities() {
 
   drawZones(camOffX, camOffY);
   drawPickups(camOffX, camOffY);
+  drawItems(camOffX, camOffY);
   drawShadows(camOffX, camOffY);
   drawSortedActors(camOffX, camOffY);
   drawProjectiles(camOffX, camOffY);
@@ -111,14 +115,40 @@ function drawPickups(ox, oy) {
   for (let i = 0; i < orbs.length; i++) {
     const o = orbs[i];
     const sx = o.x + ox, sy = o.y + oy;
-    if (sx < -8 || sy < -8 || sx > VW + 8 || sy > VH + 8) continue;
-    drawSprite(ctx, o.sprId, sx, sy);
+    if (sx < -12 || sy < -12 || sx > VW + 12 || sy > VH + 12) continue;
+    // Size carries the tier as much as colour does; the big ones also pulse so they draw the eye.
+    if (o.tier === 0) {
+      drawSprite(ctx, o.sprId, sx, sy);
+    } else {
+      const pulse = 1 + Math.sin(G.tick * 0.14 + o.x) * 0.08 * o.tier;
+      drawSpriteScaled(ctx, o.sprId, sx, sy, tierScale(o.tier) * pulse);
+    }
   }
   for (let i = 0; i < coins.length; i++) {
     const c = coins[i];
     const sx = c.x + ox, sy = c.y + oy;
     if (sx < -8 || sy < -8 || sx > VW + 8 || sy > VH + 8) continue;
     drawSprite(ctx, c.sprId, sx, sy);
+  }
+}
+
+/** Item pickups bob and glow, because the player has to choose to walk to them. */
+function drawItems(ox, oy) {
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    const sx = it.x + ox;
+    const sy = it.y + oy + Math.sin(it.age * 3 + it.bob) * 2;
+    if (sx < -16 || sy < -16 || sx > VW + 16 || sy > VH + 16) continue;
+    // A soft ring behind, not a filled glow -- a filled one washes the icon out entirely.
+    ctx.globalAlpha = 0.22 + Math.sin(it.age * 4) * 0.08;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.ellipse(sx, sy, 10, 6, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    drawShadow(ctx, sx, it.y + oy + 6);
+    drawSpriteScaled(ctx, it.sprId, sx, sy, 1.4);
   }
 }
 

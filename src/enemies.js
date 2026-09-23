@@ -71,6 +71,11 @@ const AI = {
     e.vy = (ny * radial + nx * 0.9) * e.speed;
   },
 
+  /** Scenery. Does not move, does not chase. */
+  static(e) {
+    e.vx = 0; e.vy = 0;
+  },
+
   /** Drift toward the player and detonate on contact -- handled by the contact damage path. */
   rusher(e, dt, px, py) {
     const dx = px - e.x, dy = py - e.y;
@@ -123,7 +128,15 @@ export function spawnEnemy(def, x, y, opts) {
   e.boss = !!def.boss;
   e.elite = elite;
   e.flying = !!def.flying;
+  e.prop = !!def.prop;
+  e.harmless = !!def.harmless;
   e.stunT = 0; e.weakenT = 0;
+  // Scenery must not scale with the difficulty curve, or a minute-18 bush needs a whole clip.
+  if (def.noScale) {
+    e.maxHp = e.hp = def.hp;
+    e.speed = 0;
+    e.dmg = 0;
+  }
   e.ai = def.aiIdx;
   e.aiT = 0; e.aiState = 0; e.aiX = 0; e.aiY = 0;
   e.flash = 0; e.knockX = 0; e.knockY = 0; e.contactCd = 0;
@@ -176,6 +189,13 @@ function separate(e, i, push) {
   }
 }
 
+/** Live enemies excluding scenery -- what the spawn director should budget against. */
+export function combatantCount() {
+  let n = 0;
+  for (let i = 0; i < enemies.length; i++) if (enemies[i].alive && !enemies[i].prop) n++;
+  return n;
+}
+
 export function updateEnemies(dt, separationOn) {
   const p = G.player;
   if (!p) return;
@@ -219,7 +239,7 @@ export function updateEnemies(dt, separationOn) {
 
     // Recycle anything that wandered far off-screen. It does NOT count as a kill, so it is
     // marked rather than killed and the end-of-tick sweep collects it.
-    if (dist2(e.x, e.y, px, py) > DESPAWN2 && !e.boss) e.alive = false;
+    if (dist2(e.x, e.y, px, py) > DESPAWN2 && !e.boss && !e.prop) e.alive = false;
   }
 
   if (separationOn) {

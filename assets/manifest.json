@@ -1,0 +1,4 @@
+{
+  "_comment": "Map a shape name to an image to override its drawn art. Empty = all generated.",
+  "sprites": {}
+}

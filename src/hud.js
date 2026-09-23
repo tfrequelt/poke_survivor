@@ -17,6 +17,7 @@ export function drawHud() {
   drawAbilities();
   drawTimer();
   drawTallies();
+  if (G.banner.t > 0) drawBanner();
   if (G.runOver) drawRunOver();
 }
 
@@ -80,6 +81,22 @@ function drawAbilities() {
       drawText(ctx, cd, x + SLOT - 2 - textWidth(cd), y0 + 2, 'white');
     }
   }
+}
+
+/** Short centred announcement -- awakenings, stage name, pickups. Fades in and out. */
+function drawBanner() {
+  const b = G.banner;
+  const k = Math.min(1, b.t / 0.4) * Math.min(1, (3.0 - b.t) / 0.25);
+  const y = 74;
+  ctx.globalAlpha = Math.max(0, Math.min(1, k));
+  ctx.fillStyle = '#101018';
+  ctx.fillRect(0, y - 4, VW, b.sub ? 26 : 16);
+  ctx.fillStyle = '#ffd166';
+  ctx.fillRect(0, y - 4, VW, 1);
+  ctx.fillRect(0, y + (b.sub ? 21 : 11), VW, 1);
+  drawTextCentered(ctx, b.text, VW / 2, y, 'gold');
+  if (b.sub) drawTextCentered(ctx, b.sub.toUpperCase().slice(0, 52), VW / 2, y + 11, 'white');
+  ctx.globalAlpha = 1;
 }
 
 /** XP across the very top -- the bar the player watches most, so it gets the widest real estate. */

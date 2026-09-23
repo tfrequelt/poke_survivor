@@ -95,7 +95,7 @@ function contactDamage(p, dt) {
       const end = cellStart[c + 1];
       for (let k = cellStart[c]; k < end; k++) {
         const e = enemies[cellItems[k]];
-        if (!e.alive) continue;
+        if (!e.alive || e.harmless) continue;
         if (e.contactCd > 0) { e.contactCd -= dt; continue; }
         const rr = p.r + e.r;
         if (dist2(p.x, p.y, e.x, e.y) > rr * rr) continue;

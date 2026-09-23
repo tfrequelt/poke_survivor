@@ -10,9 +10,13 @@
 import { G, MODES } from './state.js';
 import { ctx, VW, VH } from './render.js';
 import {
-  drawText, drawTextCentered, textWidth, drawSprite, drawSpriteScaled, drawShadow,
+  drawText, drawTextCentered, textWidth, drawSprite, drawSpriteScaled, drawShadow, drawLogo,
 } from './sprites.js';
 import { clamp, hash2 } from './util.js';
+
+/** Set by main.js once the atlas exists. */
+export let ballSpr = -1;
+export function setBallSprite(id) { ballSpr = id; }
 
 export const ui = {
   cursor: 0,        // selected card index
@@ -58,14 +62,51 @@ function wrap(text, maxChars) {
   return lines;
 }
 
+/**
+ * A GBA-style dialogue box: an outer dark frame, a bright inner border inset by two pixels, and
+ * clipped corners. Two rectangles more than a plain box, and it is most of what makes the UI read
+ * as a Pokemon game rather than a generic roguelite.
+ */
 function panel(x, y, w, h, border, fill) {
-  ctx.fillStyle = fill || '#161629';
+  ctx.fillStyle = '#0d0d18';                    // outer frame
   ctx.fillRect(x, y, w, h);
-  ctx.fillStyle = border;
-  ctx.fillRect(x, y, w, 1);
-  ctx.fillRect(x, y + h - 1, w, 1);
-  ctx.fillRect(x, y, 1, h);
-  ctx.fillRect(x + w - 1, y, 1, h);
+  ctx.fillStyle = fill || '#161629';            // interior
+  ctx.fillRect(x + 1, y + 1, w - 2, h - 2);
+
+  ctx.fillStyle = border;                       // inner highlight border
+  ctx.fillRect(x + 2, y + 2, w - 4, 1);
+  ctx.fillRect(x + 2, y + h - 3, w - 4, 1);
+  ctx.fillRect(x + 2, y + 2, 1, h - 4);
+  ctx.fillRect(x + w - 3, y + 2, 1, h - 4);
+
+  // Clipped corners -- the little detail that sells the border.
+  ctx.fillStyle = '#0d0d18';
+  for (const [cx2, cy2] of [[x + 2, y + 2], [x + w - 3, y + 2], [x + 2, y + h - 3], [x + w - 3, y + h - 3]]) {
+    ctx.fillRect(cx2, cy2, 1, 1);
+  }
+}
+
+/** Colour-coded type badge, drawn from the character's typeLabel. */
+const TYPE_COLORS = {
+  WATER: '#4a90d9', GROUND: '#b8a038', NORMAL: '#a8a878',
+  GRASS: '#78c850', FLYING: '#a890f0', ELECTRIC: '#f8d030', DARK: '#705848',
+};
+
+function drawTypeBadges(label, cx, y) {
+  const types = label.split('/').map((t) => t.trim()).filter(Boolean);
+  const pad = 3;
+  let total = 0;
+  for (const t of types) total += textWidth(t) + pad * 2 + 3;
+  let x = Math.round(cx - (total - 3) / 2);
+  for (const t of types) {
+    const w = textWidth(t) + pad * 2;
+    ctx.fillStyle = TYPE_COLORS[t] || '#7a7a8a';
+    ctx.fillRect(x, y, w, 9);
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.fillRect(x, y + 7, w, 2);
+    drawText(ctx, t, x + pad, y + 1, 'dark');
+    x += w + 3;
+  }
 }
 
 export function drawLevelUp() {
@@ -162,8 +203,14 @@ export function drawTitle(starters, t) {
     ctx.fillRect(x, y, 2, 1);
   }
 
-  drawTextCentered(ctx, 'POKE SURVIVOR', VW / 2, 56, 'gold');
-  drawTextCentered(ctx, 'SURVIVE TWENTY MINUTES', VW / 2, 74, 'dim');
+  drawLogo(ctx, 'POKE SURVIVOR', VW / 2, 40, 3, 'gold', 'dark');
+  drawTextCentered(ctx, 'SURVIVE TWENTY MINUTES', VW / 2, 74, 'white');
+
+  // A pokeball either side of the subtitle.
+  if (ballSpr >= 0) {
+    drawSprite(ctx, ballSpr, VW / 2 - 96, 76);
+    drawSprite(ctx, ballSpr, VW / 2 + 96, 76);
+  }
 
   // The three starters lined up on the horizon, bobbing out of phase.
   for (let i = 0; i < starters.length; i++) {
@@ -178,7 +225,7 @@ export function drawTitle(starters, t) {
   if ((t * 1.4) % 1 < 0.72) {
     drawTextCentered(ctx, 'PRESS ANY KEY', VW / 2, 268, 'white');
   }
-  drawTextCentered(ctx, 'WASD MOVE    SPACE ABILITY    ESC PAUSE    F FULLSCREEN', VW / 2, VH - 16, 'dim');
+  drawTextCentered(ctx, 'WASD MOVE   Q E ABILITIES   M MUTE   ESC PAUSE   F FULLSCREEN', VW / 2, VH - 16, 'dim');
 }
 
 // --- Character select -------------------------------------------------------
@@ -217,7 +264,7 @@ export function drawSelect(starters, t) {
     drawSpriteScaled(ctx, c.sprId + frame * 2 + 1, x + SELECT_W / 2, SELECT_Y + 44 + bob, 2);
 
     drawTextCentered(ctx, c.name.toUpperCase(), x + SELECT_W / 2, SELECT_Y + 58, 'white');
-    drawTextCentered(ctx, c.typeLabel, x + SELECT_W / 2, SELECT_Y + 70, 'dim');
+    drawTypeBadges(c.typeLabel, x + SELECT_W / 2, SELECT_Y + 68);
 
     let y = SELECT_Y + 86;
     for (const row of STAT_ROWS) {

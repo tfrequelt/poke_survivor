@@ -35,7 +35,10 @@ const chrome = spawn(CHROME, [
   `--remote-debugging-port=${PORT}`,
   `--user-data-dir=${profile}`,
   `--window-size=${W},${H}`,
-  '--hide-scrollbars', '--mute-audio', '--no-first-run', '--no-default-browser-check',
+  '--hide-scrollbars', '--no-first-run', '--no-default-browser-check',
+  // Synthetic key events are not trusted user gestures, so an AudioContext stays suspended
+  // unless the policy is relaxed. Only used for testing audio; real play unlocks on a real key.
+  ...(args.audio ? ['--autoplay-policy=no-user-gesture-required'] : ['--mute-audio']),
   ...(args.dpr ? [`--force-device-scale-factor=${args.dpr}`] : []),
   '--disable-extensions', '--disable-background-timer-throttling',
   '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows',
@@ -126,6 +129,14 @@ try {
       type: 'keyDown', code: k, key: KEYCHAR[k] || k,
       windowsVirtualKeyCode: VK[k] || 0, nativeVirtualKeyCode: VK[k] || 0,
     });
+  }
+
+  // Wait for the game's own ready flag. Boot is async (asset decode), so Page.loadEventFired is
+  // NOT a reliable signal that window.__dbg exists.
+  for (let i = 0; i < 100; i++) {
+    const r = await cdp.send('Runtime.evaluate', { expression: 'window.__booted === true', returnByValue: true });
+    if (r.result && r.result.value) break;
+    await sleep(50);
   }
 
   if (args.pre) {

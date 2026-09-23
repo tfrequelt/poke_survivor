@@ -129,6 +129,43 @@ export const WEAPONS = [
   },
 ];
 
+// --- Evolved forms ----------------------------------------------------------
+// Reached by holding a maxed weapon plus its paired passive and opening a chest. Each is a
+// genuine upgrade in KIND, not just bigger numbers -- that is the point of evolving.
+WEAPONS.push(
+  {
+    id: 'quagmire', name: 'Quagmire', evolvedFrom: 'mud_shot', hidden: true,
+    desc: 'A torrent of mud that drowns whole stretches of ground.',
+    behavior: 'projectile', aim: 'nearest', motion: 'arc',
+    sprite: 'proj_bubble', palette: 'water',
+    damage: 44, cooldown: 0.95, amount: 3, speed: 190, area: 1.5, pierce: 2, duration: 1.4,
+    r: 7, range: 230, spread: 0.30, knockback: 26, usesAmount: true,
+    zoneOnEnd: { r: 52, life: 3.4, dps: 26, slow: 0.55, color: '#4aa8e8' },
+    pulse: 0.22, impact: 10, impactColor: '#a8e4ff',
+    levels: [{}],
+  },
+  {
+    id: 'star_barrage', name: 'Star Barrage', evolvedFrom: 'swift_star', hidden: true,
+    desc: 'An unending stream of stars, and they all find something.',
+    behavior: 'projectile', aim: 'nearest', motion: 'accelerate',
+    sprite: 'proj_star', palette: 'normal',
+    damage: 26, cooldown: 0.34, amount: 5, speed: 280, area: 1.2, pierce: 3, duration: 1.4,
+    r: 4, range: 230, spread: 0.55, knockback: 10, usesAmount: true,
+    spin: 12, trail: 34, trailColor: '#ffffff', impact: 6, impactColor: '#ffffff',
+    levels: [{}],
+  },
+  {
+    id: 'spirit_shackle', name: 'Spirit Shackle', evolvedFrom: 'leaf_arrow', hidden: true,
+    desc: 'Arrows that pin whatever they pass through.',
+    behavior: 'projectile', aim: 'toughest', motion: 'wave',
+    sprite: 'proj_leaf', palette: 'ghostly',
+    damage: 95, cooldown: 1.05, amount: 3, speed: 360, area: 1.3, pierce: 9, duration: 1.8,
+    r: 6, range: 380, spread: 0.20, knockback: 20, usesAmount: true,
+    spin: 16, amp: 44, freq: 6, trail: 26, trailColor: '#c0b8e0', impact: 8, impactColor: '#a0f0d0',
+    levels: [{}],
+  },
+);
+
 export const WEAPON_BY_ID = Object.fromEntries(WEAPONS.map((w) => [w.id, w]));
 
 /** (shape, palette, rotations) triples the weapon set needs registered in the atlas. */

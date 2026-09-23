@@ -69,6 +69,7 @@ export const G = {
   pendingMiniboss: 0,
   pendingBoss: false,
   evolvedAt: new Set(),
+  banner: { text: '', sub: '', t: 0 },
 
   // --- run tallies ---
   coins: 0,
@@ -118,6 +119,7 @@ export function resetRunState() {
   G.pendingMiniboss = 0;
   G.pendingBoss = false;
   G.evolvedAt.clear();
+  G.banner.t = 0;
   G.coins = 0;
   G.kills = 0;
   G.damageDealt = 0;

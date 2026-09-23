@@ -5,18 +5,23 @@
 
 import { G } from './state.js';
 import { dist2, clamp } from './util.js';
-import { orbs, coins, spawn, despawn, CAP } from './world.js';
+import { orbs, coins, items, spawn, despawn, CAP } from './world.js';
 import { spriteBase } from './sprites.js';
 import { ensureStats } from './stats.js';
 
-// Tier thresholds. A tier-up is both a visual reward and a population control.
+// Tier thresholds, and the SIZE each tier draws at.
+//
+// These used to be 0 / 12 / 60 while every enemy in the game drops 1-5 XP -- so every orb was
+// tier 0 and they all looked identical. Thresholds now sit inside the real drop range, so a
+// Cragfist (5) visibly out-drops a Rattail (1), and elites and bosses reach the top tiers.
 const TIERS = [
-  { min: 0, palette: 'xp_small' },
-  { min: 12, palette: 'xp_mid' },
-  { min: 60, palette: 'xp_big' },
+  { min: 0, palette: 'xp_small', scale: 1.0 },
+  { min: 3, palette: 'xp_mid', scale: 1.35 },
+  { min: 8, palette: 'xp_big', scale: 1.7 },
+  { min: 25, palette: 'xp_huge', scale: 2.2 },
 ];
 
-let TIER_SPR = [0, 0, 0];
+let TIER_SPR = [0, 0, 0, 0];
 let COIN_SPR = 0;
 
 export function initPickupSprites() {
@@ -24,7 +29,12 @@ export function initPickupSprites() {
   COIN_SPR = spriteBase('coin', 'gold');
 }
 
-const tierOf = (v) => (v >= TIERS[2].min ? 2 : v >= TIERS[1].min ? 1 : 0);
+export const tierScale = (t) => TIERS[t].scale;
+
+function tierOf(v) {
+  for (let i = TIERS.length - 1; i >= 0; i--) if (v >= TIERS[i].min) return i;
+  return 0;
+}
 
 // Orbs auto-collect after this long so a forgotten carpet of XP cannot tank the frame rate.
 const ORB_MAX_AGE = 90;
@@ -134,4 +144,77 @@ export function updatePickups(dt, onXp, onCoin) {
   }
 }
 
-export { TIER_SPR };
+// --- Item pickups -----------------------------------------------------------
+//
+// Magnet / berry / bomb / chest. These share the orb's collection loop but are walked over
+// rather than vacuumed, so the player has to choose to go and get them.
+
+export const PICKUP_KINDS = {
+  magnet: { shape: 'icon_pulse', palette: 'xp_mid', label: 'MAGNET' },
+  berry:  { shape: 'orb', palette: 'crab', label: 'SITRUS BERRY' },
+  bomb:   { shape: 'icon_quake', palette: 'fire', label: 'BLAST SEED' },
+  chest:  { shape: 'prop_crate', palette: 'gold', label: 'TREASURE' },
+};
+
+const KIND_KEYS = Object.keys(PICKUP_KINDS);
+let KIND_SPR = {};
+
+/** (shape, palette) pairs the item pickups need in the atlas. */
+export function itemSpritePairs() {
+  return KIND_KEYS.map((k) => [PICKUP_KINDS[k].shape, PICKUP_KINDS[k].palette]);
+}
+
+export function initItemSprites() {
+  for (const k of KIND_KEYS) KIND_SPR[k] = spriteBase(PICKUP_KINDS[k].shape, PICKUP_KINDS[k].palette);
+}
+
+/** Hooks assigned by main.js so collecting an item can reach the systems that apply it. */
+export const itemEffects = {
+  magnet: null, berry: null, bomb: null, chest: null, onCollect: null,
+};
+
+export function dropPickup(x, y, kind) {
+  const it = spawn('items');
+  if (!it) return null;
+  it.x = x; it.y = y;
+  it.vx = (G.rngFx() - 0.5) * 30;
+  it.vy = (G.rngFx() - 0.5) * 30;
+  it.kind = KIND_KEYS.indexOf(kind);
+  it.sprId = KIND_SPR[kind];
+  it.age = 0;
+  it.bob = G.rngFx() * 6;
+  return it;
+}
+
+/** Weighted random drop -- what a destroyed crate or a lucky kill yields. */
+export function dropRandomPickup(x, y) {
+  const r = G.rngRun();
+  const kind = r < 0.40 ? 'berry' : r < 0.72 ? 'magnet' : r < 0.92 ? 'bomb' : 'chest';
+  return dropPickup(x, y, kind);
+}
+
+export function updateItems(dt) {
+  const p = G.player;
+  if (!p) return;
+  const grab = p.r + 10;
+  const grab2 = grab * grab;
+
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i];
+    it.age += dt;
+    it.x += it.vx * dt;
+    it.y += it.vy * dt;
+    it.vx *= 0.9;
+    it.vy *= 0.9;
+
+    if (dist2(it.x, it.y, p.x, p.y) <= grab2) {
+      const kind = KIND_KEYS[it.kind];
+      const fn = itemEffects[kind];
+      if (fn) fn();
+      if (itemEffects.onCollect) itemEffects.onCollect(kind, PICKUP_KINDS[kind].label);
+      despawn('items', items, i);
+    }
+  }
+}
+
+export { TIER_SPR, KIND_KEYS };

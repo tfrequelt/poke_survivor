@@ -73,6 +73,75 @@ class Grid {
       }
     }
   }
+  /** A tapering line from (x0,y0) to (x1,y1), `w0` px wide at the start and `w1` at the end. */
+  stalk(x0, y0, x1, y1, w0, w1, c) {
+    const dx = x1 - x0, dy = y1 - y0;
+    const len = Math.hypot(dx, dy) || 1;
+    const steps = Math.ceil(len * 2);
+    const nx = -dy / len, ny = dx / len;
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const cx = x0 + dx * t, cy = y0 + dy * t;
+      const w = (w0 + (w1 - w0) * t) / 2;
+      for (let o = -w; o <= w; o += 0.5) this.px(cx + nx * o, cy + ny * o, c);
+    }
+  }
+
+  /**
+   * A branching frond: a stalk that splits into `forks` smaller stalks at its tip.
+   * This is the shape an ellipse or triangle cannot give you -- Wooper's gills are branches,
+   * not horns, and that difference is most of why the old sprite read wrong.
+   */
+  branch(x, y, angle, len, width, forks, spread, c) {
+    const tx = x + Math.cos(angle) * len;
+    const ty = y + Math.sin(angle) * len;
+    this.stalk(x, y, tx, ty, width, Math.max(1, width * 0.6), c);
+    for (let i = 0; i < forks; i++) {
+      const a = angle + (i - (forks - 1) / 2) * spread;
+      this.stalk(tx, ty,
+        tx + Math.cos(a) * len * 0.62,
+        ty + Math.sin(a) * len * 0.62,
+        Math.max(1, width * 0.6), 1, c);
+    }
+  }
+
+  /** Stroked elliptical arc from a0 to a1 radians. Used for brow feathers and shockwaves. */
+  arc(cx, cy, rx, ry, a0, a1, thickness, c) {
+    const steps = Math.ceil(Math.max(rx, ry) * Math.abs(a1 - a0) * 2) + 4;
+    for (let i = 0; i <= steps; i++) {
+      const a = a0 + (a1 - a0) * (i / steps);
+      for (let t = 0; t < thickness; t++) {
+        this.px(cx + Math.cos(a) * (rx - t), cy + Math.sin(a) * (ry - t), c);
+      }
+    }
+  }
+
+  /**
+   * Rounded triangle -- wide and round at the top, narrowing to a soft point at the bottom.
+   * This is Rowlet's face disc, which is decidedly not an ellipse.
+   */
+  roundTri(cx, cy, w, h, c) {
+    for (let y = Math.floor(cy - h / 2); y <= Math.ceil(cy + h / 2); y++) {
+      const t = (y - (cy - h / 2)) / h;             // 0 at top, 1 at bottom
+      // Wide near the top, tapering with a curve rather than a straight edge.
+      const hw = (w / 2) * Math.sqrt(Math.max(0, 1 - Math.pow(Math.max(0, t - 0.15) / 0.85, 2.1)));
+      for (let x = Math.round(cx - hw); x <= Math.round(cx + hw); x++) this.px(x, y, c);
+    }
+  }
+
+  /** Explicit pixels from "x,y" pairs -- for the details that must land exactly. */
+  pixels(list, c) {
+    for (const p of list) this.px(p[0], p[1], c);
+  }
+
+  /** Mirror a list of pixels about a vertical axis, so a face only has to be authored once. */
+  pixelsMirrored(list, axis, c) {
+    for (const p of list) {
+      this.px(p[0], p[1], c);
+      this.px(axis * 2 - p[0], p[1], c);
+    }
+  }
+
   /** Filled triangle, used for ears, beaks and leaves. */
   tri(ax, ay, bx, by, cx2, cy2, c) {
     const minX = Math.floor(Math.min(ax, bx, cx2)), maxX = Math.ceil(Math.max(ax, bx, cx2));
@@ -138,30 +207,30 @@ class Grid {
  * The head:body ratio IS the read -- Wooper is basically a head that walks.
  */
 function wooper(bob) {
-  const g = new Grid(32, 32), y = bob;
+  const g = new Grid(40, 40), y = bob;
+  const cx = 19.5;
 
-  // Gills first, so the head overlaps their roots and they grow from behind it. Each prong has a
-  // WIDE base so it reads as a fleshy frond rather than an antenna.
+  // The gills are BRANCHES, not horns: one frond per side that forks into three at the tip.
+  // Drawn first so the head overlaps their roots and they grow from behind it.
   for (const dir of [-1, 1]) {
-    const bx = 15.5 + dir * 7;
-    g.tri(bx, 7 + y, bx, 14 + y, bx + dir * 8, 3 + y, '6');
-    g.tri(bx, 11 + y, bx, 18 + y, bx + dir * 9, 13 + y, '6');
-    g.tri(bx, 15 + y, bx, 21 + y, bx + dir * 7, 22 + y, '6');
+    const a = dir > 0 ? -0.42 : Math.PI + 0.42;
+    g.branch(cx + dir * 8.5, 17 + y, a, 6.2, 4, 3, 0.62, '6');
   }
 
-  g.ellipse(15.5, 24 + y, 6.0, 5.4, '3');      // body
-  g.ellipse(15.5, 13.5 + y, 10.5, 9.0, '3');   // head, dominating
-  g.ellipse(15.5, 9.5 + y, 6.5, 3.2, '4');     // forehead highlight
+  g.ellipse(cx, 29 + y, 7.5, 7.0, '3');         // body, much smaller than the head
+  g.ellipse(cx, 17 + y, 12.5, 10.5, '3');       // head, dominating the silhouette
+  g.ellipse(cx, 12 + y, 7.5, 3.6, '4');         // forehead highlight
 
-  for (const dir of [-1, 1]) {                  // eyes: small, dark, set wide
-    const ex = Math.round(15.5 + dir * 4.5);
-    g.rect(ex - 1, 13 + y, 2, 3, '5');
-    g.px(ex - 1, 13 + y, '7');
+  for (const dir of [-1, 1]) {                  // tiny dot eyes, set low and wide
+    const ex = Math.round(cx + dir * 5.5);
+    g.rect(ex - 1, 16 + y, 2, 3, '5');
+    g.px(ex - 1, 16 + y, '7');
   }
-  g.rect(14, 19 + y, 4, 1, '1');                // flat little mouth
+  g.rect(17, 22 + y, 6, 1, '1');                // the flat little mouth
+  g.px(16, 21 + y, '1'); g.px(23, 21 + y, '1');
 
-  g.rect(10, 28 + y, 4, 3, '2');                // feet
-  g.rect(18, 28 + y, 4, 3, '2');
+  g.rect(13, 35 + y, 5, 4, '2');                // stubby nub feet
+  g.rect(22, 35 + y, 5, 4, '2');
   g.underShade('3', '2');
   return g.outline();
 }
@@ -171,29 +240,31 @@ function wooper(bob) {
  * gills reduced to nubs, arms at its sides.
  */
 function quagsire(bob) {
-  const g = new Grid(32, 32), y = bob;
+  const g = new Grid(40, 40), y = bob;
+  const cx = 19.5;
 
-  for (const dir of [-1, 1]) {                  // gill nubs, much smaller than Wooper's
-    const bx = 15.5 + dir * 8.5;
-    g.tri(bx, 9 + y, bx + dir * 4.5, 5 + y, bx + dir * 1.5, 12 + y, '6');
+  for (const dir of [-1, 1]) {                   // gill nubs -- much reduced from Wooper's fronds
+    const a = dir > 0 ? -0.5 : Math.PI + 0.5;
+    g.branch(cx + dir * 9, 12 + y, a, 3.6, 3, 2, 0.7, '6');
   }
 
-  g.ellipse(15.5, 24 + y, 7.5, 7.5, '3');       // heavy slouched body
-  g.ellipse(15.5, 18 + y, 5.5, 4.0, '3');       // narrower waist, so head and body read apart
-  g.ellipse(6.5, 22 + y, 2.6, 4.5, '3');        // arms hanging at its sides
-  g.ellipse(24.5, 22 + y, 2.6, 4.5, '3');
-  g.ellipse(15.5, 11 + y, 9.0, 7.5, '3');       // head, narrower than Wooper's
-  g.halfEllipse(15.5, 8 + y, 8.5, 4.5, '2', true);   // dark cap over the top of the skull only
+  g.ellipse(cx, 29 + y, 10.5, 10.0, '3');        // heavy slouched body
+  g.ellipse(cx, 22 + y, 7.0, 5.5, '3');          // waist, so head and body read apart
+  g.ellipse(7.5, 27 + y, 3.2, 5.5, '3');         // arms hanging at its sides
+  g.ellipse(31.5, 27 + y, 3.2, 5.5, '3');
+  g.ellipse(cx, 14 + y, 11.5, 9.5, '3');         // head
+  g.halfEllipse(cx, 10 + y, 11.0, 5.5, '2', true);    // dark cap over the skull
+  g.stalk(cx, 20 + y, cx, 34 + y, 3, 2, '2');    // dorsal ridge down the back
 
-  for (const dir of [-1, 1]) {                  // small sleepy eyes
-    const ex = Math.round(15.5 + dir * 4.5);
-    g.rect(ex - 1, 10 + y, 2, 2, '5');
+  for (const dir of [-1, 1]) {                   // small sleepy eyes
+    const ex = Math.round(cx + dir * 5.5);
+    g.rect(ex - 1, 13 + y, 2, 2, '5');
   }
-  g.rect(9, 16 + y, 14, 1, '1');                // the wide flat mouth -- Quagsire's signature
-  g.rect(10, 17 + y, 12, 1, '2');
+  // The wide flat grin, running most of the width of the face -- Quagsire's signature.
+  g.arc(cx, 16 + y, 8.0, 4.0, Math.PI * 0.12, Math.PI * 0.88, 2, '1');
 
-  g.rect(9, 29 + y, 5, 2, '2');                 // feet
-  g.rect(18, 29 + y, 5, 2, '2');
+  g.rect(12, 36 + y, 6, 3, '2');                 // feet
+  g.rect(22, 36 + y, 6, 3, '2');
   g.underShade('3', '2');
   return g.outline();
 }
@@ -206,64 +277,65 @@ function quagsire(bob) {
  */
 function eevee(bob, opts) {
   const o = opts || {};
-  const g = new Grid(32, 32), y = bob;
+  const g = new Grid(40, 40), y = bob;
+  const cx = 17;
 
   // Tail first, so the ruff drawn later occludes its root and it sits BEHIND the body.
   if (o.tail === 'fin') {
-    g.tri(23, 26 + y, 31, 10 + y, 26, 27 + y, '3');
-    g.tri(24, 24 + y, 31, 14 + y, 28, 26 + y, '4');
+    g.tri(29, 33 + y, 39, 12 + y, 33, 34 + y, '3');
+    g.tri(30, 30 + y, 38, 17 + y, 35, 32 + y, '4');
   } else if (o.tail === 'spike') {
-    g.tri(20, 27 + y, 30, 17 + y, 25, 29 + y, '4');
-    g.tri(21, 24 + y, 29, 11 + y, 26, 26 + y, '4');
+    g.tri(26, 34 + y, 38, 20 + y, 32, 36 + y, '4');
+    g.tri(27, 30 + y, 37, 13 + y, 33, 32 + y, '4');
   } else {
-    g.ellipse(25, 18 + y, 6.0, 7.0, o.tailColor || '4');
-    g.ellipse(22.5, 24 + y, 4.5, 4.0, o.tailColor || '4');
+    g.ellipse(31.5, 24 + y, 6.5, 8.0, o.tailColor || '4');
+    g.ellipse(28.5, 32 + y, 5.0, 4.5, o.tailColor || '4');
   }
 
-  g.ellipse(14, 24 + y, 7.5, 6.0, '3');          // body
-  g.rect(8, 27 + y, 3, 4, '2');                  // legs
-  g.rect(13, 28 + y, 3, 3, '2');
-  g.rect(18, 27 + y, 3, 4, '2');
+  g.ellipse(cx, 30 + y, 9.5, 7.5, '3');          // body
+  g.rect(9, 34 + y, 4, 5, '2');                  // legs
+  g.rect(16, 35 + y, 4, 4, '2');
+  g.rect(22, 34 + y, 4, 5, '2');
 
   // The ruff: a wide cream collar that visually separates the head from the body.
-  if (o.ruff !== false) g.ellipse(14, 19.5 + y, 8.5, 4.0, o.ruffColor || '4');
+  if (o.ruff !== false) g.ellipse(cx, 24 + y, 11.0, 5.0, o.ruffColor || '4');
 
   // Ears: tall, pointed, angled outward, with a darker inner surface.
   for (const dir of [-1, 1]) {
-    const bx = 14 + dir * 5;
+    const bx = cx + dir * 6;
     if (o.ears === 'spiky') {
-      g.tri(bx - dir * 2, 12 + y, bx + dir * 6, 8 + y, bx + dir * 2, 0 + y, '3');
+      g.tri(bx - dir * 4, 17 + y, bx + dir * 5, 13 + y, bx + dir * 2.5, 2 + y, '3');
     } else {
-      g.tri(bx - dir * 2.5, 13 + y, bx + dir * 4.5, 11 + y, bx + dir * 4, 1 + y, '3');
-      g.tri(bx - dir * 1, 12 + y, bx + dir * 2.8, 10.5 + y, bx + dir * 3, 4 + y, '2');
+      g.tri(bx - dir * 4.5, 18 + y, bx + dir * 4.5, 15 + y, bx + dir * 2.5, 3 + y, '3');
+      g.tri(bx - dir * 2.5, 17 + y, bx + dir * 2.8, 14.5 + y, bx + dir * 2, 6.5 + y, '2');
     }
   }
 
-  g.ellipse(14, 13 + y, 7.5, 6.5, '3');          // head
+  g.ellipse(cx, 16 + y, 9.0, 8.0, '3');          // head
   if (o.frill) {                                  // Vaporeon's head fins
-    g.tri(6, 12 + y, 0, 6 + y, 7, 17 + y, '6');
-    g.tri(22, 12 + y, 28, 6 + y, 21, 17 + y, '6');
+    g.tri(8, 15 + y, 0, 7 + y, 9, 22 + y, '6');
+    g.tri(26, 15 + y, 34, 7 + y, 25, 22 + y, '6');
   }
   if (o.mane) {                                   // Jolteon's spiky collar
-    for (let i = -3; i <= 3; i++) {
-      const bx = 14 + i * 2.4;
-      g.tri(bx - 1.6, 18 + y, bx + 1.6, 18 + y, bx + i * 1.1, 26 + y, '3');
+    for (let i = -4; i <= 4; i++) {
+      const bx = cx + i * 2.4;
+      g.tri(bx - 1.8, 23 + y, bx + 1.8, 23 + y, bx + i * 1.3, 33 + y, '3');
     }
   }
-  g.ellipse(14, 8.5 + y, 4.5, 2.2, o.tuftColor || '4');   // forehead tuft
-  g.ellipse(14, 16 + y, 4.5, 3.0, o.tuftColor || '4');    // muzzle
+  g.ellipse(cx, 10.5 + y, 5.5, 2.8, o.tuftColor || '4');   // forehead tuft
+  g.ellipse(cx, 20 + y, 5.5, 3.6, o.tuftColor || '4');     // short muzzle
 
   for (const dir of [-1, 1]) {                    // eyes
-    const ex = Math.round(14 + dir * 4);
-    g.rect(ex - 1, 12 + y, 2, 3, '5');
-    g.px(ex - 1, 12 + y, '7');
+    const ex = Math.round(cx + dir * 4.5);
+    g.ellipse(ex, 15 + y, 1.8, 2.4, '5');
+    g.px(ex - 1, 14 + y, '7');
   }
-  g.rect(13, 16 + y, 2, 1, '8');                  // nose
+  g.rect(16, 19 + y, 2, 2, '8');                  // nose
 
   if (o.rings) {                                  // Umbreon's glowing bands
-    g.rect(11, 6 + y, 6, 2, '6');
-    g.rect(9, 24 + y, 3, 2, '6');
-    g.rect(17, 24 + y, 3, 2, '6');
+    g.ellipse(cx, 8 + y, 3.2, 1.6, '6');
+    g.ellipse(10, 31 + y, 2.4, 1.4, '6');
+    g.ellipse(24, 31 + y, 2.4, 1.4, '6');
   }
 
   g.underShade('3', '2');
@@ -275,60 +347,79 @@ const jolteon = (bob) => eevee(bob, { tail: 'spike', ears: 'spiky', mane: true, 
 const umbreon = (bob) => eevee(bob, { rings: true, tailColor: '3', ruffColor: '2', tuftColor: '2' });
 
 /**
- * Rowlet: an almost perfect sphere with a huge pale face disc, a tiny triangular beak and the
- * leaf bowtie. The round silhouette plus the disc is what makes it read instantly.
+ * Rowlet: a brown sphere with a pale rounded-triangle face disc, dark brow feathers over big
+ * eyes, a small orange beak and a leaf bowtie.
+ *
+ * The brow feathers and the SHAPE of the face disc are what carry the recognition. The previous
+ * version had an elliptical disc, no brows, and a green body -- three of the four things that
+ * actually say "Rowlet" were wrong.
  */
 function rowlet(bob) {
-  const g = new Grid(32, 32), y = bob;
+  const g = new Grid(40, 40), y = bob;
+  const cx = 19.5;
 
-  g.ellipse(15.5, 17 + y, 11.5, 11.0, '3');       // the sphere
-  g.halfEllipse(15.5, 15 + y, 11.0, 8.0, '2', true);   // darker crown over the top
-  g.ellipse(15.5, 16 + y, 8.0, 6.8, '4');         // the pale face disc
+  // Two small leaf-feather tufts, drawn first so the skull overlaps their roots.
+  g.stalk(18, 12 + y, 15.5, 5 + y, 3, 1, '3');
+  g.stalk(21, 12 + y, 23.5, 5 + y, 3, 1, '3');
 
-  // Two small leaf tufts on the crown.
-  g.tri(13, 7 + y, 10, 1 + y, 16, 6 + y, '3');
-  g.tri(18, 7 + y, 22, 1 + y, 15, 6 + y, '3');
+  g.ellipse(cx, 22 + y, 13.0, 12.5, '3');          // the sphere
+  g.halfEllipse(cx, 20 + y, 12.5, 8.0, '2', true); // slightly darker crown
 
-  for (const dir of [-1, 1]) {                     // big round eyes
-    const ex = Math.round(15.5 + dir * 3.5);
-    g.rect(ex - 1, 13 + y, 3, 4, '5');
-    g.px(ex - 1, 13 + y, '7');
+  // The face disc: wide and round at the brow, narrowing to a soft point at the chin.
+  // Kept well inside the silhouette so the brown body still frames it.
+  g.roundTri(cx, 21 + y, 19, 16, '4');
+
+  for (const dir of [-1, 1]) {                      // big round eyes
+    const ex = Math.round(cx + dir * 5);
+    g.ellipse(ex, 21 + y, 2.4, 2.8, '5');
+    g.px(ex - 1, 20 + y, '7');
   }
-  g.tri(15.5, 18 + y, 13.5, 22 + y, 17.5, 22 + y, '6');   // small triangular beak
 
-  // Leaf bowtie: two short wedges meeting at the chest.
-  g.tri(8, 22 + y, 15, 24 + y, 9, 27 + y, '8');
-  g.tri(23, 22 + y, 16, 24 + y, 22, 27 + y, '8');
-  g.rect(14, 23 + y, 3, 3, '6');
+  // Brow feathers -- a thin brown arc riding just over each eye. THE Rowlet detail. Kept in the
+  // shadow colour, not the outline colour, or they read as heavy cartoon eyebrows.
+  g.arc(14.5, 21 + y, 3.8, 3.4, Math.PI * 1.18, Math.PI * 1.82, 2, '2');
+  g.arc(24.5, 21 + y, 3.8, 3.4, Math.PI * 1.18, Math.PI * 1.82, 2, '2');
 
-  g.rect(10, 29 + y, 4, 2, '6');                   // stubby feet
-  g.rect(18, 29 + y, 4, 2, '6');
+  // Small orange beak, low and central.
+  g.tri(cx, 24 + y, 18, 27 + y, 21, 27 + y, '6');
+
+  // Leaf bowtie, sat low on the chest with a gap under the beak so the two oranges stay apart.
+  g.leafShape(13, 31.5 + y, 5.5, 2.4, '8');
+  g.leafShape(26, 31.5 + y, 5.5, 2.4, '8');
+  g.ellipse(cx, 31.5 + y, 1.8, 1.6, '6');
+
+  g.rect(14, 35 + y, 4, 3, '6');                    // stubby feet
+  g.rect(22, 35 + y, 4, 3, '6');
   g.underShade('3', '2');
   return g.outline();
 }
 
 /** Dartrix: taller than Rowlet, with a feathered fringe over one eye and leaf-blade shoulders. */
 function dartrix(bob) {
-  const g = new Grid(32, 32), y = bob;
+  const g = new Grid(40, 40), y = bob;
+  const cx = 19.5;
 
-  g.ellipse(15.5, 21 + y, 9.5, 10.0, '3');        // taller, less spherical body
-  g.ellipse(15.5, 11 + y, 8.0, 7.5, '3');         // distinct head
-  g.ellipse(15.5, 12 + y, 6.0, 5.5, '4');         // face disc
+  g.ellipse(cx, 27 + y, 11.5, 12.0, '3');        // taller, less spherical than Rowlet
+  g.ellipse(cx, 14 + y, 9.5, 9.0, '3');          // distinct head
+  g.roundTri(cx, 15 + y, 15, 13, '4');           // face disc
 
-  g.tri(4, 20 + y, 10, 14 + y, 9, 26 + y, '8');   // leaf-blade shoulders
-  g.tri(27, 20 + y, 21, 14 + y, 22, 26 + y, '8');
+  g.leafShape(7, 26 + y, 7.0, 3.5, '8');         // leaf-blade shoulders
+  g.leafShape(32, 26 + y, 7.0, 3.5, '8');
 
-  for (const dir of [-1, 1]) {                     // eyes
-    const ex = Math.round(15.5 + dir * 3);
-    g.rect(ex - 1, 10 + y, 2, 3, '5');
+  for (const dir of [-1, 1]) {                    // eyes
+    const ex = Math.round(cx + dir * 4);
+    g.ellipse(ex, 14 + y, 2.0, 2.4, '5');
   }
-  // The fringe: a slab of feathers hanging over the left eye, Dartrix's signature.
-  g.tri(8, 3 + y, 18, 6 + y, 11, 14 + y, '2');
-  g.tri(9, 4 + y, 16, 7 + y, 12, 12 + y, '3');
+  g.arc(15.5, 13 + y, 3.4, 3.0, Math.PI * 1.18, Math.PI * 1.82, 2, '2');
+  g.arc(23.5, 13 + y, 3.4, 3.0, Math.PI * 1.18, Math.PI * 1.82, 2, '2');
 
-  g.tri(15.5, 13 + y, 13, 17 + y, 18, 17 + y, '6');  // beak
-  g.rect(10, 29 + y, 4, 2, '6');
-  g.rect(18, 29 + y, 4, 2, '6');
+  // The fringe: a slab of feathers hanging over one eye. Dartrix's signature.
+  g.tri(9, 4 + y, 24, 7 + y, 14, 19 + y, '2');
+  g.tri(11, 5 + y, 21, 8 + y, 15, 16 + y, '3');
+
+  g.tri(cx, 16 + y, 17.5, 20 + y, 21.5, 20 + y, '6');   // beak
+  g.rect(14, 36 + y, 4, 3, '6');
+  g.rect(22, 36 + y, 4, 3, '6');
   g.underShade('3', '2');
   return g.outline();
 }
@@ -338,32 +429,39 @@ function dartrix(bob) {
  * face, an arrow-fletch crest, and a leaf cloak flaring at the bottom.
  */
 function decidueye(bob) {
-  const g = new Grid(32, 32), y = bob;
+  const g = new Grid(40, 40), y = bob;
+  const cx = 19.5;
 
-  // Cloak: a wide flared skirt, drawn first so the body sits in front of it.
-  g.tri(15.5, 14 + y, 2, 31 + y, 29, 31 + y, '2');
-  g.tri(15.5, 17 + y, 6, 30 + y, 25, 30 + y, '3');
+  // Wings read as a cloak but must stay SEPARATE from it, or the whole sprite collapses into one
+  // green cone -- which is exactly what the previous version did.
+  g.tri(9, 20 + y, 1, 33 + y, 12, 34 + y, '2');
+  g.tri(30, 20 + y, 38, 33 + y, 27, 34 + y, '2');
 
-  g.ellipse(15.5, 22 + y, 5.5, 8.0, '3');         // slender torso
-  g.rect(14, 12 + y, 4, 8, '3');                  // long neck
+  // Cloak: narrow and tapering, not a full-width skirt.
+  g.tri(cx, 21 + y, 10, 38 + y, 29, 38 + y, '3');
+  g.stalk(13, 30 + y, 12, 38 + y, 2, 2, '2');    // fold lines give the cloak depth
+  g.stalk(26, 30 + y, 27, 38 + y, 2, 2, '2');
 
-  // The hood: a pointed cowl that frames the face and comes to a peak.
-  g.tri(15.5, 0 + y, 5, 14 + y, 26, 14 + y, '2');
-  g.ellipse(15.5, 9 + y, 7.5, 6.5, '2');
-  g.ellipse(15.5, 10 + y, 5.0, 4.5, '4');         // pale face inside the hood
+  g.ellipse(cx, 26 + y, 5.5, 8.0, '3');          // slender torso
+  g.rect(17, 15 + y, 5, 8, '3');                 // long neck
 
-  // Arrow-fletch crest hanging from the back of the hood.
-  g.tri(15.5, 2 + y, 12, 9 + y, 19, 9 + y, '8');
-  g.rect(15, 1 + y, 2, 9, '8');
+  // The hood: a rounded cowl with a peak, sitting clearly above the shoulders.
+  g.ellipse(cx, 11 + y, 9.5, 8.5, '2');
+  g.tri(cx, 0 + y, 11, 12 + y, 28, 12 + y, '2');
+  g.roundTri(cx, 12 + y, 11, 10, '4');           // pale face inside the hood
 
-  for (const dir of [-1, 1]) {                     // narrow, sharp eyes
-    const ex = Math.round(15.5 + dir * 2.5);
-    g.rect(ex - 1, 9 + y, 2, 2, '5');
+  // The arrow-fletch crest: a pale arrow pointing DOWN over the forehead, Decidueye's tell.
+  g.stalk(cx, 2 + y, cx, 9 + y, 3, 3, '8');
+  g.tri(cx, 12 + y, 16, 6 + y, 23, 6 + y, '8');
+
+  for (const dir of [-1, 1]) {                    // narrow, sharp eyes
+    const ex = Math.round(cx + dir * 3.5);
+    g.rect(ex - 1, 13 + y, 2, 2, '5');
   }
-  g.tri(15.5, 11 + y, 14, 15 + y, 17, 15 + y, '6');  // beak
+  g.tri(cx, 15 + y, 18, 19 + y, 21, 19 + y, '6');   // beak
 
-  g.rect(10, 29 + y, 4, 2, '6');                   // talons
-  g.rect(18, 29 + y, 4, 2, '6');
+  g.rect(15, 37 + y, 4, 2, '6');                  // talons
+  g.rect(21, 37 + y, 4, 2, '6');
   g.underShade('3', '2');
   return g.outline();
 }
@@ -500,6 +598,38 @@ function projCloud() {
   return g.outline();
 }
 
+/** Destructible scenery: a leafy bush. */
+function propBush() {
+  const g = new Grid(20, 18);
+  g.ellipse(6, 11, 5.5, 5.0, '3');
+  g.ellipse(13, 10, 6.0, 5.5, '3');
+  g.ellipse(9.5, 7, 5.0, 4.5, '4');
+  g.ellipse(9.5, 9, 3.0, 2.5, '3');
+  g.rect(9, 15, 2, 3, '2');
+  g.underShade('3', '2');
+  return g.outline();
+}
+
+/** Destructible scenery: a boulder. */
+function propRock() {
+  const g = new Grid(20, 16);
+  g.tri(2, 15, 8, 1, 18, 15, '3');
+  g.ellipse(10, 11, 8.0, 4.5, '3');
+  g.tri(6, 10, 9, 3, 13, 10, '4');
+  g.underShade('3', '2');
+  return g.outline();
+}
+
+/** Destructible scenery: a wooden crate -- the one most likely to hold something. */
+function propCrate() {
+  const g = new Grid(18, 16);
+  g.rect(1, 2, 16, 13, '3');
+  g.rect(3, 4, 12, 9, '4');
+  g.rect(1, 7, 16, 2, '2');
+  g.rect(8, 2, 2, 13, '2');
+  return g.outline();
+}
+
 function orb() {
   const g = new Grid(6, 6);
   g.ellipse(2.5, 2.5, 2.2, 2.2, '3');
@@ -507,10 +637,26 @@ function orb() {
   return g.outline();
 }
 
+/** Coins are pokeballs -- the most recognisable object in the series and a better pickup read. */
 function coin() {
-  const g = new Grid(6, 6);
-  g.ellipse(2.5, 2.5, 2.2, 2.2, '3');
-  g.rect(2, 1, 2, 4, '4');
+  const g = new Grid(8, 8);
+  g.ellipse(3.5, 3.5, 3.2, 3.2, '4');             // lower half, pale
+  g.halfEllipse(3.5, 3.5, 3.2, 3.2, '3', true);   // upper half, coloured
+  g.rect(0, 3, 8, 2, '1');                        // the band
+  g.ellipse(3.5, 3.5, 1.3, 1.3, '1');             // button ring
+  g.px(3, 3, '7'); g.px(4, 3, '7');
+  return g.outline();
+}
+
+/** A larger pokeball, for the HUD and the title screen. */
+function pokeball() {
+  const g = new Grid(14, 14);
+  g.ellipse(6.5, 6.5, 6.0, 6.0, '4');
+  g.halfEllipse(6.5, 6.5, 6.0, 6.0, '3', true);
+  g.rect(0, 6, 14, 2, '1');
+  g.ellipse(6.5, 6.5, 2.4, 2.4, '1');
+  g.ellipse(6.5, 6.5, 1.3, 1.3, '7');
+  g.px(4, 3, '7'); g.px(5, 3, '7');
   return g.outline();
 }
 
@@ -603,6 +749,8 @@ const ONE_FRAME = {
   proj_rock: projRock, proj_bone: projBone, proj_spark: projSpark, proj_cloud: projCloud,
   icon_shield: iconShield, icon_quake: iconQuake, icon_leaf: iconLeaf, icon_arrow: iconArrow,
   icon_beam: iconBeam, icon_bolt: iconBolt, icon_jet: iconJet, icon_pulse: iconPulse,
+  prop_bush: propBush, prop_rock: propRock, prop_crate: propCrate,
+  pokeball,
 };
 
 const SHAPES = {};
