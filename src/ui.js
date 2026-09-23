@@ -13,6 +13,8 @@ import {
   drawText, drawTextCentered, textWidth, drawSprite, drawSpriteScaled, drawShadow, drawLogo,
 } from './sprites.js';
 import { clamp, hash2 } from './util.js';
+import { getPortrait } from './assets.js';
+import { CREDITS } from './data/credits.js';
 
 /** Set by main.js once the atlas exists. */
 export let ballSpr = -1;
@@ -226,13 +228,37 @@ export function drawTitle(starters, t) {
     drawTextCentered(ctx, 'PRESS ANY KEY', VW / 2, 268, 'white');
   }
   drawTextCentered(ctx, 'WASD MOVE   Q E ABILITIES   M MUTE   ESC PAUSE   F FULLSCREEN', VW / 2, VH - 16, 'dim');
+  drawTextCentered(ctx, 'SPRITES BY THE PMD SPRITE COLLAB   -   C FOR CREDITS', VW / 2, VH - 28, 'blue');
+}
+
+// --- Credits ----------------------------------------------------------------
+
+export function drawCredits() {
+  ctx.fillStyle = '#12202a';
+  ctx.fillRect(0, 0, VW, VH);
+  drawTextCentered(ctx, 'CREDITS', VW / 2, 22, 'gold');
+
+  panel(28, 38, VW - 56, VH - 76, '#7ac8ff', '#161629');
+
+  let y = 50;
+  for (const row of CREDITS) {
+    if (row.heading) {
+      y += 4;
+      drawText(ctx, row.heading, 42, y, 'gold');
+      y += 12;
+    } else {
+      drawText(ctx, row.line, 42, y, row.color || 'white');
+      y += row.line ? 10 : 5;
+    }
+  }
+  drawTextCentered(ctx, 'ESC BACK', VW / 2, VH - 22, 'dim');
 }
 
 // --- Character select -------------------------------------------------------
 
 const SELECT_W = 176;
-const SELECT_H = 216;
-const SELECT_Y = 62;
+const SELECT_H = 252;
+const SELECT_Y = 44;
 
 // Shared maxima so the three bars are comparable rather than each self-normalised.
 const STAT_ROWS = [
@@ -257,16 +283,30 @@ export function drawSelect(starters, t) {
     const selected = i === ui.cursor;
     panel(x, SELECT_Y, SELECT_W, SELECT_H, selected ? '#ffffff' : c.color, selected ? '#20203a' : '#161629');
 
-    // Only the selected partner animates -- it reads as "this one is awake".
-    const frame = selected ? (((t * 6) | 0) & 1) : 0;
-    const bob = selected ? Math.sin(t * 4) * 2 : 0;
-    drawShadow(ctx, x + SELECT_W / 2, SELECT_Y + 46, 1.6);
-    drawSpriteScaled(ctx, c.sprId + frame * 2 + 1, x + SELECT_W / 2, SELECT_Y + 44 + bob, 2);
+    // The portrait, not the walking sprite -- a face reads far better on a selection card.
+    const port = getPortrait(c.id);
+    const px = x + SELECT_W / 2;
+    if (port) {
+      const k = 2;
+      const pw = port.w * k, ph = port.h * k;
+      // Framed, with the selected one lifted slightly.
+      const py = SELECT_Y + 8 - (selected ? 1 : 0);
+      ctx.fillStyle = '#0d0d18';
+      ctx.fillRect(px - pw / 2 - 2, py - 2, pw + 4, ph + 4);
+      ctx.fillStyle = selected ? c.color : '#2a2a40';
+      ctx.fillRect(px - pw / 2 - 1, py - 1, pw + 2, ph + 2);
+      ctx.drawImage(port.canvas, 0, 0, port.w, port.h, Math.round(px - pw / 2), py, pw, ph);
+    } else {
+      const frame = selected ? (((t * 6) | 0) & 1) : 0;
+      const bob = selected ? Math.sin(t * 4) * 2 : 0;
+      drawShadow(ctx, px, SELECT_Y + 46, 1.6);
+      drawSpriteScaled(ctx, c.sprId + frame * 2 + 1, px, SELECT_Y + 44 + bob, 2);
+    }
 
-    drawTextCentered(ctx, c.name.toUpperCase(), x + SELECT_W / 2, SELECT_Y + 58, 'white');
-    drawTypeBadges(c.typeLabel, x + SELECT_W / 2, SELECT_Y + 68);
+    drawTextCentered(ctx, c.name.toUpperCase(), x + SELECT_W / 2, SELECT_Y + 94, 'white');
+    drawTypeBadges(c.typeLabel, x + SELECT_W / 2, SELECT_Y + 105);
 
-    let y = SELECT_Y + 86;
+    let y = SELECT_Y + 120;
     for (const row of STAT_ROWS) {
       const v = c.stats[row.key] || 0;
       drawText(ctx, row.label, x + 10, y, 'dim');
@@ -334,12 +374,13 @@ export function drawEvolution(evo) {
     const k = t / EVO_FLICKER;
     const interval = 0.34 - k * 0.29;
     const showNew = Math.floor(t / interval) & 1;
-    const id = (showNew ? evo.newBase : evo.oldBase) + 4;    // +4 = the white flash variant
+    // The white silhouette is the pre-baked flash variant; its offset is nf*nd per form.
+    const id = showNew ? evo.newBase + evo.newFlash : evo.oldBase + evo.oldFlash;
     drawSpriteScaled(ctx, id, cx, cy, 2);
     drawTextCentered(ctx, 'WHAT?', cx, 48, 'white');
   } else if (t < EVO_FLICKER + EVO_FLASH) {
     const k = (t - EVO_FLICKER) / EVO_FLASH;
-    drawSpriteScaled(ctx, evo.newBase + 4, cx, cy, 2 + k * 0.6);
+    drawSpriteScaled(ctx, evo.newBase + evo.newFlash, cx, cy, 2 + k * 0.6);
     ctx.globalAlpha = Math.min(1, k * 1.6);
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, VW, VH);
@@ -354,7 +395,7 @@ export function drawEvolution(evo) {
       ctx.globalAlpha = 1;
     }
     const pop = k < 0.2 ? 2.5 - k * 2.5 : 2;
-    drawSpriteScaled(ctx, evo.newBase + 1, cx, cy, pop);
+    drawSpriteScaled(ctx, evo.newBase + evo.newFace, cx, cy, pop);
 
     ctx.globalAlpha = Math.max(0, 1 - k);
     ctx.strokeStyle = '#ffffff';

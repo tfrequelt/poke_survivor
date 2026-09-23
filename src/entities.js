@@ -208,7 +208,7 @@ function drawEnemy(e, ox, oy) {
   const sx = e.x + ox, sy = e.y + oy;
   if (sx < -MARGIN || sy < -MARGIN || sx > VW + MARGIN || sy > VH + MARGIN) return;
   // id = base + flash*(nf*nd) + frame*nd + dir. The flash variant is pre-baked white.
-  const id = e.sprBase + (e.flash > 0 ? 4 : 0) + e.frame * 2 + e.dir;
+  const id = e.sprBase + (e.flash > 0 ? e.nf * e.nd : 0) + e.frame * e.nd + e.dir;
   if (e.spawnT > 0) {
     ctx.globalAlpha = 1 - e.spawnT / 0.18;
     drawSprite(ctx, id, sx, sy);
@@ -224,7 +224,8 @@ function drawPlayer(p, ox, oy) {
   const sx = p.x + ox, sy = p.y + oy;
   // Blink during i-frames, but on a slow enough cycle to stay readable in a crowd.
   if (p.iframes > 0 && (((p.iframes * 20) | 0) & 1)) return;
-  drawSprite(ctx, p.sprBase + p.frame * 2 + p.dir, sx, sy);
+  // id = base + flash*(nf*nd) + frame*nd + dir
+  drawSprite(ctx, p.sprBase + p.frame * p.nd + p.dir, sx, sy);
 }
 
 function drawHealthBar(e, sx, sy) {

@@ -10,6 +10,7 @@ export const MODES = {
   SELECT: 'select',
   SHOP: 'shop',
   POKEDEX: 'pokedex',
+  CREDITS: 'credits',
   PLAYING: 'playing',
   LEVELUP: 'levelup',
   EVOLVE_CHOICE: 'evolveChoice',

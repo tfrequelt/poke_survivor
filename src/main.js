@@ -10,7 +10,7 @@ import {
   updateCamera, snapCamera, toScreenX, toScreenY, addShake, scale, VW, VH,
 } from './render.js';
 import {
-  registerSprite, buildAtlas, spriteBase, spriteDirs, angleSlot,
+  registerSprite, buildAtlas, spriteBase, spriteDirs, spriteInfo, angleSlot,
   drawSprite, drawShadow, drawText, drawTextCentered,
 } from './sprites.js';
 import {
@@ -45,16 +45,17 @@ import { drawEntities } from './entities.js';
 import { drawHud, debugLines } from './hud.js';
 import {
   ui, drawLevelUp, drawPause, drawTitle, drawSelect, drawEvolution, drawEvolutionChoice,
-  EVO_TOTAL, setBallSprite,
+  EVO_TOTAL, setBallSprite, drawCredits,
 } from './ui.js';
 import { CHARACTERS, CHARACTER_BY_ID, characterSpritePairs } from './data/characters.js';
 import { enemySpritePairs } from './data/enemies.js';
 import { weaponSpritePairs } from './data/weapons.js';
 import { STAGE_BY_ID, STAGES, propSpritePairs } from './data/stages.js';
-import { loadAssets } from './assets.js';
+import { loadAssets, pickMusic } from './assets.js';
 import {
   initAudio, audioReady, sfx, playTrack, playOnce, setIntensity, stopTrack,
   setVolume, toggleMute, settings as audioSettings, TITLE, ROUTE, BOSS, FANFARE,
+  playMusicFile, musicFilePlaying, setMusicFallback,
 } from './audio.js';
 
 const STEP = 1 / 60;
@@ -64,6 +65,7 @@ let accumulator = 0;
 let lastTime = 0;
 let fps = 60, frameMs = 0, simMs = 0, drawMs = 0;
 let atlasView = false;
+let dirView = false;
 let atlasStats = null;
 let bootParams = null;
 let menuTime = 0;
@@ -92,6 +94,7 @@ function parseParams() {
 async function boot() {
   const q = parseParams();
   atlasView = q.has('atlas');
+  dirView = q.has('dirs');
 
   initInput();
   initRender();
@@ -131,6 +134,7 @@ async function boot() {
   }
 
   onKey(handleKey);
+  setMusicFallback(() => playTrack(lastChiptune || ROUTE));
 
   // Debug-only handle so an automated harness can drive the stress test and read exact frame
   // timings, rather than inferring them from a screenshot of the overlay.
@@ -302,6 +306,7 @@ function startRun(character, q) {
 
   G.player = createPlayer(0, 0);
   G.player.sprBase = spriteBase(character.shape, character.palette);
+  applyPlayerSprite(character.shape, character.palette);
   G.player.hp = G.player.maxHp = G.stats.maxHp;
   G.xpNext = xpToNext(1);
 
@@ -326,7 +331,8 @@ function startRun(character, q) {
   snapCamera(0, 0);
   setMode(MODES.PLAYING);
   resetAccumulator();
-  if (audioReady()) { setIntensity(0); playTrack(ROUTE); }
+  setIntensity(0);
+  startMusic(G.stage.id, ROUTE);
 }
 
 // --- Input ------------------------------------------------------------------
@@ -336,16 +342,22 @@ function handleKey(code) {
   // keypress, so that is the natural unlock point.
   if (!audioReady()) {
     initAudio();
-    if (G.mode === MODES.TITLE) playTrack(TITLE);
+    // Start whatever this context calls for. A run entered directly via ?char= is already
+    // playing by the time audio unlocks, so it needs its stage track, not the menu theme.
+    if (G.mode === MODES.PLAYING && G.stage) startMusic(G.stage.id, ROUTE);
+    else startMusic('menu', TITLE);
   }
   if (code === 'KeyM') { toggleMute(); return; }
   if (code === 'KeyF') return toggleFullscreen();
 
   if (G.mode === MODES.TITLE) {
+    if (code === 'KeyC') { setMode(MODES.CREDITS); return; }
     ui.cursor = 0;
     setMode(MODES.SELECT);
+    sfx('confirm');
     return;
   }
+  if (G.mode === MODES.CREDITS) { setMode(MODES.TITLE); return; }
   if (G.mode === MODES.SELECT) return selectKey(code);
 
   // The level-up modal owns the keyboard while it is open, so R means "reroll" there and
@@ -382,7 +394,7 @@ function toSelect() {
   ui.cursor = Math.max(0, CHARACTERS.indexOf(G.character));
   setMode(MODES.SELECT);
   sfx('select');
-  if (audioReady()) playTrack(TITLE);
+  startMusic('menu', TITLE);
 }
 
 function selectKey(code) {
@@ -439,6 +451,22 @@ function levelUpKey(code) {
   }
 }
 
+/**
+ * Start the music for a context. Supplied tracks win; if none is listed for this key, or the file
+ * will not play, the synthesised chiptune takes over so the game is never silent.
+ */
+function startMusic(key, chiptune) {
+  if (!audioReady()) return;
+  // Remember the chiptune for this context, so a track that fails to load later still has
+  // something to fall back to.
+  lastChiptune = chiptune;
+  const url = pickMusic(key, G.rngFx);
+  if (url && playMusicFile(url)) return;
+  playTrack(chiptune);
+}
+
+let lastChiptune = null;
+
 /** Fire an ability and play the sound that matches its effect. */
 function castAbility(slot) {
   const a = G.abilities[slot];
@@ -449,6 +477,18 @@ function castAbility(slot) {
   };
   sfx(byEffect[a.def.effect] || 'ability');
   return true;
+}
+
+/** Point the player at a form's sprite and adopt its direction/frame counts. */
+function applyPlayerSprite(shape, palette) {
+  const p = G.player;
+  if (!p) return;
+  p.sprBase = spriteBase(shape, palette);
+  const info = spriteInfo(shape, palette);
+  p.nd = info ? info.nd : 2;
+  p.nf = info ? info.nf : 2;
+  // A 2-slot sprite has no row for "down"; clamp so an 8-way facing never indexes past the end.
+  if (p.dir >= p.nd) p.dir = p.nd === 8 ? 0 : 1;
 }
 
 function togglePause() {
@@ -530,7 +570,7 @@ function stepSim(dt) {
   heavyLoad = enemies.length > 220;
 
   // The route theme layers up with the spawn curve rather than looping identically for 20 minutes.
-  if ((G.tick & 63) === 0 && audioReady()) {
+  if ((G.tick & 63) === 0 && audioReady() && !musicFilePlaying()) {
     const m = G.curve.m;
     setIntensity(m > 11 ? 2 : m > 5 ? 1 : 0);
   }
@@ -605,15 +645,23 @@ function beginCutscene(ev, branch) {
   }
   const oldName = G.form.name;
   const oldBase = G.player.sprBase;
+  const oldInfo = spriteInfo(G.form.shape, G.form.palette);
+  const oldFlash = oldInfo ? oldInfo.nf * oldInfo.nd : 4;
+  const oldFace = oldInfo && oldInfo.nd === 8 ? 0 : 1;
 
   applyEvolution(ev, branch);
   const newBase = spriteBase(G.form.shape, G.form.palette);
-  G.player.sprBase = newBase;
+  applyPlayerSprite(G.form.shape, G.form.palette);
 
   sfx('evolve');
   if (audioReady()) playOnce(FANFARE);
+  const newInfo = spriteInfo(G.form.shape, G.form.palette);
   evo = {
     t: 0, ev, oldBase, newBase,
+    // Flash-variant offset and the "face the camera" direction differ per form, so they travel
+    // with the cutscene rather than being assumed.
+    oldFlash, newFlash: newInfo ? newInfo.nf * newInfo.nd : 4,
+    oldFace, newFace: newInfo && newInfo.nd === 8 ? 0 : 1,
     oldName, newName: G.form.name, note: chosen.note || '',
   };
   setMode(MODES.EVOLVING);
@@ -680,7 +728,9 @@ function spawnMiniboss(tier) {
   e.bossTier = tier;
 
   sfx('boss');
-  if (audioReady() && tier >= 4) playTrack(BOSS);
+  // Only switch to the chiptune boss theme if this stage has no supplied music -- cutting from a
+  // streamed track to a synthesised one mid-fight is jarring.
+  if (audioReady() && tier >= 4 && !pickMusic(G.stage.id)) playTrack(BOSS);
   G.banner.text = tier >= 4 ? 'A HUGE SHADOW FALLS' : 'SOMETHING BIG APPROACHES';
   G.banner.sub = '';
   G.banner.t = 2.5;
@@ -765,10 +815,12 @@ function updateFx(dt) {
 // --- Draw -------------------------------------------------------------------
 
 function draw() {
+  if (dirView) { drawDirectionSheet(); present(); return; }
   if (atlasView) { drawAtlasShowcase(); present(); return; }
 
-  if (G.mode === MODES.TITLE || G.mode === MODES.SELECT) {
-    if (G.mode === MODES.TITLE) drawTitle(CHARACTERS, menuTime);
+  if (G.mode === MODES.TITLE || G.mode === MODES.SELECT || G.mode === MODES.CREDITS) {
+    if (G.mode === MODES.CREDITS) drawCredits();
+    else if (G.mode === MODES.TITLE) drawTitle(CHARACTERS, menuTime);
     else drawSelect(CHARACTERS, menuTime);
     present();
     if (G.debug.on) drawDebugOverlay([`mode ${G.mode}   1-3 / ARROWS + ENTER`]);
@@ -816,6 +868,34 @@ function drawHitboxes() {
   }
 }
 
+/**
+ * `?dirs=1` -- every sheet-backed form in all 8 facings, one row each.
+ * Column order matches the PMD row order: Down, Down-Right, Right, Up-Right, Up, Up-Left, Left,
+ * Down-Left. If a row looks scrambled, the sheet's rows are being read in the wrong order.
+ */
+function drawDirectionSheet() {
+  ctx.fillStyle = '#14141f';
+  ctx.fillRect(0, 0, VW, VH);
+  const labels = ['DN', 'DR', 'R', 'UR', 'UP', 'UL', 'L', 'DL'];
+
+  let y = 26;
+  drawText(ctx, 'FACING:', 6, 8, 'dim');
+  for (let d = 0; d < 8; d++) drawText(ctx, labels[d], 70 + d * 60, 10, 'gold');
+
+  const frame = ((performance.now() / 120) | 0);
+  for (const [shape, pal] of characterSpritePairs()) {
+    const info = spriteInfo(shape, pal);
+    if (!info || info.nd !== 8) continue;            // drawn-art forms have no 8-way sheet
+    drawText(ctx, shape.slice(0, 10), 4, y - 6, 'white');
+    for (let d = 0; d < 8; d++) {
+      const id = info.base + (frame % info.nf) * 8 + d;
+      drawSprite(ctx, id, 70 + d * 60, y + 14);
+    }
+    y += 37;                                       // 9 forms have to fit in 360px
+    if (y > VH - 8) break;
+  }
+}
+
 /** `?atlas=1` -- contact sheet of every registered sprite plus the pixel font. */
 function drawAtlasShowcase() {
   ctx.fillStyle = '#14141f';
@@ -829,7 +909,9 @@ function drawAtlasShowcase() {
   for (const [shape, pal] of characterSpritePairs()) {
     const base = spriteBase(shape, pal);
     drawShadow(ctx, x, y, 1.6);
-    drawSprite(ctx, base + flash * 4 + frame * 2 + dir, x, y);
+    const inf = spriteInfo(shape, pal);
+    const nd2 = inf ? inf.nd : 2;
+    drawSprite(ctx, base + (frame % (inf ? inf.nf : 2)) * nd2 + (nd2 === 8 ? 0 : dir), x, y);
     drawText(ctx, shape.slice(0, 9), x - 24, y + 10, 'dim');
     x += 76;
     if (x > VW - 44) { x = 40; y += 74; }
@@ -838,7 +920,8 @@ function drawAtlasShowcase() {
   x = 40; y += 62;
   drawText(ctx, 'FLASH', 2, y - 12, 'dim');
   for (const [shape, pal] of characterSpritePairs()) {
-    drawSprite(ctx, spriteBase(shape, pal) + 4, x, y);
+    const inf2 = spriteInfo(shape, pal);
+    drawSprite(ctx, spriteBase(shape, pal) + (inf2 ? inf2.nf * inf2.nd : 4), x, y);
     x += 76;
     if (x > VW - 44) { x = 40; y += 74; }
   }
@@ -847,7 +930,9 @@ function drawAtlasShowcase() {
   for (const [shape, pal] of enemySpritePairs()) {
     const base = spriteBase(shape, pal);
     drawShadow(ctx, x, y);
-    drawSprite(ctx, base + flash * 4 + frame * 2 + dir, x, y);
+    const inf = spriteInfo(shape, pal);
+    const nd2 = inf ? inf.nd : 2;
+    drawSprite(ctx, base + (frame % (inf ? inf.nf : 2)) * nd2 + (nd2 === 8 ? 0 : dir), x, y);
     drawText(ctx, pal.slice(0, 7), x - 16, y + 6, 'dim');
     x += 48;
     if (x > VW - 40) { x = 34; y += 40; }

@@ -1,4 +1,45 @@
 {
-  "_comment": "Map a shape name to an image to override its drawn art. Empty = all generated.",
-  "sprites": {}
+  "_comment": "sheets: PMD walk sheets (8 direction rows x N frame columns). sprites: single-image overrides.",
+  "sheets": {
+    "dartrix": "assets/sprites/dartrix",
+    "decidueye": "assets/sprites/decidueye",
+    "eevee": "assets/sprites/eevee",
+    "jolteon": "assets/sprites/jolteon",
+    "quagsire": "assets/sprites/quagsire",
+    "rowlet": "assets/sprites/rowlet",
+    "umbreon": "assets/sprites/umbreon",
+    "vaporeon": "assets/sprites/vaporeon",
+    "wooper": "assets/sprites/wooper"
+  },
+  "portraits": {
+    "dartrix": "assets/portraits/dartrix_portrait.png",
+    "decidueye": "assets/portraits/decidueye_portrait.png",
+    "eevee": "assets/portraits/eevee_portrait.png",
+    "jolteon": "assets/portraits/jolteon_portrait.png",
+    "quagsire": "assets/portraits/quagisre_portrait.png",
+    "rowlet": "assets/portraits/rowlet_portrait.png",
+    "umbreon": "assets/portraits/umbreon_portrait.png",
+    "vaporeon": "assets/portraits/vaporeon_portrait.png",
+    "wooper": "assets/portraits/wooper_portrait.png"
+  },
+  "sprites": {},
+  "music": {
+    "menu": [
+      "assets/musics/01. Pokémon Exploration Team Theme.mp3"
+    ],
+    "grass": [
+      "assets/musics/109. Murky Forest.mp3",
+      "assets/musics/120. Southern Jungle.mp3",
+      "assets/musics/29. Apple Woods.mp3"
+    ],
+    "cave": [
+      "assets/musics/24. Waterfall Cave.mp3",
+      "assets/musics/32. Mt. Horn.mp3",
+      "assets/musics/43. Crystal Cave.mp3"
+    ],
+    "beach": [
+      "assets/musics/05. Beach Cave.mp3",
+      "assets/musics/89. Miracle Sea.mp3"
+    ]
+  }
 }

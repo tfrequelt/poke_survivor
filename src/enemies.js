@@ -9,7 +9,8 @@ import {
   enemies, spawn, despawn, rebuildGrid, cellRange, cellStart, cellItems, CELL, GW,
 } from './world.js';
 import { ENEMIES, ENEMY_BY_ID } from './data/enemies.js';
-import { spriteBase } from './sprites.js';
+import { dirFromAngle } from './assets.js';
+import { spriteBase, spriteInfo } from './sprites.js';
 
 // World units. The content pass was authored for a 1280x720 space; everything spatial is halved
 // for the 640x360 render space (see the conversion rule in the plan).
@@ -145,6 +146,8 @@ export function spawnEnemy(def, x, y, opts) {
   e.spawnT = 0.18;                                 // brief fade-in so pop-in is less jarring
   e.lastHitId = 0;
   e.sprBase = elite ? def.sprEliteBase : def.sprBase;
+  e.nd = def.sprDirs;
+  e.nf = def.sprFrames;
   return e;
 }
 
@@ -233,9 +236,12 @@ export function updateEnemies(dt, separationOn) {
       if (Math.abs(e.knockX) < 1 && Math.abs(e.knockY) < 1) { e.knockX = 0; e.knockY = 0; }
     }
 
-    if (e.vx > 1) e.dir = 1; else if (e.vx < -1) e.dir = 0;
+    if (e.nd === 8) {
+      if (e.vx || e.vy) e.dir = dirFromAngle(Math.atan2(e.vy, e.vx));
+    } else if (e.vx > 1) e.dir = 1;
+    else if (e.vx < -1) e.dir = 0;
     e.animTime += dt;
-    e.frame = ((e.animTime * 6) | 0) & 1;
+    e.frame = ((e.animTime * 6) | 0) % e.nf;
 
     // Recycle anything that wandered far off-screen. It does NOT count as a kill, so it is
     // marked rather than killed and the end-of-tick sweep collects it.
@@ -256,6 +262,9 @@ export function initEnemyDefs() {
     def.aiIdx = aiIndex(def.ai);
     def.sprBase = spriteBase(def.shape, def.palette);
     def.sprEliteBase = spriteBase(def.shape, 'elite');
+    const info = spriteInfo(def.shape, def.palette);
+    def.sprDirs = info ? info.nd : 2;
+    def.sprFrames = info ? info.nf : 2;
   }
 }
 

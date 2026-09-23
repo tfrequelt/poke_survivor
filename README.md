@@ -1,5 +1,17 @@
 # Poke Survivor
 
+## Credits
+
+The Pokemon sprites and portraits in `assets/` come from the **[PMD Sprite Collab](https://sprites.pmdcollab.org)**,
+a community project. Each sprite and portrait is the work of individual contributors, who are
+credited per-Pokemon on the project's
+**[Contributors page](https://sprites.pmdcollab.org/#/Contributors)**. Thank you to all of them.
+
+Pokemon is a trademark of Nintendo, Game Freak and Creatures Inc. This is a non-commercial fan
+project and is not affiliated with them.
+
+Code, music, sound, UI and the fallback pixel art were made for this project.
+
 A Pokemon-flavoured Vampire Survivors clone that runs in the browser. Vanilla JavaScript ES modules,
 Canvas 2D and Web Audio -- no framework, no dependencies, no build step. All art is pixel data defined
 in `src/data/art.js` and all music is synthesised at runtime, so there are no binary asset files.
@@ -26,6 +38,7 @@ python -m http.server 8000  # -> http://localhost:8000
 | `B` / `S` | Banish / skip a level-up (press `B` twice to confirm) |
 | `Q` (paused / after a run) | Back to partner select |
 | `M` | Mute |
+| `C` | Credits (from the title screen) |
 | `F` | Fullscreen -- 640x360 is an exact 3x fit for 1080p |
 
 The game opens on a title screen; any key goes to partner select, where you pick Wooper, Eevee or
@@ -73,10 +86,20 @@ Barrage; Leaf Arrow + Sharp Beak becomes Spirit Shackle.
 
 ## Audio
 
-All music and sound is synthesised at runtime with Web Audio -- there are no audio files. A title
-theme, a route theme that layers up as the run escalates, a boss theme, an evolution fanfare and
-~20 sound effects. Browsers require a real keypress before audio can start, so the first key you
-press on the title screen unlocks it.
+Music tracks listed under `music` in `assets/manifest.json` are streamed per context -- one list
+per key, picked at random each time:
+
+| Key | When |
+|---|---|
+| `menu` | Title, partner select and credits |
+| `grass` / `cave` / `beach` | Whichever stage the run is on |
+
+Tracks stream rather than decode, so the ~35MB set costs nothing at boot. Every sound effect is
+still synthesised at runtime, as is a **fallback chiptune**: if a key has no track listed, or the
+file fails to load, the synthesised theme takes over so the game is never silent.
+
+Browsers require a real keypress before audio can start, so the first key you press unlocks it.
+`M` mutes.
 
 ## Debug keys
 
@@ -93,6 +116,7 @@ Available with `?debug=1`:
 | `R` | Restart the run |
 
 `?atlas=1` renders a contact sheet of every sprite and the pixel font.
+`?dirs=1` shows every PMD-backed form in all eight facings, to verify direction mapping.
 
 ## Development tools
 

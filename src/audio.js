@@ -144,6 +144,9 @@ export function stopTrack() {
   track = null;
 }
 
+/** Is the synthesised track currently scheduling notes? */
+export const chiptunePlaying = () => !!track;
+
 /** Layer the route theme up as the run escalates. 0 = bass+lead, 1 = +arp, 2 = everything. */
 export function setIntensity(level) {
   intensity = Math.max(0, Math.min(2, level | 0));
@@ -258,6 +261,120 @@ function noiseSource(dur) {
   s.loop = true;
   return s;
 }
+
+// --- Streamed music files ---------------------------------------------------
+//
+// Supplied tracks are STREAMED through HTMLAudioElement rather than decoded into buffers: the
+// set is ~35MB, and decodeAudioData would hold all of it uncompressed in memory for no benefit.
+//
+// Two elements exist so one can fade out while the next fades in. createMediaElementSource can
+// only be called once per element, so they are built once here and reused by swapping `.src`.
+
+const FADE = 1.1;
+
+let musicEls = null;
+let musicGains = null;
+let activeSlot = 0;
+let currentUrl = null;
+let fileMusicOn = false;
+
+/**
+ * Called when a supplied track cannot play. play() rejects ASYNCHRONOUSLY, long after
+ * playMusicFile has returned, so the caller cannot fall back on its own -- without this hook a
+ * missing or unsupported file leaves the game silent rather than dropping to the chiptune.
+ */
+let onMusicFail = null;
+export function setMusicFallback(fn) { onMusicFail = fn; }
+
+function initMusicElements() {
+  if (musicEls) return;
+  musicEls = [];
+  musicGains = [];
+  for (let i = 0; i < 2; i++) {
+    const el = new Audio();
+    el.loop = true;
+    el.preload = 'none';
+    el.addEventListener('error', () => {
+      if (el.src && decodeURI(el.src).endsWith(String(currentUrl))) {
+        console.warn('[audio] track errored:', currentUrl);
+        fileMusicOn = false;
+        currentUrl = null;
+        if (onMusicFail) onMusicFail();
+      }
+    });
+    const g = ctx.createGain();
+    g.gain.value = 0;
+    ctx.createMediaElementSource(el).connect(g);
+    g.connect(musicBus);
+    musicEls.push(el);
+    musicGains.push(g);
+  }
+}
+
+/**
+ * Stream a music file, crossfading from whatever is playing.
+ * Returns false if it could not start, so the caller can fall back to the chiptune.
+ */
+export function playMusicFile(url) {
+  if (!ctx || ctx.state !== 'running' || !url) return false;
+  if (url === currentUrl) return true;               // already playing this one
+
+  initMusicElements();
+  const now = ctx.currentTime;
+  const next = activeSlot ^ 1;
+  const outG = musicGains[activeSlot];
+  const inEl = musicEls[next];
+  const inG = musicGains[next];
+
+  // Fade the outgoing track down and stop it once it is silent.
+  outG.gain.cancelScheduledValues(now);
+  outG.gain.setValueAtTime(outG.gain.value, now);
+  outG.gain.linearRampToValueAtTime(0, now + FADE);
+  const outEl = musicEls[activeSlot];
+  const outSlot = activeSlot;
+  setTimeout(() => {
+    if (activeSlot === outSlot) return;              // it became current again; leave it alone
+    try { outEl.pause(); } catch { /* element already torn down */ }
+  }, FADE * 1000 + 60);
+
+  inEl.src = encodeURI(url);
+  inEl.currentTime = 0;
+  inG.gain.cancelScheduledValues(now);
+  inG.gain.setValueAtTime(0, now);
+  inG.gain.linearRampToValueAtTime(1, now + FADE);
+
+  const p = inEl.play();
+  if (p && p.catch) {
+    p.catch((e) => {
+      console.warn('[audio] could not play', url, e && e.message);
+      fileMusicOn = false;
+      currentUrl = null;
+      if (onMusicFail) onMusicFail(url);
+    });
+  }
+
+  activeSlot = next;
+  currentUrl = url;
+  fileMusicOn = true;
+  stopTrack();                                       // the chiptune stands down
+  return true;
+}
+
+export function stopMusicFile() {
+  if (!musicEls) return;
+  const now = ctx.currentTime;
+  for (let i = 0; i < 2; i++) {
+    musicGains[i].gain.cancelScheduledValues(now);
+    musicGains[i].gain.linearRampToValueAtTime(0, now + 0.4);
+    const el = musicEls[i];
+    setTimeout(() => { try { el.pause(); } catch {} }, 460);
+  }
+  currentUrl = null;
+  fileMusicOn = false;
+}
+
+export const musicFilePlaying = () => fileMusicOn;
+export const currentMusicUrl = () => currentUrl;
 
 // --- SFX --------------------------------------------------------------------
 

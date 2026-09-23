@@ -12,10 +12,12 @@
 
 import { SHAPES, PALETTES } from './data/art.js';
 import { FONT, FONT_COLORS, GLYPH_W, GLYPH_H, B32 } from './data/font.js';
-import { getOverride } from './assets.js';
+import { getOverride, getSheet } from './assets.js';
 
-const ATLAS_W = 1024;
-const ATLAS_H = 1024;
+// PMD walk sheets are 8 directions x N frames x 2 flash variants per form, which is far more
+// atlas area than the drawn art needed. 2048 leaves comfortable headroom.
+const ATLAS_W = 2048;
+const ATLAS_H = 2048;
 
 export const ATLAS = document.createElement('canvas');
 export const FRAMES = [];          // { sx, sy, w, h, ox, oy } indexed by numeric frame id
@@ -63,14 +65,18 @@ function packPalette(name, flash) {
 
 function shelfPacker(w, h) {
   let shelfY = 0, shelfH = 0, penX = 0;
-  return function alloc(iw, ih) {
+  const alloc = function (iw, ih) {
     if (penX + iw > w) { shelfY += shelfH; penX = 0; shelfH = 0; }
-    if (shelfY + ih > h) throw new Error('sprites: atlas full -- raise ATLAS_W/ATLAS_H');
+    if (shelfY + ih > h) {
+      throw new Error(`sprites: atlas full at ${w}x${h} -- raise ATLAS_W/ATLAS_H`);
+    }
     const r = { sx: penX, sy: shelfY };
     penX += iw;
     if (ih > shelfH) shelfH = ih;
     return r;
   };
+  alloc.usedRows = () => shelfY + shelfH;
+  return alloc;
 }
 
 // --- Registration -----------------------------------------------------------
@@ -88,6 +94,7 @@ export function registerSprite(shape, palette, rot = 0) {
   if (!e) {
     const s = SHAPES[shape];
     if (!s) throw new Error(`sprites: unknown shape "${shape}"`);
+    // nf/nd below are provisional: buildAtlas overwrites them if a PMD sheet is supplied.
     // rot = 0 means the usual left/right pair. rot = N bakes N evenly spaced angles instead,
     // which is how a leaf missile or a boomerang can point anywhere without a ctx transform.
     e = {
@@ -141,13 +148,21 @@ export function buildAtlas() {
     const shape = SHAPES[e.shape];
     // A supplied image replaces the drawn art for this shape entirely, including its dimensions.
     const over = getOverride(e.shape);
-    if (over) { e.w = over.w; e.h = over.h; e.ox = over.w >> 1; e.oy = over.h - 2; }
+    // A PMD sheet supplies 8 direction rows and N frame columns, which slots straight into the
+    // existing id arithmetic: base + flash*(nf*nd) + frame*nd + dir, with nd = 8.
+    const sheet = getSheet(e.shape);
+    if (sheet) {
+      e.w = sheet.w; e.h = sheet.h; e.ox = sheet.ox; e.oy = sheet.oy;
+      e.nf = sheet.cols; e.nd = 8; e.sheet = true;
+    } else if (over) {
+      e.w = over.w; e.h = over.h; e.ox = over.w >> 1; e.oy = over.h - 2;
+    }
     e.base = FRAMES.length;
 
-    const sw = over ? over.w : shape.w;
-    const sh = over ? over.h : shape.h;
-    const sox = over ? e.ox : shape.ox;
-    const soy = over ? e.oy : shape.oy;
+    const sw = sheet ? sheet.w : over ? over.w : shape.w;
+    const sh = sheet ? sheet.h : over ? over.h : shape.h;
+    const sox = (sheet || over) ? e.ox : shape.ox;
+    const soy = (sheet || over) ? e.oy : shape.oy;
     // A rotated sprite needs a square box big enough for its diagonal, or the corners clip.
     const box = e.rot ? Math.ceil(Math.hypot(sw, sh) / 2) * 2 : 0;
 
@@ -161,6 +176,12 @@ export function buildAtlas() {
             if (over) blitImageRot(buf, over, sox, soy, sx, sy, (d / e.nd) * Math.PI * 2, box, flash === 1);
             else blitRot(buf, rows, shape, sx, sy, pal, (d / e.nd) * Math.PI * 2, box);
             FRAMES.push({ sx, sy, w: box, h: box, ox: box >> 1, oy: box >> 1 });
+          } else if (sheet) {
+            // Row d is the facing direction, column f the animation frame. No mirroring: the
+            // sheet already contains every direction drawn by hand.
+            const { sx, sy } = alloc(sw, sh);
+            blitSheet(buf, sheet, f, d, sx, sy, flash === 1);
+            FRAMES.push({ sx, sy, w: sw, h: sh, ox: sox, oy: soy });
           } else {
             const mirror = d === 0;                 // d 0 = left = mirrored source
             const { sx, sy } = alloc(sw, sh);
@@ -185,8 +206,10 @@ export function buildAtlas() {
   built = true;
 
   const ms = performance.now() - t0;
+  const fill = alloc.usedRows() / ATLAS_H;
+  if (fill > 0.85) console.warn(`sprites: atlas ${Math.round(fill * 100)}% full`);
   if (FRAMES.length > 4000) console.warn(`sprites: ${FRAMES.length} frames is a lot`);
-  return { frames: FRAMES.length, ms };
+  return { frames: FRAMES.length, ms, fill };
 }
 
 /** Rasterise one pixel-map frame into the atlas buffer. Rows may omit trailing transparency. */
@@ -213,6 +236,21 @@ function whiten(px, t) {
   const ng = Math.round(g + (255 - g) * t);
   const nb = Math.round(b + (255 - b) * t);
   return ((a << 24) | (nb << 16) | (ng << 8) | nr) >>> 0;
+}
+
+/** Copy one cell (frame `col`, direction `row`) of a PMD sheet into the atlas. */
+function blitSheet(buf, sheet, col, row, dx, dy, flash) {
+  const srcX = col * sheet.w;
+  const srcY = row * sheet.h;
+  for (let y = 0; y < sheet.h; y++) {
+    const src = (srcY + y) * sheet.sheetW + srcX;
+    const dst = (dy + y) * ATLAS_W + dx;
+    for (let x = 0; x < sheet.w; x++) {
+      const px = sheet.data[src + x];
+      if ((px >>> 24) === 0) continue;
+      buf[dst + x] = flash ? whiten(px, 0.85) : px;
+    }
+  }
 }
 
 /** Copy a supplied image into the atlas, optionally mirrored and/or whitened. */
