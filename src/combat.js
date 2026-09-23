@@ -9,7 +9,7 @@
 // main.js at boot, so this module stays free of upward dependencies.
 
 import { G } from './state.js';
-import { enemies } from './world.js';
+import { enemies, cellRange, cellStart, cellItems, GW } from './world.js';
 import { dist2 } from './util.js';
 
 export const hooks = {
@@ -79,10 +79,106 @@ export function killAll(radius = 0) {
   return n;
 }
 
-/** Damage the player, respecting armour, i-frames and god mode. Returns true if it landed. */
+// --- Area damage ------------------------------------------------------------
+//
+// Abilities hit regions, not single enemies. Both helpers walk the uniform grid the same way
+// weapons.js does, and both take a hitId from nextHitId() so one cast can never hit the same
+// enemy twice -- which matters for an expanding shockwave that overlaps itself across ticks.
+
+const _opts = {};
+
+/**
+ * Damage every enemy inside a circle. `opts` may carry { knockback, stun, slow, slowT, weaken,
+ * execute, noFly, lifesteal, canCrit }. Returns the number of enemies hit.
+ */
+export function damageCircle(x, y, r, dmg, hitId, opts = _opts) {
+  const range = cellRange(x, y, r);
+  if (!range) return 0;
+  let hits = 0;
+
+  for (let gy = range.y0; gy <= range.y1; gy++) {
+    const rowBase = gy * GW;
+    for (let gx = range.x0; gx <= range.x1; gx++) {
+      const c = rowBase + gx;
+      const end = cellStart[c + 1];
+      for (let k = cellStart[c]; k < end; k++) {
+        const e = enemies[cellItems[k]];
+        if (!e.alive || e.lastHitId === hitId) continue;
+        // Ground moves miss flyers -- Earthquake should read like the real type chart.
+        if (opts.noFly && e.flying) continue;
+        const rr = r + e.r;
+        if (dist2(x, y, e.x, e.y) > rr * rr) continue;
+
+        e.lastHitId = hitId;
+        applyStatus(e, opts);
+        const d = Math.hypot(e.x - x, e.y - y) || 1;
+        const kb = opts.knockback || 0;
+        if (damageEnemy(e, dmg, ((e.x - x) / d) * kb, ((e.y - y) / d) * kb, opts.canCrit !== false)) {
+          // already dead; nothing further
+        } else if (opts.execute && e.hp <= e.maxHp * opts.execute && !e.boss) {
+          killEnemy(e);
+        }
+        hits++;
+      }
+    }
+  }
+  return hits;
+}
+
+/**
+ * Damage every enemy within `width` of a ray from (x, y) along `angle` for `len`.
+ * Used by Hyperbeam, Spectral Arrow and Hydro Pump.
+ */
+export function damageLine(x, y, angle, len, width, dmg, hitId, opts = _opts) {
+  const dx = Math.cos(angle), dy = Math.sin(angle);
+  // Query a circle covering the whole ray, then reject per-enemy by perpendicular distance.
+  const midX = x + dx * len * 0.5, midY = y + dy * len * 0.5;
+  const range = cellRange(midX, midY, len * 0.5 + width);
+  if (!range) return 0;
+  let hits = 0;
+
+  for (let gy = range.y0; gy <= range.y1; gy++) {
+    const rowBase = gy * GW;
+    for (let gx = range.x0; gx <= range.x1; gx++) {
+      const c = rowBase + gx;
+      const end = cellStart[c + 1];
+      for (let k = cellStart[c]; k < end; k++) {
+        const e = enemies[cellItems[k]];
+        if (!e.alive || e.lastHitId === hitId) continue;
+        if (opts.noFly && e.flying) continue;
+
+        // Project onto the ray, clamped to the segment.
+        const ex = e.x - x, ey = e.y - y;
+        const along = ex * dx + ey * dy;
+        if (along < -e.r || along > len + e.r) continue;
+        const perp = Math.abs(ex * -dy + ey * dx);
+        if (perp > width + e.r) continue;
+
+        e.lastHitId = hitId;
+        applyStatus(e, opts);
+        const kb = opts.knockback || 0;
+        if (!damageEnemy(e, dmg, dx * kb, dy * kb, opts.canCrit !== false)) {
+          if (opts.execute && e.hp <= e.maxHp * opts.execute && !e.boss) killEnemy(e);
+        }
+        hits++;
+      }
+    }
+  }
+  return hits;
+}
+
+function applyStatus(e, opts) {
+  if (opts.stun) e.stunT = Math.max(e.stunT, opts.stun);
+  if (opts.slow) { e.slow = Math.max(e.slow, opts.slow); e.slowT = Math.max(e.slowT, opts.slowT || 2); }
+  if (opts.weaken) e.weakenT = Math.max(e.weakenT, opts.weaken);
+}
+
+/** Damage the player, respecting armour, i-frames, shields and god mode. True if it landed. */
 export function damagePlayer(amount) {
   const p = G.player;
   if (!p || p.iframes > 0 || G.debug.godmode || G.runOver) return false;
+  // Protect Bubble blocks contact damage outright rather than reducing it.
+  if (p.shieldT > 0) return false;
   const s = G.stats;
   const dealt = Math.max(1, Math.round(amount - (s.armor || 0)));
   p.hp -= dealt;

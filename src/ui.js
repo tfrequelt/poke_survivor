@@ -25,6 +25,7 @@ const CARD_Y = 96;
 const GAP = 28;
 
 const KIND_COLOR = {
+  ability: '#e878d0',
   weapon: '#7ac8ff',
   passive: '#ffd166',
   stat: '#7fe08a',
@@ -32,6 +33,7 @@ const KIND_COLOR = {
 };
 
 const KIND_LABEL = {
+  ability: 'ABILITY',
   weapon: 'WEAPON',
   passive: 'ITEM',
   stat: 'BOOST',
@@ -91,6 +93,9 @@ export function drawLevelUp() {
 
     drawText(ctx, o.name.toUpperCase(), x + 8, CARD_Y + 24, selected ? 'white' : 'white');
     if (o.isNew) drawText(ctx, 'NEW', x + 8 + textWidth(o.name) + 8, CARD_Y + 24, 'gold');
+    if (o.kind === 'ability') {
+      drawText(ctx, o.slot === 0 ? 'KEY Q' : 'KEY E', x + CARD_W - 40, CARD_Y + 24, 'gold');
+    }
 
     const lines = wrap(o.desc, 28);
     for (let l = 0; l < lines.length && l < 5; l++) {
@@ -241,6 +246,85 @@ export function drawSelect(starters, t) {
   }
 
   drawTextCentered(ctx, '1-3 / ARROWS + ENTER      ESC BACK', VW / 2, VH - 18, 'dim');
+}
+
+// --- Evolution cutscene -----------------------------------------------------
+//
+// The classic Pokemon cadence: the creature flickers between its old and new silhouette in pure
+// white, ACCELERATING, then a white flash reveals the new form. The white silhouettes are the
+// hit-flash variants already baked into the atlas, so this costs no extra art.
+
+export const EVO_FLICKER = 1.5;    // silhouette flicker
+export const EVO_FLASH = 0.35;     // white screen wipe
+export const EVO_REVEAL = 0.9;     // new form on screen with its banner
+export const EVO_TOTAL = EVO_FLICKER + EVO_FLASH + EVO_REVEAL;
+
+export function drawEvolution(evo) {
+  const t = evo.t;
+  const cx = VW / 2;
+  const cy = VH / 2 + 6;
+
+  ctx.fillStyle = '#0a0a14';
+  ctx.fillRect(0, 0, VW, VH);
+
+  // A slow starburst behind the creature, so the screen is never static.
+  const spin = t * 0.6;
+  ctx.globalAlpha = 0.12;
+  ctx.fillStyle = '#7ac8ff';
+  for (let i = 0; i < 12; i++) {
+    const a = spin + (i / 12) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(a) * 300, cy + Math.sin(a) * 300);
+    ctx.lineTo(cx + Math.cos(a + 0.12) * 300, cy + Math.sin(a + 0.12) * 300);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  if (t < EVO_FLICKER) {
+    // Flicker interval shrinks from 0.34s to 0.05s across the phase.
+    const k = t / EVO_FLICKER;
+    const interval = 0.34 - k * 0.29;
+    const showNew = Math.floor(t / interval) & 1;
+    const id = (showNew ? evo.newBase : evo.oldBase) + 4;    // +4 = the white flash variant
+    drawSpriteScaled(ctx, id, cx, cy, 2);
+    drawTextCentered(ctx, 'WHAT?', cx, 48, 'white');
+  } else if (t < EVO_FLICKER + EVO_FLASH) {
+    const k = (t - EVO_FLICKER) / EVO_FLASH;
+    drawSpriteScaled(ctx, evo.newBase + 4, cx, cy, 2 + k * 0.6);
+    ctx.globalAlpha = Math.min(1, k * 1.6);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, VW, VH);
+    ctx.globalAlpha = 1;
+  } else {
+    const k = (t - EVO_FLICKER - EVO_FLASH) / EVO_REVEAL;
+    // White wipe pulls back to reveal the real sprite.
+    if (k < 0.35) {
+      ctx.globalAlpha = 1 - k / 0.35;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, VW, VH);
+      ctx.globalAlpha = 1;
+    }
+    const pop = k < 0.2 ? 2.5 - k * 2.5 : 2;
+    drawSpriteScaled(ctx, evo.newBase + 1, cx, cy, pop);
+
+    ctx.globalAlpha = Math.max(0, 1 - k);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, 40 + k * 220, (40 + k * 220) * 0.6, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    drawTextCentered(ctx, `${evo.oldName.toUpperCase()} EVOLVED`, cx, VH - 58, 'white');
+    drawTextCentered(ctx, `INTO ${evo.newName.toUpperCase()}!`, cx, VH - 44, 'gold');
+    if (evo.note) {
+      for (const [i, line] of wrap(evo.note, 46).slice(0, 2).entries()) {
+        drawTextCentered(ctx, line, cx, VH - 26 + i * 10, 'dim');
+      }
+    }
+  }
 }
 
 // --- Evolution choice (Eevee's branch) --------------------------------------

@@ -107,11 +107,78 @@ const MOTION = {
     pr.x = pr.ox + (pr.vx * pr.maxLife) * k;
     pr.y = pr.oy + (pr.vy * pr.maxLife) * k - Math.sin(k * Math.PI) * 14;
   },
+
+  /** Slow launch, fast finish -- reads as a shot that snaps toward its target. */
+  accelerate(pr, dt) {
+    const k = 0.45 + Math.min(1, pr.life / (pr.maxLife * 0.5)) * 1.1;
+    pr.x += pr.vx * k * dt;
+    pr.y += pr.vy * k * dt;
+    pr.angle = Math.atan2(pr.vy, pr.vx);
+  },
+
+  /** Drifts sinusoidally across its own heading, so a volley fans out as it flies. */
+  wave(pr, dt) {
+    pr.t += dt;
+    pr.x += pr.vx * dt;
+    pr.y += pr.vy * dt;
+    // Perpendicular offset applied as a velocity, so it never desyncs from the true path.
+    const sp = Math.hypot(pr.vx, pr.vy) || 1;
+    const nx = -pr.vy / sp, ny = pr.vx / sp;
+    const w = Math.cos(pr.t * pr.freq) * pr.amp;
+    pr.x += nx * w * dt;
+    pr.y += ny * w * dt;
+    pr.angle += pr.spin * dt;
+  },
+
+  /**
+   * Out, slow to a stop, then accelerate back to the player -- and it can hit on both legs,
+   * which is what makes positioning matter.
+   */
+  boomerang(pr, dt) {
+    pr.t += dt;
+    const half = pr.maxLife * 0.5;
+    if (pr.t < half) {
+      const k = 1 - (pr.t / half) * 0.85;           // decelerating outward
+      pr.x += pr.vx * k * dt;
+      pr.y += pr.vy * k * dt;
+    } else {
+      pr.returning = true;
+      const p = G.player;
+      const dx = p.x - pr.x, dy = p.y - pr.y;
+      const d = Math.hypot(dx, dy) || 1;
+      const sp = Math.hypot(pr.vx, pr.vy) || 1;
+      const k = 0.4 + ((pr.t - half) / half) * 1.4;  // accelerating home
+      pr.x += (dx / d) * sp * k * dt;
+      pr.y += (dy / d) * sp * k * dt;
+      // Coming home re-arms the hit id, so the return leg can hit the same enemies again.
+      if (!pr.crit) { pr.crit = true; pr.hitId = nextHitId(); }
+    }
+    pr.angle += pr.spin * dt;
+  },
+
+  /** Held in a circle around the player. Orbitals never expire on distance. */
+  orbitPlayer(pr, dt) {
+    const p = G.player;
+    pr.orbitA += pr.spin * dt;
+    pr.x = p.x + Math.cos(pr.orbitA) * pr.orbitR;
+    pr.y = p.y + Math.sin(pr.orbitA) * pr.orbitR;
+    pr.angle = pr.orbitA;
+    // Orbitals sweep through the same enemies repeatedly, so the hit id refreshes each lap.
+    if (pr.orbitA - pr.t > Math.PI) { pr.t = pr.orbitA; pr.hitId = nextHitId(); }
+  },
+
+  /** Sits where it was dropped and slowly fades -- the trail weapon's clouds. */
+  drift(pr, dt) {
+    pr.x += pr.vx * dt;
+    pr.y += pr.vy * dt;
+    pr.vx *= 0.94;
+    pr.vy *= 0.94;
+  },
 };
 
 const MOTION_KEYS = Object.keys(MOTION);
 const MOTION_FNS = MOTION_KEYS.map((k) => MOTION[k]);
-const motionIndex = (name) => {
+export const motionIndex = (name) => {
   const i = MOTION_KEYS.indexOf(name);
   if (i < 0) throw new Error(`weapons: unknown motion "${name}"`);
   return i;
@@ -142,7 +209,146 @@ const BEHAVIOR = {
     }
     return true;
   },
+
+  /**
+   * Orbitals: maintain a ring of projectiles around the player. Re-armed on cooldown rather than
+   * fired, so the weapon is always "on" and the cooldown controls how quickly a destroyed ring
+   * comes back.
+   */
+  orbit(w, st, p) {
+    const def = w.def;
+    // Clear any survivors so the ring always re-forms evenly spaced.
+    for (let i = projectiles.length - 1; i >= 0; i--) {
+      if (projectiles[i].weapon === w.defIdx) despawn('projectiles', projectiles, i);
+    }
+    const n = st.amount;
+    for (let i = 0; i < n; i++) {
+      const pr = spawnFor(w, st, p);
+      if (!pr) break;
+      pr.motion = def.motionIdx;
+      pr.orbitA = (i / n) * TAU;
+      pr.orbitR = def.orbitRadius * st.area;
+      pr.spin = def.orbitSpeed;
+      pr.maxLife = st.duration;
+      pr.t = 0;
+    }
+    return true;
+  },
+
+  /** Always-on damage field centred on the player. One projectile, never expiring meaningfully. */
+  aura(w, st, p) {
+    const def = w.def;
+    for (let i = projectiles.length - 1; i >= 0; i--) {
+      if (projectiles[i].weapon === w.defIdx) despawn('projectiles', projectiles, i);
+    }
+    const pr = spawnFor(w, st, p);
+    if (!pr) return true;
+    pr.motion = def.motionIdx;
+    pr.orbitA = 0;
+    pr.orbitR = 0;
+    pr.spin = 0;
+    pr.r = def.r * st.area;
+    pr.maxLife = st.duration;
+    pr.pierce = 9999;                      // an aura never runs out of targets
+    return true;
+  },
+
+  /** Drops a lingering cloud behind the player -- rewards moving, does nothing if you stand still. */
+  trail(w, st, p) {
+    const def = w.def;
+    const z = spawn('zones');
+    if (!z) return true;
+    z.x = p.x; z.y = p.y;
+    z.r = def.r * st.area;
+    z.maxLife = z.life = st.duration;
+    z.dps = st.damage;
+    z.tick = 0;
+    z.slow = def.slow || 0;
+    z.kind = 2;
+    z.color = def.zoneColor || '#b050d0';
+    return true;
+  },
+
+  /** Instant lightning arcing between clustered enemies. Rewards letting the crowd build. */
+  chain(w, st, p) {
+    const def = w.def;
+    let x = p.x, y = p.y;
+    let dmg = st.damage;
+    const used = _chainUsed;
+    used.length = 0;
+
+    for (let j = 0; j < st.amount + def.jumps; j++) {
+      const idx = nearestNotIn(x, y, j === 0 ? def.range : def.jumpRange, used);
+      if (idx < 0) break;
+      const e = enemies[idx];
+      used.push(idx);
+      if (arcFx) arcFx(x, y, e.x, e.y, def.arcColor || '#f8e038');
+      damageEnemy(e, dmg, 0, 0, true);
+      x = e.x; y = e.y;
+      dmg *= def.falloff || 0.88;
+    }
+    return used.length > 0;
+  },
 };
+
+const _chainUsed = [];
+
+/** Set by main.js so the chain weapon can draw its arcs without importing render. */
+export let arcFx = null;
+export let trailFx = null;
+export let impactFx = null;
+export function setWeaponFx(arc, trail, impact) { arcFx = arc; trailFx = trail; impactFx = impact; }
+
+function nearestNotIn(x, y, range, used) {
+  const r = cellRange(x, y, range);
+  if (!r) return -1;
+  let best = -1, bestD = range * range;
+  for (let gy = r.y0; gy <= r.y1; gy++) {
+    const rowBase = gy * GW;
+    for (let gx = r.x0; gx <= r.x1; gx++) {
+      const c = rowBase + gx;
+      const end = cellStart[c + 1];
+      for (let k = cellStart[c]; k < end; k++) {
+        const j = cellItems[k];
+        const e = enemies[j];
+        if (!e.alive || used.includes(j)) continue;
+        const d = dist2(x, y, e.x, e.y);
+        if (d < bestD) { bestD = d; best = j; }
+      }
+    }
+  }
+  return best;
+}
+
+/** Shared projectile setup for the non-aimed behaviours. */
+function spawnFor(w, st, p) {
+  const pr = spawn('projectiles');
+  if (!pr) return null;
+  const def = w.def;
+  pr.x = p.x; pr.y = p.y;
+  pr.ox = p.x; pr.oy = p.y;
+  pr.vx = 0; pr.vy = 0;
+  pr.angle = 0;
+  pr.r = def.r * st.area;
+  pr.dmg = st.damage;
+  pr.pierce = st.pierce;
+  pr.life = 0;
+  pr.sprBase = def.sprBase;
+  pr.nd = def.sprDirs;
+  pr.knockback = def.knockback || 0;
+  pr.weapon = w.defIdx;
+  pr.targetIdx = -1;
+  pr.homingTurn = 0;
+  pr.area = st.area;
+  pr.hitId = nextHitId();
+  pr.trail = def.trail || 0;
+  pr.trailColor = def.trailColor || '#ffffff';
+  pr.pulse = def.pulse || 0;
+  pr.impact = def.impact || 0;
+  pr.impactColor = def.impactColor || '#ffffff';
+  pr.amp = 0; pr.freq = 0; pr.returning = false; pr.crit = false;
+  return pr;
+}
 
 function fireProjectile(w, st, p, angle, targetIdx, hitId) {
   const pr = spawn('projectiles');
@@ -168,6 +374,19 @@ function fireProjectile(w, st, p, angle, targetIdx, hitId) {
   pr.homingTurn = def.homingTurn || 0;
   pr.t = 0;
   pr.area = st.area;
+  // Visual identity: two weapons can share a motion and still look nothing alike.
+  pr.spin = def.spin || 0;
+  pr.amp = def.amp || 0;
+  pr.freq = def.freq || 0;
+  pr.trail = def.trail || 0;
+  pr.trailColor = def.trailColor || '#ffffff';
+  pr.pulse = def.pulse || 0;
+  pr.impact = def.impact || 0;
+  pr.impactColor = def.impactColor || '#ffffff';
+  pr.returning = false;
+  pr.crit = false;
+  pr.orbitA = 0;
+  pr.orbitR = 0;
   // One id per volley, so a piercing shot cannot hit the same enemy twice, and so two projectiles
   // from the same trigger pull do not both count as the "first hit" for bonus damage.
   pr.hitId = hitId;
@@ -245,9 +464,35 @@ export function updateProjectiles(dt) {
     const pr = projectiles[i];
     MOTION_FNS[pr.motion](pr, dt);
     pr.life += dt;
-    if (pr.life >= pr.maxLife) { despawn('projectiles', projectiles, i); continue; }
-    if (collideProjectile(pr)) despawn('projectiles', projectiles, i);
+    if (pr.life >= pr.maxLife) {
+      dropEndZone(pr);
+      despawn('projectiles', projectiles, i);
+      continue;
+    }
+    if (pr.trail > 0 && trailFx) trailFx(pr, dt);
+    if (collideProjectile(pr)) {
+      dropEndZone(pr);
+      despawn('projectiles', projectiles, i);
+    }
   }
+}
+
+/** A lobbed shot that reaches the end of its arc leaves its zone behind. */
+function dropEndZone(pr) {
+  const def = pr.weapon >= 0 ? WEAPONS[pr.weapon] : null;
+  const z0 = def && def.zoneOnEnd;
+  if (!z0) return;
+  const z = spawn('zones');
+  if (!z) return;
+  z.x = pr.x; z.y = pr.y;
+  z.r = z0.r * pr.area;
+  z.maxLife = z.life = z0.life;
+  z.dps = z0.dps * G.stats.power;
+  z.tick = 0;
+  z.slow = z0.slow || 0;
+  z.kind = 1;
+  z.color = z0.color;
+  z.hitId = 0;
 }
 
 /**
@@ -275,6 +520,7 @@ function collideProjectile(pr) {
         const kb = pr.knockback;
         const inv = kb ? kb / (Math.hypot(pr.vx, pr.vy) || 1) : 0;
         damageEnemy(e, pr.dmg, pr.vx * inv, pr.vy * inv);
+        if (pr.impact > 0 && impactFx) impactFx(e.x, e.y, pr.impact, pr.impactColor);
 
         if (pr.pierce <= 0) return true;
         pr.pierce--;
@@ -294,9 +540,11 @@ export function initWeaponDefs() {
 
     // A weapon that acquires targets further away than its projectile can travel fires shots
     // that always expire in flight -- it looks like it is working and deals no damage at all.
-    // Homing shots get a pass: they chase, so raw reach is not the whole story.
+    // Only applies to behaviours that actually launch something: homing shots chase, and orbit /
+    // aura / trail / chain never travel at all, so raw reach is meaningless for them.
     const reach = def.speed * def.duration;
-    if (def.motion !== 'homing' && reach < def.range) {
+    const travels = def.behavior === 'projectile' && def.motion !== 'homing';
+    if (travels && reach < def.range) {
       console.warn(`weapons: "${def.id}" aims to ${def.range} but only travels ${Math.round(reach)} -- shots will expire short`);
     }
   }

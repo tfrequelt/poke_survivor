@@ -5,7 +5,7 @@
 
 import { G } from './state.js';
 import { ctx, VW, VH } from './render.js';
-import { drawText, drawTextCentered, textWidth } from './sprites.js';
+import { drawText, drawTextCentered, textWidth, drawSprite } from './sprites.js';
 import { formatTime, formatNum, clamp } from './util.js';
 import { enemies } from './world.js';
 
@@ -14,9 +14,72 @@ const PAD = 6;
 export function drawHud() {
   drawXpBar();
   drawHealth();
+  drawAbilities();
   drawTimer();
   drawTallies();
   if (G.runOver) drawRunOver();
+}
+
+// --- Ability slots ----------------------------------------------------------
+
+const SLOT = 20;
+const SLOT_KEYS = ['Q', 'E'];
+
+/**
+ * Two slots under the health bar. Each shows its icon, its key, and a dark overlay that drains
+ * away as the cooldown recharges -- so readiness is legible at a glance without reading a number.
+ */
+function drawAbilities() {
+  const x0 = PAD, y0 = 40;
+
+  for (let i = 0; i < 2; i++) {
+    const a = G.abilities[i];
+    const x = x0 + i * (SLOT + 4);
+
+    if (!a) {
+      // Empty slot: a dim outline, so the player can see there IS a second slot to unlock.
+      ctx.strokeStyle = '#2e2e44';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + 0.5, y0 + 0.5, SLOT - 1, SLOT - 1);
+      drawText(ctx, SLOT_KEYS[i], x + 2, y0 + SLOT - 8, 'dim');
+      continue;
+    }
+
+    const ready = a.cd <= 0;
+    const frac = ready ? 0 : clamp(a.cd / a.cdMax, 0, 1);
+
+    ctx.fillStyle = '#101018';
+    ctx.fillRect(x, y0, SLOT, SLOT);
+    drawSprite(ctx, a.def.iconBase, x + SLOT / 2, y0 + SLOT / 2);
+
+    // Cooldown drains from the top down.
+    if (frac > 0) {
+      ctx.fillStyle = 'rgba(8,8,18,0.72)';
+      ctx.fillRect(x, y0, SLOT, Math.ceil(SLOT * frac));
+    }
+
+    // Ready slots pulse; recharging ones stay flat and dim.
+    if (ready) {
+      const pulse = (Math.sin(G.tick * 0.12) + 1) * 0.5;
+      ctx.strokeStyle = pulse > 0.5 ? '#ffffff' : '#7ac8ff';
+    } else {
+      ctx.strokeStyle = '#3a3a55';
+    }
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y0 + 0.5, SLOT - 1, SLOT - 1);
+
+    drawText(ctx, SLOT_KEYS[i], x + 2, y0 + SLOT - 8, ready ? 'white' : 'dim');
+    // Both numbers are right-aligned off the slot edge; a two-digit cooldown left-aligned at a
+    // fixed offset overflows the 20px box and lands on top of the icon.
+    if (a.level > 1) {
+      const lv = String(a.level);
+      drawText(ctx, lv, x + SLOT - 2 - textWidth(lv), y0 + SLOT - 8, 'gold');
+    }
+    if (!ready && a.cd > 1) {
+      const cd = String(Math.ceil(a.cd));
+      drawText(ctx, cd, x + SLOT - 2 - textWidth(cd), y0 + 2, 'white');
+    }
+  }
 }
 
 /** XP across the very top -- the bar the player watches most, so it gets the widest real estate. */

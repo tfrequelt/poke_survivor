@@ -22,6 +22,7 @@ export const CAP = {
   damageNumbers: 90,
   particles: 320,
   zones: 60,
+  shapes: 48,
 };
 
 // --- Entity factories -------------------------------------------------------
@@ -36,23 +37,33 @@ const newEnemy = () => ({
   sprBase: 0, nf: 2, nd: 2, frame: 0, dir: 1, animTime: 0,
   flash: 0, knockX: 0, knockY: 0, contactCd: 0,
   ai: 0, aiT: 0, aiState: 0, aiX: 0, aiY: 0,
-  slow: 0, slowT: 0, armor: 0, knockResist: 0,
-  coinChance: 0, boss: false, elite: false, spawnT: 0,
+  slow: 0, slowT: 0, stunT: 0, weakenT: 0, armor: 0, knockResist: 0,
+  coinChance: 0, boss: false, elite: false, flying: false, spawnT: 0,
   cell: -1, lastHitId: 0,
 });
 
 const newProjectile = () => ({
   alive: false, x: 0, y: 0, vx: 0, vy: 0,
   r: 3, dmg: 0, pierce: 0, life: 0, maxLife: 0,
-  motion: 0, sprBase: 0, nd: 2, spin: 0, angle: 0,
+  motion: 0, sprBase: 0, nd: 2, angle: 0,
   knockback: 0, weapon: -1, crit: false, targetIdx: -1,
   homingTurn: 0, t: 0, ox: 0, oy: 0, area: 1, hitId: 0,
+  // Visual identity, so two weapons sharing a motion still look nothing alike.
+  spin: 0, trail: 0, trailColor: '#fff', pulse: 0, impact: 0, impactColor: '#fff',
+  amp: 0, freq: 0, returning: false, orbitA: 0, orbitR: 0,
 });
 
 const newOrb = () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, value: 1, tier: 0, sprId: 0, age: 0, pulling: false });
 const newCoin = () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, value: 1, sprId: 0, age: 0, pulling: false });
 const newDamageNumber = () => ({ alive: false, x: 0, y: 0, vy: 0, life: 0, value: 0, crit: false, color: 'white' });
 const newParticle = () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, maxLife: 0, size: 1, color: '#fff', grav: 0 });
+// Expanding rings and beam flashes from abilities. Purely cosmetic -- damage is applied by the
+// ability itself, so these never need to be queried.
+const newFxShape = () => ({
+  alive: false, kind: 0, x: 0, y: 0, r: 0, angle: 0, width: 0,
+  color: '#fff', life: 0, maxLife: 0,
+});
+
 const newZone = () => ({ alive: false, x: 0, y: 0, r: 0, life: 0, maxLife: 0, dps: 0, tick: 0, slow: 0, kind: 0, color: '#fff', hitId: 0 });
 
 // --- Pools and live arrays --------------------------------------------------
@@ -65,6 +76,7 @@ export const pools = {
   damageNumbers: new Pool(newDamageNumber, CAP.damageNumbers),
   particles: new Pool(newParticle, CAP.particles),
   zones: new Pool(newZone, CAP.zones),
+  shapes: new Pool(newFxShape, CAP.shapes),
 };
 
 export const enemies = [];
@@ -74,15 +86,17 @@ export const coins = [];
 export const damageNumbers = [];
 export const particles = [];
 export const zones = [];
+export const fxShapes = [];
 
 const ALL = [
   ['enemies', enemies], ['projectiles', projectiles], ['orbs', orbs], ['coins', coins],
   ['damageNumbers', damageNumbers], ['particles', particles], ['zones', zones],
+  ['shapes', fxShapes],
 ];
 
 // Built once. A literal here would allocate an object on every single spawn.
 const LIVE = {
-  enemies, projectiles, orbs, coins, damageNumbers, particles, zones,
+  enemies, projectiles, orbs, coins, damageNumbers, particles, zones, shapes: fxShapes,
 };
 
 /** Take an entity from a pool and push it live. Returns null when the pool is exhausted. */

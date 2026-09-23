@@ -26,6 +26,8 @@ export function createPlayer(x = 0, y = 0) {
     sprBase: 0,
     stillTime: 0,          // feeds Dartrix's "Tidy Feathers"
     regenAcc: 0,
+    shieldT: 0,            // Protect Bubble -- blocks contact damage outright
+    rootT: 0,              // Hyperbeam channel -- cannot move while firing
   };
 }
 
@@ -35,12 +37,14 @@ export function updatePlayer(dt) {
   const s = ensureStats();
 
   const axis = moveAxis();
-  p.vx = axis.x * s.moveSpeed;
-  p.vy = axis.y * s.moveSpeed;
+  // Hyperbeam roots you while it channels -- that drawback is the whole point of the ability.
+  const rooted = p.rootT > 0;
+  p.vx = rooted ? 0 : axis.x * s.moveSpeed;
+  p.vy = rooted ? 0 : axis.y * s.moveSpeed;
   p.x += p.vx * dt;
   p.y += p.vy * dt;
 
-  p.moving = axis.x !== 0 || axis.y !== 0;
+  p.moving = !rooted && (axis.x !== 0 || axis.y !== 0);
   p.stillTime = p.moving ? 0 : p.stillTime + dt;
   if (axis.x > 0) p.dir = 1;
   else if (axis.x < 0) p.dir = 0;
@@ -95,7 +99,8 @@ function contactDamage(p, dt) {
         if (e.contactCd > 0) { e.contactCd -= dt; continue; }
         const rr = p.r + e.r;
         if (dist2(p.x, p.y, e.x, e.y) > rr * rr) continue;
-        if (damagePlayer(e.dmg)) e.contactCd = CONTACT_CD;
+        const dmg = e.weakenT > 0 ? e.dmg * 0.7 : e.dmg;
+        if (damagePlayer(dmg)) e.contactCd = CONTACT_CD;
       }
     }
   }

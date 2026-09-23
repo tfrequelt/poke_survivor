@@ -7,6 +7,8 @@ import { addGrant, ensureStats, addMod, addMods } from './stats.js';
 import { CHARACTER_BY_ID } from './data/characters.js';
 import { STAT_UPGRADES, PASSIVES, STAT_BY_ID, PASSIVE_BY_ID } from './data/upgrades.js';
 import { WEAPONS, WEAPON_BY_ID } from './data/weapons.js';
+import { ABILITIES } from './data/abilities.js';
+import { addAbility } from './abilities.js';
 import { addWeapon, levelWeapon, MAX_WEAPONS } from './weapons.js';
 
 /**
@@ -39,7 +41,7 @@ const MAX_PASSIVES = 6;
 
 /** How many times a card has already been taken this run. */
 const picks = new Map();
-export function resetPicks() { picks.clear(); }
+export function resetPicks() { picks.clear(); offersSeen.clear(); }
 const pickCount = (id) => picks.get(id) || 0;
 
 /** Every card that is currently legal to offer, as {kind, id, name, desc, level} entries. */
@@ -79,7 +81,54 @@ function candidates() {
     out.push({ kind: 'passive', id: u.id, name: u.name, desc: u.desc, level: n + 1, max: u.maxPicks, weight: 8 });
   }
 
+  for (const a of availableAbilities()) {
+    const n = pickCount(a.id);
+    if (n >= a.levels.length || G.banished.has(a.id)) continue;
+    out.push({
+      kind: 'ability', id: a.id, name: a.name, desc: a.desc, slot: a.slot,
+      isNew: n === 0, level: n + 1, max: a.levels.length,
+      // Weighted well above everything else so a new ability surfaces fast without being forced.
+      weight: n === 0 ? 30 : 11,
+    });
+  }
+
   return out;
+}
+
+/**
+ * The abilities the CURRENT form may draft. Exclusive by design: slot 0 is the starter's own, and
+ * slot 1 only exists once you have evolved into the form that owns it -- which is what makes
+ * evolving feel like it unlocked something rather than just raising numbers.
+ */
+function availableAbilities() {
+  const c = G.character;
+  if (!c) return [];
+  const formId = G.form ? G.form.id : c.id;
+  return ABILITIES.filter((a) =>
+    a.owner === c.id && (a.form === c.id || a.form === formId));
+}
+
+/**
+ * A run with no ability is a worse run, so a not-yet-owned ability is FORCED into the card set if
+ * it has been draftable for three level-ups without being taken. Counting offers it has appeared
+ * alongside is simpler and fairer than reasoning about player level, which shifts when you evolve.
+ */
+const offersSeen = new Map();
+
+function forcedAbility() {
+  for (const a of availableAbilities()) {
+    if (pickCount(a.id) > 0 || G.banished.has(a.id)) continue;
+    if ((offersSeen.get(a.id) || 0) >= 2) return a;       // 3rd time it comes up, it is guaranteed
+  }
+  return null;
+}
+
+/** Tick the "has been available" counter for every unowned ability. Called once per level-up. */
+function noteAbilityOffers() {
+  for (const a of availableAbilities()) {
+    if (pickCount(a.id) > 0) continue;
+    offersSeen.set(a.id, (offersSeen.get(a.id) || 0) + 1);
+  }
 }
 
 /** Human-readable summary of what the next weapon level grants. */
@@ -97,9 +146,17 @@ function levelDesc(def, currentLevel) {
 
 /** Roll three distinct cards. Falls back to a heal if the pool is somehow exhausted. */
 export function rollOffers(count = 3) {
+  noteAbilityOffers();
   const pool = candidates();
   const chosen = [];
   const rng = G.rngRun;
+
+  // A guaranteed ability takes the first slot, then the rest roll normally around it.
+  const forced = forcedAbility();
+  if (forced) {
+    const i = pool.findIndex((c) => c.kind === 'ability' && c.id === forced.id);
+    if (i >= 0) chosen.push(pool.splice(i, 1)[0]);
+  }
 
   while (chosen.length < count && pool.length > 0) {
     let total = 0;
@@ -145,6 +202,10 @@ export function takeOffer(offer) {
       const u = PASSIVE_BY_ID[offer.id];
       addMods(u.mods, `passive:${u.id}`);
       if (!G.passives.includes(u.id)) G.passives.push(u.id);
+      break;
+    }
+    case 'ability': {
+      addAbility(offer.id);
       break;
     }
     case 'heal': {
@@ -198,15 +259,22 @@ export function pendingEvolution() {
   return null;
 }
 
-/** Apply a non-branching evolution (or a chosen branch) to the player. */
+/**
+ * Apply a non-branching evolution (or a chosen branch) to the player.
+ *
+ * The shape swap is the point: previously this only changed the palette, and because the player's
+ * cached sprite id was never refreshed either, evolving was completely invisible.
+ */
 export function applyEvolution(ev, branch) {
   const chosen = branch || ev;
   G.evolvedAt.add(ev.atLevel);
 
   if (chosen.grant) addGrant(chosen.grant, `evo:${chosen.id || ev.atLevel}`);
-  if (chosen.palette && G.form) {
-    G.form.palette = chosen.palette;
-    G.form.name = chosen.name;
+  if (G.form) {
+    if (chosen.shape) G.form.shape = chosen.shape;
+    if (chosen.palette) G.form.palette = chosen.palette;
+    if (chosen.name) G.form.name = chosen.name;
+    if (chosen.id) G.form.id = chosen.id;
   }
   ensureStats();
 

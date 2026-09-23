@@ -122,6 +122,8 @@ export function spawnEnemy(def, x, y, opts) {
   e.coinChance = elite ? 1 : (def.coinChance || 0);
   e.boss = !!def.boss;
   e.elite = elite;
+  e.flying = !!def.flying;
+  e.stunT = 0; e.weakenT = 0;
   e.ai = def.aiIdx;
   e.aiT = 0; e.aiState = 0; e.aiX = 0; e.aiY = 0;
   e.flash = 0; e.knockX = 0; e.knockY = 0; e.contactCd = 0;
@@ -186,8 +188,16 @@ export function updateEnemies(dt, separationOn) {
     if (e.spawnT > 0) e.spawnT -= dt;
     if (e.flash > 0) e.flash -= dt;
     if (e.slowT > 0) { e.slowT -= dt; if (e.slowT <= 0) e.slow = 0; }
+    if (e.weakenT > 0) e.weakenT -= dt;
 
-    AI_FNS[e.ai](e, dt, px, py);
+    // A stunned enemy keeps its velocity for knockback but stops steering and stops advancing,
+    // so Earthquake and Thunderbolt actually buy the player breathing room.
+    if (e.stunT > 0) {
+      e.stunT -= dt;
+      e.vx = 0; e.vy = 0;
+    } else {
+      AI_FNS[e.ai](e, dt, px, py);
+    }
 
     const slowK = 1 - e.slow;
     e.x += e.vx * slowK * dt;

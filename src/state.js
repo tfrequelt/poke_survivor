@@ -12,6 +12,8 @@ export const MODES = {
   POKEDEX: 'pokedex',
   PLAYING: 'playing',
   LEVELUP: 'levelup',
+  EVOLVE_CHOICE: 'evolveChoice',
+  EVOLVING: 'evolving',
   PAUSED: 'paused',
   SUMMARY: 'summary',
 };
@@ -49,7 +51,7 @@ export const G = {
   // --- loadout ---
   weapons: [],      // <= 6 live weapon instances
   passives: [],     // <= 6 passive instances
-  ability: null,    // single active ability, fired with Space
+  abilities: [null, null],   // slot 0 fires with Q, slot 1 with E (form-gated)
 
   // --- progression ---
   level: 1,
@@ -105,7 +107,8 @@ export function resetRunState() {
   G.mods.length = 0;
   G.weapons.length = 0;
   G.passives.length = 0;
-  G.ability = null;
+  G.abilities[0] = null;
+  G.abilities[1] = null;
   G.level = 1;
   G.xp = 0;
   G.xpNext = 20;

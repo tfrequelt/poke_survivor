@@ -19,12 +19,12 @@ python -m http.server 8000  # -> http://localhost:8000
 | Key | Action |
 |---|---|
 | `WASD` / arrow keys | Move |
-| `Space` | Active ability |
+| `Q` / `E` | First / second ability |
 | `Esc` / `P` | Pause |
 | `1`-`3` / arrows + `Enter` | Choose on any card screen |
 | `R` | Reroll on level-up, restart otherwise |
 | `B` / `S` | Banish / skip a level-up (press `B` twice to confirm) |
-| `Q` | Back to partner select (from pause or after a run) |
+| `Q` (paused / after a run) | Back to partner select |
 | `F` | Fullscreen -- 640x360 is an exact 3x fit for 1080p |
 
 The game opens on a title screen; any key goes to partner select, where you pick Wooper, Eevee or
@@ -35,6 +35,22 @@ Rowlet. `?char=wooper|eevee|rowlet` skips straight into a run with that partner.
 Append `?debug=1` to the URL for the developer overlay (frame timing, entity counts, hitboxes).
 Other URL parameters: `?seed=`, `?t=` (start N seconds into a run), `?char=`, `?stage=`, `?level=`.
 `?spriteedit=1` opens the in-page pixel editor used to author the sprites in `src/data/art.js`.
+
+## Abilities
+
+Each partner has two abilities, exclusive to it, drafted from the level-up screen. The first is
+guaranteed to appear within three level-ups; the second unlocks when you evolve at level 10.
+
+| Partner | `Q` | `E` (after evolving) |
+|---|---|---|
+| Wooper | **Protect Bubble** -- shield that blocks all contact damage, then bursts | **Earthquake** (Quagsire) -- shockwaves that stun; flying enemies are immune |
+| Rowlet | **Homing Leaf** -- blades that seek separate targets and curve back | **Spectral Arrow** (Dartrix) -- pierces a line, executes the wounded, leaves a burning trail |
+| Eevee | **Hyperbeam** -- massive damage, but you cannot move while firing | **Thunderbolt** (Jolteon) -- chain lightning that paralyses |
+| Eevee | | **Hydro Pump** (Vaporeon) -- knockback jet that heals you |
+| Eevee | | **Dark Pulse** (Umbreon) -- rings that weaken enemies and drain life |
+
+Both abilities level 1-5 through further level-up draws. The HUD shows each slot's icon, its key,
+and a cooldown that drains as it recharges.
 
 ## Debug keys
 

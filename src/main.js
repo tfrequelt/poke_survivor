@@ -15,23 +15,32 @@ import {
 } from './sprites.js';
 import {
   enemies, projectiles, orbs, coins, damageNumbers, particles,
-  spawn, despawn, clearWorld, rebuildGrid, sweepDead, entityCounts, spawnRequests,
+  spawn, despawn, clearWorld, rebuildGrid, sweepDead, entityCounts, spawnRequests, fxShapes,
 } from './world.js';
 import { initStats, ensureStats, addGrant } from './stats.js';
 import { hooks, damageEnemy, killAll } from './combat.js';
 import { createPlayer, updatePlayer } from './player.js';
 import { initEnemyDefs, updateEnemies, spawnEnemy } from './enemies.js';
 import { ENEMY_BY_ID } from './data/enemies.js';
-import { initWeaponDefs, addWeapon, updateWeapons, updateProjectiles } from './weapons.js';
+import {
+  initWeaponDefs, addWeapon, updateWeapons, updateProjectiles, motionIndex, setWeaponFx,
+} from './weapons.js';
+import {
+  initAbilityDefs, addAbility, fireAbility, updateAbilities, updateZones, fx as abilityFx,
+} from './abilities.js';
+import { abilitySpritePairs } from './data/abilities.js';
 import { initPickupSprites, dropXp, dropCoin, updatePickups } from './pickups.js';
 import {
   grantXp, grantCoins, initForm, xpToNext, rollOffers, takeOffer,
-  rerollOffers, banishOffer, skipOffer, resetPicks,
+  rerollOffers, banishOffer, skipOffer, resetPicks, pendingEvolution, applyEvolution,
 } from './progress.js';
 import { updateDirector, resetDirector, catchUpSchedule, stressSpawn } from './director.js';
 import { drawEntities } from './entities.js';
 import { drawHud, debugLines } from './hud.js';
-import { ui, drawLevelUp, drawPause, drawTitle, drawSelect } from './ui.js';
+import {
+  ui, drawLevelUp, drawPause, drawTitle, drawSelect, drawEvolution, drawEvolutionChoice,
+  EVO_TOTAL,
+} from './ui.js';
 import { CHARACTERS, CHARACTER_BY_ID, characterSpritePairs } from './data/characters.js';
 import { enemySpritePairs } from './data/enemies.js';
 import { weaponSpritePairs } from './data/weapons.js';
@@ -79,12 +88,14 @@ function boot() {
   for (const [shape, pal] of characterSpritePairs()) registerSprite(shape, pal);
   for (const [shape, pal] of enemySpritePairs()) registerSprite(shape, pal);
   for (const [shape, pal, rot] of weaponSpritePairs()) registerSprite(shape, pal, rot || 0);
+  for (const [shape, pal] of abilitySpritePairs()) registerSprite(shape, pal);
   for (const pal of ['xp_small', 'xp_mid', 'xp_big']) registerSprite('orb', pal);
   registerSprite('coin', 'gold');
   atlasStats = buildAtlas();
 
   initEnemyDefs();
   initWeaponDefs();
+  initAbilityDefs(motionIndex('homing'));
   initPickupSprites();
   installHooks();
 
@@ -106,6 +117,18 @@ function boot() {
     window.__dbg = {
       G,
       stress: (n) => stressSpawn(n),
+      grantAbility: (id) => addAbility(id),
+      grantWeapon: (id) => addWeapon(id),
+      // Spawn a ring of enemies at an exact radius -- the stress spawner uses the 350-430 spawn
+      // ring, which sits outside most ability radii and makes them look broken when they are not.
+      spawnNear: function (n, r, id) {
+        const p = G.player, def = ENEMY_BY_ID[arguments[2] || 'rattail'];
+        for (let i = 0; i < n; i++) {
+          const a = (i / n) * Math.PI * 2;
+          spawnEnemy(def, p.x + Math.cos(a) * r, p.y + Math.sin(a) * r);
+        }
+      },
+      fire: (slot) => fireAbility(slot),
       menuTime: () => menuTime,
       perf: () => ({
         fps: +fps.toFixed(1), frameMs: +frameMs.toFixed(3),
@@ -138,6 +161,35 @@ function installHooks() {
   hooks.onPlayerHit = () => {
     addShake(0.28);
     G.hitstop = 0.04;
+  };
+
+  // abilities.js emits its FX through these rather than importing render/world upward.
+  abilityFx.burst = burst;
+  abilityFx.shake = addShake;
+  abilityFx.ring = (x, y, r, color, life) => pushFx(0, x, y, r, 0, color, life);
+  abilityFx.beam = (x, y, angle, len, width, color, life) => pushFx(1, x, y, len, angle, color, life, width);
+  // Chain arcs, projectile trails and impact bursts.
+  setWeaponFx(
+    (x0, y0, x1, y1, color) =>
+      pushFx(1, x0, y0, Math.hypot(x1 - x0, y1 - y0), Math.atan2(y1 - y0, x1 - x0), color, 0.16, 2),
+    (pr, dt) => {
+      // Rate-limited so a dense volley cannot flood the particle pool.
+      if (G.rngFx() > pr.trail * dt) return;
+      const p2 = spawn('particles');
+      if (!p2) return;
+      p2.x = pr.x; p2.y = pr.y;
+      p2.vx = -pr.vx * 0.08; p2.vy = -pr.vy * 0.08;
+      p2.maxLife = p2.life = 0.22;
+      p2.size = 1;
+      p2.color = pr.trailColor;
+      p2.grav = 0;
+    },
+    (x, y, n, color) => burst(x, y, Math.min(6, n), color),
+  );
+
+  abilityFx.heal = (amount) => {
+    const p = G.player;
+    if (p) p.hp = Math.min(G.stats.maxHp, p.hp + amount);
   };
 }
 
@@ -196,11 +248,20 @@ function handleKey(code) {
   // The level-up modal owns the keyboard while it is open, so R means "reroll" there and
   // "restart" everywhere else.
   if (G.mode === MODES.LEVELUP) return levelUpKey(code);
+  if (G.mode === MODES.EVOLVE_CHOICE) return evolveChoiceKey(code);
+  if (G.mode === MODES.EVOLVING) return;        // the cutscene owns the screen
 
   if (code === 'KeyR') return startRun(G.character, bootParams);
-  if (code === 'KeyQ') return toSelect();
+  // Q and E are the ability keys during play, so "back to partner select" only applies when the
+  // run is already stopped.
+  if (code === 'KeyQ' && (G.runOver || G.mode === MODES.PAUSED)) return toSelect();
   if (G.runOver) return;
   if (code === 'Escape' || code === 'KeyP') return togglePause();
+
+  if (G.mode === MODES.PLAYING) {
+    if (code === 'KeyQ') return void fireAbility(0);
+    if (code === 'KeyE') return void fireAbility(1);
+  }
 
   if (!G.debug.on) return;
   switch (code) {
@@ -231,6 +292,20 @@ function selectKey(code) {
     }
     case 'Enter': case 'Space': startRun(CHARACTERS[ui.cursor], bootParams); break;
     case 'Escape': setMode(MODES.TITLE); break;
+  }
+}
+
+function evolveChoiceKey(code) {
+  const n = evo.branches.length;
+  switch (code) {
+    case 'ArrowLeft': case 'KeyA': ui.cursor = (ui.cursor + n - 1) % n; break;
+    case 'ArrowRight': case 'KeyD': ui.cursor = (ui.cursor + 1) % n; break;
+    case 'Digit1': case 'Digit2': case 'Digit3': {
+      const i = Number(code.slice(5)) - 1;
+      if (i < n) beginCutscene(evo.ev, evo.ev.branch[i]);
+      break;
+    }
+    case 'Enter': case 'Space': beginCutscene(evo.ev, evo.ev.branch[ui.cursor]); break;
   }
 }
 
@@ -295,6 +370,7 @@ function frame(now) {
   simMs += (t1 - t0 - simMs) * 0.1;
 
   menuTime += rawDt;
+  if (G.mode === MODES.EVOLVING) updateEvolution(rawDt);
   updateCamera(rawDt);
   draw();
 
@@ -320,6 +396,8 @@ function stepSim(dt) {
   rebuildGrid();
 
   updateWeapons(dt);
+  updateAbilities(dt);
+  updateZones(dt);
   updateProjectiles(dt);
   updatePlayer(dt);
   updatePickups(dt, grantXp, grantCoins);
@@ -347,6 +425,65 @@ function openLevelUp() {
 
 function closeLevelUp() {
   if (G.pendingLevelUps > 0) { openLevelUp(); return; }
+  if (startEvolution()) return;
+  setMode(MODES.PLAYING);
+  resetAccumulator();
+}
+
+// --- Evolution --------------------------------------------------------------
+
+let evo = null;
+
+/** Open the branch picker or the cutscene if an evolution is due. Returns true if it took over. */
+function startEvolution() {
+  const ev = pendingEvolution();
+  if (!ev) return false;
+
+  if (ev.branch) {
+    // Eevee's fork reuses the level-up modal's cursor and the already-written choice screen.
+    ui.cursor = 0;
+    evo = { ev, branches: ev.branch.map((b) => ({ ...b, sprId: spriteBase(b.shape, b.palette) })) };
+    setMode(MODES.EVOLVE_CHOICE);
+    return true;
+  }
+  if (ev.crest) {
+    // The level-20 Eevee crest has no new sprite; apply it silently.
+    applyEvolution(ev, null);
+    return false;
+  }
+  beginCutscene(ev, null);
+  return true;
+}
+
+function beginCutscene(ev, branch) {
+  const chosen = branch || ev;
+  const oldName = G.form.name;
+  const oldBase = G.player.sprBase;
+
+  applyEvolution(ev, branch);
+  const newBase = spriteBase(G.form.shape, G.form.palette);
+  G.player.sprBase = newBase;
+
+  evo = {
+    t: 0, ev, oldBase, newBase,
+    oldName, newName: G.form.name, note: chosen.note || '',
+  };
+  setMode(MODES.EVOLVING);
+  resetAccumulator();
+}
+
+function updateEvolution(dt) {
+  if (!evo) return;
+  evo.t += dt;
+  if (evo.t < EVO_TOTAL) return;
+
+  // The shockwave that lands with the new form clears the immediate area, and the player gets a
+  // moment of invulnerability so a 2-second freeze can never be what killed them.
+  killAll(120);
+  addShake(0.8);
+  G.player.iframes = 1.5;
+  G.player.hp = Math.min(G.stats.maxHp, G.player.hp + 20);
+  evo = null;
   setMode(MODES.PLAYING);
   resetAccumulator();
 }
@@ -372,6 +509,19 @@ function popDamage(x, y, value, crit) {
   d.value = value;
   d.crit = crit;
   d.color = crit ? 'gold' : 'white';
+}
+
+/** Cosmetic ring (kind 0) or beam flash (kind 1). Damage is applied by the ability itself. */
+function pushFx(kind, x, y, r, angle, color, life, width) {
+  const f = spawn('shapes');
+  if (!f) return;
+  f.kind = kind;
+  f.x = x; f.y = y;
+  f.r = r;
+  f.angle = angle || 0;
+  f.width = width || 0;
+  f.color = color;
+  f.maxLife = f.life = life;
 }
 
 function burst(x, y, n, color) {
@@ -406,6 +556,11 @@ function updateFx(dt) {
     p.vy += p.grav * dt;
     if (p.life <= 0) despawn('particles', particles, i);
   }
+  for (let i = fxShapes.length - 1; i >= 0; i--) {
+    const f = fxShapes[i];
+    f.life -= dt;
+    if (f.life <= 0) despawn('shapes', fxShapes, i);
+  }
 }
 
 // --- Draw -------------------------------------------------------------------
@@ -429,6 +584,8 @@ function draw() {
   drawHud();
 
   if (G.mode === MODES.LEVELUP) drawLevelUp();
+  else if (G.mode === MODES.EVOLVING) drawEvolution(evo);
+  else if (G.mode === MODES.EVOLVE_CHOICE) drawEvolutionChoice(evo.branches);
   else if (G.mode === MODES.PAUSED) drawPause();
 
   present();
@@ -467,17 +624,34 @@ function drawAtlasShowcase() {
   const t = performance.now() / 1000;
   const frame = ((t * 6) | 0) & 1;
   const dir = ((t * 0.7) | 0) & 1;
-  const flash = (t % 2) > 1.7 ? 1 : 0;
+  const flash = 0;   // shown deliberately on its own row below, not strobed over everything
 
-  const pairs = [...characterSpritePairs(), ...enemySpritePairs()];
-  let x = 16, y = 24;
-  for (const [shape, pal] of pairs) {
+  let x = 34, y = 44;
+  for (const [shape, pal] of characterSpritePairs()) {
     const base = spriteBase(shape, pal);
-    drawShadow(ctx, x, y + 10);
-    drawSprite(ctx, base + flash * 4 + frame * 2 + dir, x, y + 10);
-    drawText(ctx, pal.slice(0, 8), x - 14, y + 16, 'dim');
-    x += 52;
-    if (x > VW - 44) { x = 16; y += 44; }
+    drawShadow(ctx, x, y, 1.6);
+    drawSprite(ctx, base + flash * 4 + frame * 2 + dir, x, y);
+    drawText(ctx, shape.slice(0, 9), x - 22, y + 6, 'dim');
+    x += 68;
+    if (x > VW - 40) { x = 34; y += 62; }
+  }
+  // Hit-flash variants on their own row -- the evolution cutscene depends on these existing.
+  x = 34; y += 54;
+  drawText(ctx, 'FLASH', 4, y - 10, 'dim');
+  for (const [shape, pal] of characterSpritePairs()) {
+    drawSprite(ctx, spriteBase(shape, pal) + 4, x, y);
+    x += 68;
+    if (x > VW - 40) { x = 34; y += 62; }
+  }
+
+  x = 34; y += 58;
+  for (const [shape, pal] of enemySpritePairs()) {
+    const base = spriteBase(shape, pal);
+    drawShadow(ctx, x, y);
+    drawSprite(ctx, base + flash * 4 + frame * 2 + dir, x, y);
+    drawText(ctx, pal.slice(0, 7), x - 16, y + 6, 'dim');
+    x += 48;
+    if (x > VW - 40) { x = 34; y += 40; }
   }
 
   y += 40;

@@ -10,7 +10,9 @@
 
 import { G } from './state.js';
 import { ctx, toScreenX, toScreenY, VW, VH } from './render.js';
-import { enemies, projectiles, orbs, coins, damageNumbers, particles, zones } from './world.js';
+import {
+  enemies, projectiles, orbs, coins, damageNumbers, particles, zones, fxShapes,
+} from './world.js';
 import { drawSprite, drawShadow, drawText, FRAMES, angleSlot } from './sprites.js';
 
 const MARGIN = 28;                    // draw a little beyond the edge so nothing pops in visibly
@@ -30,8 +32,64 @@ export function drawEntities() {
   drawShadows(camOffX, camOffY);
   drawSortedActors(camOffX, camOffY);
   drawProjectiles(camOffX, camOffY);
+  drawFxShapes(camOffX, camOffY);
+  drawShield(camOffX, camOffY);
   drawParticles(camOffX, camOffY);
   drawDamageNumbers(camOffX, camOffY);
+}
+
+/** Ability rings and beam flashes. Drawn above actors so a cast always reads over the crowd. */
+function drawFxShapes(ox, oy) {
+  for (let i = 0; i < fxShapes.length; i++) {
+    const f = fxShapes[i];
+    const k = f.life / f.maxLife;                 // 1 -> 0 over its lifetime
+    const sx = f.x + ox, sy = f.y + oy;
+
+    if (f.kind === 0) {
+      // Ring: expands outward as it fades, so it reads as a shockwave rather than a flash.
+      const r = f.r * (1.35 - k * 0.35);
+      ctx.globalAlpha = k * 0.85;
+      ctx.strokeStyle = f.color;
+      ctx.lineWidth = 1 + k * 2;
+      ctx.beginPath();
+      ctx.ellipse(sx, sy, r, r * 0.62, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    } else {
+      // Beam: a tapering quad along the cast angle.
+      const w = f.width * k;
+      const dx = Math.cos(f.angle), dy = Math.sin(f.angle);
+      const nx = -dy, ny = dx;
+      ctx.globalAlpha = k * 0.9;
+      ctx.fillStyle = f.color;
+      ctx.beginPath();
+      ctx.moveTo(sx + nx * w, sy + ny * w);
+      ctx.lineTo(sx + dx * f.r + nx * w * 0.4, sy + dy * f.r + ny * w * 0.4);
+      ctx.lineTo(sx + dx * f.r - nx * w * 0.4, sy + dy * f.r - ny * w * 0.4);
+      ctx.lineTo(sx - nx * w, sy - ny * w);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+/** Protect Bubble, drawn around the player while it holds. */
+function drawShield(ox, oy) {
+  const p = G.player;
+  if (!p || p.shieldT <= 0) return;
+  const sx = p.x + ox, sy = p.y + oy;
+  const pulse = 1 + Math.sin(G.tick * 0.25) * 0.05;
+  const r = 34 * (G.stats.area || 1) * pulse;
+  ctx.globalAlpha = 0.28;
+  ctx.fillStyle = '#a8e4ff';
+  ctx.beginPath();
+  ctx.ellipse(sx, sy - 4, r, r * 0.8, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 0.85;
+  ctx.strokeStyle = '#e8f8ff';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.globalAlpha = 1;
 }
 
 function drawZones(ox, oy) {

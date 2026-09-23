@@ -28,7 +28,7 @@ export const ENEMIES = [
     id: 'flittermouse', name: 'Flittermouse', dex: 3,
     shape: 'bat', palette: 'cavebat',
     hp: 8, dmg: 5, speed: 37, r: 3.5, mass: 0.7, xp: 1,
-    ai: 'sine', coinChance: 0.05,
+    ai: 'sine', coinChance: 0.05, flying: true,
     stages: ['grass', 'cave'], from: 1, to: 20, weight: 8,
   },
   {
@@ -42,14 +42,14 @@ export const ENEMIES = [
     id: 'wisp', name: 'Wisp', dex: 5,
     shape: 'bat', palette: 'ghostly',
     hp: 14, dmg: 8, speed: 30, r: 3.5, mass: 0.6, xp: 2,
-    ai: 'orbit', coinChance: 0.06,
+    ai: 'orbit', coinChance: 0.06, flying: true,
     stages: ['cave', 'grass'], from: 6, to: 20, weight: 6,
   },
   {
     id: 'toxifly', name: 'Toxifly', dex: 6,
     shape: 'bug', palette: 'poison',
     hp: 30, dmg: 9, speed: 28, r: 4.5, mass: 1.2, xp: 3,
-    ai: 'rusher', coinChance: 0.08,
+    ai: 'rusher', coinChance: 0.08, flying: true,
     stages: ['grass', 'cave', 'beach'], from: 8, to: 20, weight: 6,
   },
   {
