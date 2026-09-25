@@ -17,13 +17,16 @@ import { G } from './state.js';
 export const STAT_KEYS = [
   'power', 'attackSpeed', 'area', 'projSpeed', 'duration', 'pierce', 'amount', 'range',
   'moveSpeed', 'maxHp', 'regen', 'armor', 'crit', 'critMult', 'magnet', 'xpGain',
-  'cooldown', 'luck', 'revives', 'greed',
+  'cooldown', 'luck', 'revives', 'greed', 'contactMult',
 ];
 
 const BASE = {
   power: 1, attackSpeed: 1, area: 1, projSpeed: 1, duration: 1, pierce: 0, amount: 0, range: 1,
   moveSpeed: 60, maxHp: 100, regen: 0, armor: 0, crit: 0.05, critMult: 1.5, magnet: 45,
   xpGain: 1, cooldown: 1, luck: 0, revives: 0, greed: 1,
+  // Multiplier on damage taken from walking into something. It is the only lever that separates
+  // "tanky" from "high max HP", and it is what Wooper's hide and Gastly's Levitate actually are.
+  contactMult: 1,
 };
 
 // Pre-allocated scratch. Resolving must not allocate, because evolutions resolve mid-frame.
@@ -88,6 +91,7 @@ export function resolveStats() {
   s.amount = Math.round(s.amount);
   s.pierce = Math.round(s.pierce);
   s.armor = Math.max(0, s.armor);
+  s.contactMult = Math.max(0.1, s.contactMult);
 
   G.statsDirty = false;
   return s;

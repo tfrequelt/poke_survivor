@@ -8,15 +8,18 @@ export const MODES = {
   BOOT: 'boot',
   TITLE: 'title',
   SELECT: 'select',
+  STAGE_SELECT: 'stageSelect',
   SHOP: 'shop',
   POKEDEX: 'pokedex',
   CREDITS: 'credits',
+  SETTINGS: 'settings',
   PLAYING: 'playing',
   LEVELUP: 'levelup',
   EVOLVE_CHOICE: 'evolveChoice',
   EVOLVING: 'evolving',
   PAUSED: 'paused',
   SUMMARY: 'summary',
+  WHEEL: 'wheel',
 };
 
 /** Modes in which the simulation advances. Everything else freezes the world. */
@@ -32,6 +35,18 @@ export const G = {
   runTime: 0,       // seconds; advances ONLY inside stepSim
   runOver: false,
   won: false,
+  // Set when the final boss dies. The sim keeps running for this long so the payout can fly in
+  // and be collected, then the summary screen opens.
+  victoryT: 0,
+  // Guards bankRunGold so a run's gold can only ever be banked once, however it ended.
+  banked: false,
+  // Second chances left this run, from the shop's Revive rank. Counted down, not recomputed,
+  // so a mid-run stat change cannot hand out another one.
+  revivesLeft: 0,
+  // Set when Delibird walks over a present. Drained at the END of the tick, like a level-up.
+  pendingWheel: false,
+  // Seconds until the next present is dropped. Delibird only; zero means never.
+  presentT: 0,
 
   // --- determinism ---
   seed: 0,
@@ -40,6 +55,10 @@ export const G = {
 
   // --- run configuration ---
   stage: null,      // stage definition
+  // The playable floor, in world pixels, derived from stage.arena when the run starts. Every
+  // system that moves something clamps against this: the player, the enemies, the spawn ring,
+  // the camera and the scenery. Null means unbounded.
+  bounds: null,
   character: null,  // starter definition
   form: null,       // current evolution form (base stats live here)
 
@@ -50,7 +69,7 @@ export const G = {
   mods: [],         // { stat, op:'flat'|'inc'|'more', value, scope } -- source of truth for stats
 
   // --- loadout ---
-  weapons: [],      // <= 6 live weapon instances
+  weapons: [],      // <= MAX_WEAPONS live weapon instances
   passives: [],     // <= 6 passive instances
   abilities: [null, null],   // slot 0 fires with Q, slot 1 with E (form-gated)
 
@@ -103,8 +122,14 @@ export function resetRunState() {
   G.runTime = 0;
   G.runOver = false;
   G.won = false;
+  G.victoryT = 0;
+  G.banked = false;
+  G.revivesLeft = 0;
+  G.pendingWheel = false;
+  G.presentT = 0;
   G.player = null;
   G.form = null;
+  G.bounds = null;
   G.statsDirty = true;
   G.mods.length = 0;
   G.weapons.length = 0;

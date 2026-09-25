@@ -20,6 +20,11 @@ export const PALETTES = {
   rowlet:   ['.', '#33241a', '#6b4e2e', '#9c7a4a', '#f4f2e8', '#101018', '#e8a02c', '#ffffff', '#4f9a38'],
   dartrix:  ['.', '#2b2018', '#5c4429', '#8a6c42', '#efeadc', '#101018', '#e09428', '#ffffff', '#3f8a30'],
   decidueye:['.', '#16241b', '#2c4a32', '#437a45', '#e8e4d2', '#101018', '#d4782a', '#ffffff', '#8a3a2e'],
+  // Slot 8 on the Gastly line is the gas shroud, which is why it is a light haze rather than the
+  // usual accent-dark: the cloud reads as the outer silhouette, not as shading.
+  gastly:   ['.', '#1d1030', '#3c2266', '#5e3a9c', '#9f7fd8', '#e8e8f8', '#d0a8ff', '#ffffff', '#6a4fa8'],
+  haunter:  ['.', '#1a0e2c', '#3a2060', '#5c3898', '#a888e0', '#f0f0ff', '#e0b0ff', '#ffffff', '#2a1746'],
+  gengar:   ['.', '#170c26', '#31184f', '#553180', '#8f6cc8', '#f4f4ff', '#ff6f8f', '#ffffff', '#24123a'],
 
   // --- enemies (same shapes, different colours) ---
   rattail:  ['.', '#3a2450', '#6a4a90', '#9a7ac0', '#d8c0e8', '#101018', '#f0d0a0', '#ffffff', '#4a3060'],
@@ -39,6 +44,24 @@ export const PALETTES = {
   electric: ['.', '#5a4a08', '#c8a818', '#f8e038', '#fffaa8', '#101018', '#ffffff', '#ffffff', '#7a6410'],
   poison:   ['.', '#3a1048', '#7a2a98', '#b050d0', '#e8b0f8', '#101018', '#ffffff', '#ffffff', '#52186a'],
   psychic:  ['.', '#4a0f3a', '#a8288a', '#e858c0', '#ffb8ea', '#101018', '#ffffff', '#ffffff', '#6a1852'],
+  dark:     ['.', '#0d0a16', '#2a2038', '#4a3a66', '#8a72b8', '#101018', '#d0b0ff', '#ffffff', '#1a1428'],
+  flying:   ['.', '#3a4a62', '#7f93b0', '#b8cde0', '#f0f6ff', '#101018', '#ffffff', '#ffffff', '#5a6e8a'],
+  ghost:    ['.', '#241c3c', '#463a72', '#7a6ab0', '#c8bcf0', '#101018', '#9af0d8', '#ffffff', '#33285a'],
+  ground:   ['.', '#3a2410', '#6b4620', '#9a6c36', '#c49a5e', '#101018', '#e0c088', '#ffffff', '#4e3018'],
+  // Frost, not water: almost white at the top with a cold blue core, so an ice shard reads as
+  // ice against the sea on the beach stage rather than as another bubble.
+  ice:      ['.', '#1d4a70', '#4a9fd0', '#9ad8f4', '#eaffff', '#101018', '#ffffff', '#ffffff', '#2f6f9c'],
+  // The present: a white box with a red ribbon, so slot 4 is the paper and 2/3 are the ribbon.
+  gift:     ['.', '#3a2028', '#c02030', '#e84050', '#ffffff', '#101018', '#ffe0e4', '#ffffff', '#8a1020'],
+
+  // --- ability FX ---
+  // Slot 1 is the OUTLINE, which is why Homing Leaf's purple rim is a palette entry rather than
+  // something baked into fx_leafblade's pixels.
+  leafblade: ['.', '#9333d6', '#2f6b22', '#4aa32c', '#8fdc5e', '#101018', '#d070f0', '#e8ffd0', '#255316'],
+  thunder:  ['.', '#7a5a08', '#e8c418', '#fff05a', '#ffffc8', '#101018', '#ffffff', '#ffffff', '#a07c10'],
+  wave:     ['.', '#0b3560', '#2276bd', '#5ab6ef', '#bfe9ff', '#101018', '#ffffff', '#ffffff', '#154e88'],
+  shadowy:  ['.', '#120e22', '#2a2140', '#4a3a70', '#7a62b0', '#101018', '#f0d040', '#e0d0ff', '#1c1630'],
+  earth:    ['.', '#3a2410', '#6b4620', '#9a6c36', '#c49a5e', '#101018', '#e0c088', '#ffffff', '#4e3018'],
 
   // --- pickups ---
   xp_small: ['.', '#0d3a2a', '#2a9a6a', '#4ae0a0', '#c0ffe0', '#101018', '#ffffff', '#ffffff', '#186a48'],

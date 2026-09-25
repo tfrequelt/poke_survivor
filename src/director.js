@@ -68,7 +68,9 @@ export function catchUpSchedule() {
   for (let i = 0; i < MINIBOSS_AT.length; i++) {
     if (t > MINIBOSS_AT[i]) minibossFired[i] = true;
   }
-  if (t > RUN_LENGTH) bossFired = true;
+  // The boss is the win condition, so unlike the mini-bosses it is never skipped: a clock jump
+  // past 20:00 queues it immediately instead of marking it already fired.
+  if (t > RUN_LENGTH && !bossFired) { bossFired = true; G.pendingBoss = true; }
   spawnAcc = 0;
   spawnDebt = 0;
 }

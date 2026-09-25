@@ -559,6 +559,384 @@ function leaf() {
   return g.outline();
 }
 
+/** Night Shade: a crescent of shadow swallowing a disc. */
+function iconShade() {
+  const g = new Grid(16, 16);
+  g.ellipse(7.5, 7.5, 6.4, 6.4, '3');
+  g.ellipse(9.5, 6.5, 5.2, 5.2, '1');
+  g.px(4, 6, '4'); g.px(5, 9, '4'); g.px(3, 8, '4');
+  return g.outline();
+}
+
+/** Lick: a tongue unrolling to the right. */
+function iconLick() {
+  const g = new Grid(16, 16);
+  g.stalk(1, 7.5, 12, 7.5, 5, 3, '3');
+  g.ellipse(12.5, 7.5, 2.6, 2.2, '4');
+  g.rect(1, 7, 9, 1, '4');
+  g.px(13, 6, '7');
+  return g.outline();
+}
+
+// --- The Gastly line --------------------------------------------------------
+//
+// These are FALLBACKS. The real art is the PMD sheets in assets/sprites/gastly|haunter|gengar,
+// and these only ever appear if one of those folders is missing. They still have to be three
+// visibly different creatures: a line whose fallbacks all look the same reintroduces exactly the
+// "evolved into itself" confusion the evolution cutscene exists to avoid.
+
+/** Gastly: a face suspended in a cloud of gas, with nothing solid about it at all. */
+function gastly(bob) {
+  const g = new Grid(40, 40), y = bob;
+  const cx = 19.5;
+
+  // The gas shroud: overlapping lobes, deliberately lumpy rather than a clean ellipse.
+  for (const [ox, oy, rx, ry] of [
+    [0, 26, 17, 9], [-11, 22, 8, 7], [11, 22, 8, 7],
+    [-7, 31, 8, 6], [7, 31, 8, 6], [0, 18, 10, 6],
+  ]) {
+    g.ellipse(cx + ox, oy + y, rx, ry, '8');
+  }
+  g.ellipse(cx, 20 + y, 11.5, 10.5, '3');       // the dark inner sphere -- the creature itself
+  g.ellipse(cx, 15 + y, 6.5, 3.4, '4');         // highlight across the top of the sphere
+
+  for (const dir of [-1, 1]) {                  // wide, lidded, thoroughly unimpressed eyes
+    const ex = Math.round(cx + dir * 5);
+    g.ellipse(ex, 18 + y, 2.6, 2.2, '7');
+    g.rect(ex - 1, 17 + y, 2, 3, '5');
+  }
+  g.arc(cx, 21 + y, 5, 4, 0.5, Math.PI - 0.5, 1, '5');   // a wide grin
+  g.px(15, 25 + y, '5'); g.px(24, 25 + y, '5');          // two fangs
+  return g.outline();
+}
+
+/** Haunter: a head and two detached hands, floating apart. The gap is the whole silhouette. */
+function haunter(bob) {
+  const g = new Grid(40, 40), y = bob;
+  const cx = 19.5;
+
+  g.ellipse(cx, 19 + y, 10.5, 9.5, '3');        // head
+  g.tri(cx - 9, 13 + y, cx - 3, 4 + y, cx - 1, 14 + y, '3');    // two spiked ears
+  g.tri(cx + 9, 13 + y, cx + 3, 4 + y, cx + 1, 14 + y, '3');
+  g.ellipse(cx, 15 + y, 6.0, 3.0, '4');
+
+  for (const dir of [-1, 1]) {
+    const ex = Math.round(cx + dir * 4.5);
+    g.ellipse(ex, 18 + y, 2.4, 2.0, '7');
+    g.rect(ex - 1, 17 + y, 2, 3, '5');
+  }
+  g.arc(cx, 21 + y, 5.5, 4, 0.45, Math.PI - 0.45, 1, '5');
+  g.px(15, 25 + y, '5'); g.px(24, 25 + y, '5');
+
+  // The hands, floating clear of the body with a visible gap on each side.
+  for (const dir of [-1, 1]) {
+    const hx = cx + dir * 15;
+    g.ellipse(hx, 30 + y, 4.2, 3.6, '3');
+    for (let f = -1; f <= 1; f++) g.stalk(hx + f * 2, 28 + y, hx + f * 3, 24 + y, 2, 1, '3');
+  }
+  g.underShade('3', '2');
+  return g.outline();
+}
+
+/** Gengar: squat, solid and grinning, with a ridged back and stubby limbs. */
+function gengar(bob) {
+  const g = new Grid(40, 40), y = bob;
+  const cx = 19.5;
+
+  g.ellipse(cx, 24 + y, 13.0, 12.0, '3');       // one heavy rounded body
+  g.tri(cx - 11, 16 + y, cx - 5, 5 + y, cx - 2, 17 + y, '3');   // ears
+  g.tri(cx + 11, 16 + y, cx + 5, 5 + y, cx + 2, 17 + y, '3');
+  for (let i = -2; i <= 2; i++) {               // the spines down its back
+    g.tri(cx + i * 5 - 2, 14 + y, cx + i * 5, 9 + y, cx + i * 5 + 2, 14 + y, '8');
+  }
+  g.ellipse(cx, 20 + y, 7.5, 3.4, '4');
+
+  for (const dir of [-1, 1]) {
+    const ex = Math.round(cx + dir * 5.5);
+    g.ellipse(ex, 21 + y, 2.8, 2.2, '7');
+    g.rect(ex - 1, 20 + y, 2, 3, '5');
+  }
+  // The grin: wide, and it reaches most of the way across the face.
+  g.arc(cx, 24 + y, 8, 6, 0.35, Math.PI - 0.35, 1, '5');
+  for (let x = cx - 6; x <= cx + 6; x += 3) g.px(Math.round(x), 29 + y, '5');
+
+  g.ellipse(cx - 12, 31 + y, 3.4, 4.0, '3');    // stubby arms
+  g.ellipse(cx + 12, 31 + y, 3.4, 4.0, '3');
+  g.rect(13, 35 + y, 5, 4, '2');                // and feet
+  g.rect(22, 35 + y, 5, 4, '2');
+  g.underShade('3', '2');
+  return g.outline();
+}
+
+// --- Weapon projectiles, second wave ----------------------------------------
+//
+// One sprite per delivery mechanism rather than one per weapon: the palette supplies the type,
+// so a fang in `dark` and a fang in `electric` are the same 24 authored pixels. What must NOT be
+// shared is the silhouette -- two weapons that read as the same shot in a different colour are
+// exactly the thing the arsenal is trying to avoid.
+
+/** A curved fang, pointing right. */
+function projFang() {
+  const g = new Grid(10, 8);
+  g.tri(0, 1, 9, 4, 1, 6, '3');
+  g.tri(1, 2, 7, 4, 2, 5, '4');
+  g.px(8, 4, '7');
+  return g.outline();
+}
+
+/** A sharp crystal shard. */
+function projShard() {
+  const g = new Grid(10, 10);
+  g.tri(9, 5, 1, 1, 3, 5, '3');
+  g.tri(9, 5, 3, 5, 1, 9, '4');
+  g.px(4, 4, '7'); g.px(5, 5, '7');
+  return g.outline();
+}
+
+/** A single feather, pointing right. */
+function projFeather() {
+  const g = new Grid(12, 8);
+  g.leafShape(5.5, 3.5, 5.5, 2.6, '4');
+  g.stalk(0, 4.5, 10, 3.5, 1, 1, '3');
+  for (let i = 2; i < 9; i += 2) g.px(i, 2, '3');
+  return g.outline();
+}
+
+/** A thin needle-quill. */
+function projQuill() {
+  const g = new Grid(11, 5);
+  g.tri(10, 2, 0, 1, 0, 3, '4');
+  g.rect(0, 2, 5, 1, '3');
+  return g.outline();
+}
+
+/** A falling droplet, pointing down. */
+function projDroplet() {
+  const g = new Grid(7, 10);
+  g.ellipse(3, 6.5, 2.8, 3.0, '3');
+  g.tri(3, 0, 0.6, 6, 5.4, 6, '3');
+  g.ellipse(3, 6.5, 1.5, 1.6, '4');
+  g.px(2, 5, '7');
+  return g.outline();
+}
+
+/** A swirling vortex, seen from above. */
+function projVortex() {
+  const g = new Grid(16, 16);
+  for (let arm = 0; arm < 3; arm++) {
+    const a0 = (arm / 3) * Math.PI * 2;
+    g.arc(7.5, 7.5, 7, 7, a0, a0 + 1.5, 2, '3');
+    g.arc(7.5, 7.5, 4.2, 4.2, a0 + 0.6, a0 + 2.0, 2, '4');
+  }
+  g.ellipse(7.5, 7.5, 1.6, 1.6, '7');
+  return g;
+}
+
+/** A spiked mine, sitting on the ground. */
+function projMine() {
+  const g = new Grid(12, 12);
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    g.stalk(5.5 + Math.cos(a) * 2.5, 5.5 + Math.sin(a) * 2.5,
+      5.5 + Math.cos(a) * 5.5, 5.5 + Math.sin(a) * 5.5, 2, 1, '3');
+  }
+  g.ellipse(5.5, 5.5, 3.4, 3.4, '3');
+  g.ellipse(5.5, 5.5, 2.0, 2.0, '4');
+  g.px(4, 4, '7');
+  return g.outline();
+}
+
+/** A squat coil, the turret body. */
+function projCoil() {
+  const g = new Grid(12, 14);
+  g.rect(3, 9, 6, 4, '2');
+  g.ellipse(5.5, 12, 4.4, 1.8, '3');
+  for (let y = 3; y < 10; y += 2) g.rect(3, y, 6, 1, '3');
+  for (let y = 4; y < 10; y += 2) g.rect(4, y, 4, 1, '4');
+  g.rect(5, 0, 2, 4, '4');
+  g.px(5, 0, '7'); g.px(6, 0, '7');
+  return g.outline();
+}
+
+/** A seed with a sprouting tip. */
+function projSeed() {
+  const g = new Grid(9, 9);
+  g.ellipse(4, 5.5, 3.0, 3.2, '3');
+  g.ellipse(3.4, 5, 1.6, 1.8, '4');
+  g.stalk(4, 2.5, 4, 0, 1, 1, '6');
+  g.px(3, 1, '6'); g.px(5, 1, '6');
+  return g.outline();
+}
+
+/** A barbed thorn vine segment, pointing right. */
+function projThorn() {
+  const g = new Grid(14, 9);
+  g.stalk(0, 4.5, 13, 4.5, 3, 1, '3');
+  g.tri(4, 4, 6, 0, 7, 4, '4');
+  g.tri(7, 5, 9, 9, 10, 5, '4');
+  g.tri(9, 4, 11, 1, 12, 4, '4');
+  return g.outline();
+}
+
+/** A lidless ghostly eye. */
+function projEye() {
+  const g = new Grid(12, 9);
+  g.ellipse(5.5, 4.5, 5.4, 3.6, '3');
+  g.ellipse(5.5, 4.5, 3.0, 2.8, '4');
+  g.ellipse(5.5, 4.5, 1.4, 2.0, '1');
+  g.px(4, 3, '7');
+  return g.outline();
+}
+
+/** A clenched fist, thrown right. */
+function projFist() {
+  const g = new Grid(11, 10);
+  g.ellipse(6, 4.5, 4.2, 4.0, '3');
+  g.rect(2, 3, 4, 4, '3');
+  for (let y = 2; y < 7; y += 2) g.rect(7, y, 3, 1, '4');
+  g.ellipse(5, 3, 2.0, 1.4, '4');
+  return g.outline();
+}
+
+/** A crescent slash, opening right. */
+function projBlade() {
+  const g = new Grid(14, 16);
+  g.arc(1, 8, 12, 7.5, -1.15, 1.15, 3, '3');
+  g.arc(1, 8, 10.5, 6.2, -1.0, 1.0, 2, '4');
+  g.px(11, 3, '7'); g.px(12, 8, '7'); g.px(11, 13, '7');
+  return g.outline();
+}
+
+/** A grinning skull. */
+function projSkull() {
+  const g = new Grid(11, 11);
+  g.ellipse(5, 4.5, 4.4, 4.0, '4');
+  g.rect(3, 7, 5, 3, '4');
+  g.ellipse(3.2, 4.2, 1.5, 1.6, '1');
+  g.ellipse(6.8, 4.2, 1.5, 1.6, '1');
+  for (let x = 3; x <= 7; x += 2) g.px(x, 9, '1');
+  return g.outline();
+}
+
+/** A small four-legged familiar, for the companion weapons. */
+function projHound() {
+  const g = new Grid(14, 12);
+  g.ellipse(6, 6, 4.6, 3.2, '3');
+  g.ellipse(10.5, 4.5, 2.8, 2.4, '3');
+  g.tri(9, 2.5, 10, 0, 11, 2.5, '3');
+  g.tri(11, 2.5, 12, 0, 13, 2.5, '3');
+  g.stalk(2, 6, 0, 2, 2, 1, '3');
+  g.rect(3, 8, 2, 3, '2'); g.rect(8, 8, 2, 3, '2');
+  g.ellipse(5, 5, 2.4, 1.4, '4');
+  g.px(11, 4, '5');
+  return g.outline();
+}
+
+/** A hooked claw, three talons, pointing right. */
+function projClaw() {
+  const g = new Grid(12, 12);
+  for (let i = 0; i < 3; i++) {
+    const y = 2 + i * 3.5;
+    g.stalk(0, y, 9, y - 0.5, 2, 1, '4');
+    g.px(10, Math.round(y) - 1, '3');
+  }
+  return g.outline();
+}
+
+/** A blunt chunk of earth thrown up by the ground weapons. */
+function projBoulder() {
+  const g = new Grid(14, 12);
+  g.tri(7, 0, 0, 7, 13, 6, '3');
+  g.tri(0, 7, 13, 6, 6, 11, '3');
+  g.tri(4, 3, 9, 4, 6, 7, '4');
+  g.px(3, 6, '2'); g.px(10, 8, '2');
+  return g.outline();
+}
+
+/** A ring segment, for the expanding nova fronts. */
+function projRing() {
+  const g = new Grid(16, 16);
+  g.arc(7.5, 7.5, 7.5, 7.5, 0, Math.PI * 2, 2, '3');
+  g.arc(7.5, 7.5, 5.5, 5.5, 0, Math.PI * 2, 1, '4');
+  return g;
+}
+
+// --- Ability FX -------------------------------------------------------------
+
+/**
+ * Homing Leaf's blade. Deliberately much larger than proj_leaf (14px against 8px) and outlined
+ * through palette slot 1, which the `leafblade` palette sets to purple -- so the outline colour
+ * is a palette decision rather than something baked into the pixels.
+ */
+function fxLeafBlade() {
+  const g = new Grid(18, 16);
+  g.leafShape(7.5, 7.5, 7.5, 4.2, '3');
+  g.leafShape(7.0, 6.2, 5.2, 1.5, '4');       // a highlight along the upper edge only
+  for (let x = 3; x <= 12; x++) g.px(x, 7, '8');   // central vein, one pixel, darker than body
+  g.px(6, 6, '8'); g.px(7, 5, '8');                // two short side veins
+  g.px(6, 8, '8'); g.px(7, 9, '8');
+  g.px(11, 6, '7');
+  g.stalk(1, 9, 4, 10.5, 2, 1, '3');          // stem
+  return g.outline();
+}
+
+/**
+ * One segment of a lightning strike, pointing DOWN. A strike stacks several of these with a
+ * little horizontal jitter rather than stretching one tall sprite, because a vertically scaled
+ * zigzag smears into mush and a stack of segments reads as a real bolt.
+ */
+function fxBolt() {
+  const g = new Grid(12, 16);
+  g.tri(7, 0, 3, 8, 7, 8, '3');
+  g.tri(5, 15, 9, 7, 5, 7, '3');
+  g.tri(6.5, 1, 4, 7.5, 6.5, 7.5, '4');
+  g.tri(5.5, 14, 8, 7.5, 5.5, 7.5, '4');
+  g.px(6, 7, '7'); g.px(5, 8, '7');
+  return g.outline();
+}
+
+/** A breaking wave crest, travelling to the right (+x). Rotations are baked by the compiler. */
+function fxWave() {
+  const g = new Grid(20, 12);
+  // The body of the crest: a tall arc leaning into its direction of travel.
+  for (let y = 0; y < 12; y++) {
+    const t = y / 11;
+    const x0 = 3 + Math.sin(t * Math.PI) * 5;
+    g.rect(x0, y, 7 - Math.abs(t - 0.5) * 4, 1, '3');
+  }
+  for (let y = 1; y < 11; y++) {
+    const t = y / 11;
+    const x0 = 5 + Math.sin(t * Math.PI) * 5;
+    g.rect(x0, y, 3, 1, '4');
+  }
+  // Foam along the leading edge.
+  for (let y = 1; y < 11; y += 2) {
+    const t = y / 11;
+    g.px(6 + Math.sin(t * Math.PI) * 6 + 3, y, '7');
+  }
+  g.px(14, 4, '7'); g.px(15, 6, '7'); g.px(14, 8, '7');
+  return g.outline();
+}
+
+/** A drifting shadow wisp for Dark Pulse's lingering zone. */
+function fxWisp() {
+  // No eyes and no outline: with either, a drifting wisp reads as a small enemy, and a shadow
+  // zone that appears to be full of creatures is actively misleading in a game about a swarm.
+  const g = new Grid(8, 10);
+  g.ellipse(3.5, 6.5, 2.6, 2.8, '3');
+  g.tri(3.5, 0, 1.5, 6, 5.5, 6, '3');
+  g.ellipse(3.5, 6.5, 1.4, 1.5, '4');
+  return g;
+}
+
+/** A jagged chunk of earth thrown up by Earthquake. */
+function fxRubble() {
+  const g = new Grid(6, 6);
+  g.tri(3, 0, 0, 4, 5, 3, '3');
+  g.tri(0, 4, 5, 3, 3, 5, '4');
+  return g.outline();
+}
+
 /** Chunky angular rock, for the orbitals. */
 function projRock() {
   const g = new Grid(10, 10);
@@ -742,6 +1120,7 @@ const TWO_FRAME = {
   wooper, quagsire,
   eevee, vaporeon, jolteon, umbreon,
   rowlet, dartrix, decidueye,
+  gastly, haunter, gengar,
   quad_small: quadSmall, bat, round_big: roundBig, bug,
 };
 const ONE_FRAME = {
@@ -749,6 +1128,14 @@ const ONE_FRAME = {
   proj_rock: projRock, proj_bone: projBone, proj_spark: projSpark, proj_cloud: projCloud,
   icon_shield: iconShield, icon_quake: iconQuake, icon_leaf: iconLeaf, icon_arrow: iconArrow,
   icon_beam: iconBeam, icon_bolt: iconBolt, icon_jet: iconJet, icon_pulse: iconPulse,
+  icon_shade: iconShade, icon_lick: iconLick,
+  fx_leafblade: fxLeafBlade, fx_bolt: fxBolt, fx_wave: fxWave, fx_wisp: fxWisp,
+  fx_rubble: fxRubble,
+  proj_fang: projFang, proj_shard: projShard, proj_feather: projFeather,
+  proj_quill: projQuill, proj_droplet: projDroplet, proj_vortex: projVortex,
+  proj_mine: projMine, proj_coil: projCoil, proj_seed: projSeed, proj_thorn: projThorn,
+  proj_eye: projEye, proj_fist: projFist, proj_blade: projBlade, proj_skull: projSkull,
+  proj_hound: projHound, proj_claw: projClaw, proj_boulder: projBoulder, proj_ring: projRing,
   prop_bush: propBush, prop_rock: propRock, prop_crate: propCrate,
   pokeball,
 };

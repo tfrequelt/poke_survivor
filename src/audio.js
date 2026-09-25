@@ -63,6 +63,7 @@ export function initAudio() {
     else ctx.resume?.();
   });
 
+  decodePending();
   return resume();
 }
 
@@ -78,6 +79,8 @@ export const audioReady = () => !!ctx && ctx.state === 'running';
 
 export function setVolume(kind, v) {
   settings[kind] = Math.max(0, Math.min(1, v));
+  // Cancel any duck in progress, or its scheduled ramp would overwrite this a moment later.
+  if (kind === 'music' && ctx && musicBus) musicBus.gain.cancelScheduledValues(ctx.currentTime);
   if (kind === 'music' && musicBus) musicBus.gain.value = settings.music;
   if (kind === 'sfx' && sfxBus) sfxBus.gain.value = settings.sfx;
 }
@@ -286,14 +289,34 @@ let fileMusicOn = false;
 let onMusicFail = null;
 export function setMusicFallback(fn) { onMusicFail = fn; }
 
+/**
+ * Called when the playing track reaches its end, and returns the URL to play next. Tracks do not
+ * loop: a stage lists several songs and running out of one should move to another, which is what
+ * the games themselves do. Returning null (or the same URL, when a list holds only one song)
+ * restarts the current track instead, so a single-track list still behaves like a loop.
+ */
+let onMusicEnded = null;
+export function setMusicAdvance(fn) { onMusicEnded = fn; }
+
 function initMusicElements() {
   if (musicEls) return;
   musicEls = [];
   musicGains = [];
   for (let i = 0; i < 2; i++) {
     const el = new Audio();
-    el.loop = true;
+    // Deliberately NOT looping -- see setMusicAdvance.
+    el.loop = false;
     el.preload = 'none';
+    el.addEventListener('ended', () => {
+      // Only the element currently in front may advance the playlist. The outgoing half of a
+      // crossfade is still playing while it fades, and if it happens to run out during that
+      // second it would otherwise yank the playlist forward past the track that just started.
+      if (!musicEls || musicEls[activeSlot] !== el) return;
+      const next = onMusicEnded ? onMusicEnded(currentUrl) : null;
+      if (next && next !== currentUrl) { playMusicFile(next); return; }
+      // One-song list, or nothing to advance to: replay this one.
+      try { el.currentTime = 0; el.play(); } catch { /* element torn down */ }
+    });
     el.addEventListener('error', () => {
       if (el.src && decodeURI(el.src).endsWith(String(currentUrl))) {
         console.warn('[audio] track errored:', currentUrl);
@@ -375,6 +398,9 @@ export function stopMusicFile() {
 
 export const musicFilePlaying = () => fileMusicOn;
 export const currentMusicUrl = () => currentUrl;
+/** The element actually playing. Exposed so a harness can seek a track to its end and watch the
+ *  playlist hand over, which is the only way to test that path without waiting three minutes. */
+export const currentMusicEl = () => (musicEls ? musicEls[activeSlot] : null);
 
 // --- SFX --------------------------------------------------------------------
 
@@ -382,16 +408,85 @@ export const currentMusicUrl = () => currentUrl;
  * Fire a sound effect. Rate-limited per id and capped globally: 300 enemies dying in one frame
  * would otherwise queue eighty overlapping voices and turn the master into mud.
  */
+// --- Supplied samples -------------------------------------------------------
+//
+// A decoded sample takes priority over the synthesised version of the same id, so dropping a
+// file into assets/sfx/ and naming it in the manifest replaces that sound with no code change.
+// Decoding needs a live context, so the raw bytes sit here until initAudio has one.
+
+const sampleBytes = new Map();      // id -> ArrayBuffer, not yet decoded
+const samples = new Map();          // id -> AudioBuffer, ready to play
+
+/** Hand over the raw files loaded from the manifest. Safe to call before initAudio. */
+export function setSfxFiles(map) {
+  for (const [id, bytes] of map) sampleBytes.set(id, bytes);
+  if (ctx) decodePending();
+}
+
+function decodePending() {
+  for (const [id, bytes] of sampleBytes) {
+    sampleBytes.delete(id);
+    // decodeAudioData detaches the buffer, so a failed decode cannot be retried -- which is
+    // fine: the synthesised sound is already the fallback.
+    ctx.decodeAudioData(bytes.slice(0))
+      .then((buf) => samples.set(id, buf))
+      .catch((e) => console.warn('[audio] could not decode sfx', id, e && e.message));
+  }
+}
+
+/** True if a supplied sample was used. */
+function playSample(id, detune, now) {
+  const buf = samples.get(id);
+  if (!buf) return false;
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  if (detune) src.playbackRate.value = Math.pow(2, detune / 12);
+  const g = ctx.createGain();
+  g.gain.value = 1;
+  src.connect(g);
+  g.connect(sfxBus);
+  src.start(now);
+  voices++;
+  setTimeout(() => { voices--; }, buf.duration * 1000 + 40);
+  return true;
+}
+
+/** How long a supplied sample runs, in seconds, or 0 if there is no sample for that id. */
+export function sampleDuration(id) {
+  const buf = samples.get(id);
+  return buf ? buf.duration : 0;
+}
+
+/**
+ * Dip the music bus for `seconds`, then bring it back.
+ *
+ * The evolution jingle is a piece of music in its own right and runs far longer than the
+ * cutscene does; without this it plays underneath the stage track and both turn to mush.
+ */
+export function duckMusic(seconds, level = 0.18) {
+  if (!ctx || !musicBus) return;
+  const now = ctx.currentTime;
+  const g = musicBus.gain;
+  g.cancelScheduledValues(now);
+  g.setValueAtTime(g.value, now);
+  g.linearRampToValueAtTime(settings.music * level, now + 0.25);
+  g.setValueAtTime(settings.music * level, now + Math.max(0.3, seconds - 1));
+  g.linearRampToValueAtTime(settings.music, now + Math.max(0.6, seconds));
+}
+
 export function sfx(id, detune = 0) {
   if (!ctx || ctx.state !== 'running' || settings.muted) return;
   const def = SFX[id];
-  if (!def) return;
+  // A supplied sample does not need a synthesised definition to exist, so this check comes after.
+  if (!def && !samples.has(id)) return;
 
   const now = ctx.currentTime;
   const last = lastPlayed.get(id) || 0;
   if (now - last < 0.045) return;                   // same sound, too soon
   if (voices >= MAX_VOICES) return;
   lastPlayed.set(id, now);
+
+  if (playSample(id, detune, now)) return;
 
   const dur = def.dur;
   voices++;

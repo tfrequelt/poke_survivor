@@ -2,9 +2,12 @@
 // exceptions, optionally holds keys down, and writes a PNG screenshot.
 //
 //   node shot.mjs --url=http://127.0.0.1:8080/?debug=1 --out=a.png --wait=2500 --hold=KeyD,KeyS
+//
+// --eval=<js> runs an expression and prints its value; --evalfile=<path> does the same from a
+// file, which is the only sane way to pass anything with quotes or backticks in it.
 
 import { spawn } from 'node:child_process';
-import { writeFileSync, rmSync, mkdtempSync } from 'node:fs';
+import { writeFileSync, readFileSync, rmSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -109,7 +112,10 @@ try {
       errors.push(`${d.exception?.description || d.text}${where}`);
     } else if (msg.method === 'Log.entryAdded') {
       const e = msg.params.entry;
-      if (e.level === 'error') errors.push(`[${e.source}] ${e.text} ${e.url || ''}`);
+      // A missing -Shadow.png is an expected, handled 404: assets.js probes for it and falls
+      // back to an estimated anchor. Counting it as an error would make every run "fail".
+      const expected404 = e.source === 'network' && /-Shadow\.png$/.test(e.url || '');
+      if (e.level === 'error' && !expected404) errors.push(`[${e.source}] ${e.text} ${e.url || ''}`);
       else logs.push(`[${e.level}] ${e.text}`);
     }
   });
@@ -124,6 +130,8 @@ try {
   await cdp.send('Page.navigate', { url: URL_ });
   await Promise.race([loaded, sleep(10000)]);
 
+  // Held before the boot handshake, so these arrive before onKey() subscribers exist. Movement
+  // works (input.js registers its listeners early) but menu handlers will not see them.
   for (const k of HOLD) {
     await cdp.send('Input.dispatchKeyEvent', {
       type: 'keyDown', code: k, key: KEYCHAR[k] || k,
@@ -139,12 +147,18 @@ try {
     await sleep(50);
   }
 
-  if (args.pre) {
-    await cdp.send('Runtime.evaluate', { expression: String(args.pre), returnByValue: true, awaitPromise: true });
+  // --prefile is to --pre what --evalfile is to --eval: setup scripts are full of quotes.
+  const preSrc = args.prefile ? readFileSync(String(args.prefile), 'utf8') : args.pre ? String(args.pre) : null;
+  if (preSrc) {
+    const r = await cdp.send('Runtime.evaluate', { expression: preSrc, returnByValue: true, awaitPromise: true });
+    if (r.exceptionDetails) errors.push(`PRE: ${r.exceptionDetails.exception?.description || r.exceptionDetails.text}`);
   }
 
   await sleep(WAIT);
 
+  // NOTE: --hold keys are released HERE, before --eval runs. A probe that needs the player to
+  // keep moving while it measures must dispatch its own keydown from inside the script; input.js
+  // only clears a held key on keyup, so one synthetic event is enough.
   for (const k of HOLD) {
     await cdp.send('Input.dispatchKeyEvent', {
       type: 'keyUp', code: k, key: KEYCHAR[k] || k,
@@ -152,9 +166,13 @@ try {
     });
   }
 
-  if (args.eval) {
-    const r = await cdp.send('Runtime.evaluate', { expression: String(args.eval), returnByValue: true, awaitPromise: true });
-    console.log('EVAL:', JSON.stringify(r.result?.value ?? r.result?.description ?? null));
+  // --evalfile keeps long probes out of the command line entirely. Shell quoting mangles JS
+  // (backticks, backslashes, quotes), and these probes are the only thing that proves a fix.
+  const evalSrc = args.evalfile ? readFileSync(String(args.evalfile), 'utf8') : args.eval ? String(args.eval) : null;
+  if (evalSrc) {
+    const r = await cdp.send('Runtime.evaluate', { expression: evalSrc, returnByValue: true, awaitPromise: true });
+    if (r.exceptionDetails) errors.push(`EVAL: ${r.exceptionDetails.exception?.description || r.exceptionDetails.text}`);
+    console.log('EVAL:', JSON.stringify(r.result?.value ?? r.result?.description ?? null, null, 1));
   }
 
   const shot = await cdp.send('Page.captureScreenshot', { format: 'png' });

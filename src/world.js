@@ -39,6 +39,9 @@ const newEnemy = () => ({
   flash: 0, knockX: 0, knockY: 0, contactCd: 0,
   ai: 0, aiT: 0, aiState: 0, aiX: 0, aiY: 0,
   slow: 0, slowT: 0, stunT: 0, weakenT: 0, armor: 0, knockResist: 0,
+  // Burn: the first status that damages over time and is attached to the enemy rather than to
+  // a zone on the ground. `burnTick` is the countdown to the next damage instalment.
+  burnT: 0, burnDps: 0, burnTick: 0,
   coinChance: 0, boss: false, elite: false, flying: false, spawnT: 0,
   prop: false, harmless: false, propKey: 0, bossTier: 0,
   cell: -1, lastHitId: 0,
@@ -53,17 +56,33 @@ const newProjectile = () => ({
   // Visual identity, so two weapons sharing a motion still look nothing alike.
   spin: 0, trail: 0, trailColor: '#fff', pulse: 0, impact: 0, impactColor: '#fff',
   amp: 0, freq: 0, returning: false, orbitA: 0, orbitR: 0,
+  // Second-wave mechanics. `z` is height above the ground, which is purely visual except that a
+  // projectile still in the air has no hitbox; `r0` remembers the radius it lands with.
+  z: 0, r0: 0, bounces: 0, fuse: 0, emitT: 0, gen: 0, payload: 0,
+  // Burn passed on to whatever this hits: dps and seconds. Fire weapons set them from the def.
+  burn: 0, burnT: 0,
+  // Chill magnitude, 0..1, applied on hit. Ice weapons set it; everything else leaves it zero.
+  slow: 0,
 });
 
 const newOrb = () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, value: 1, tier: 0, sprId: 0, age: 0, pulling: false });
 const newCoin = () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, value: 1, sprId: 0, age: 0, pulling: false });
 const newDamageNumber = () => ({ alive: false, x: 0, y: 0, vy: 0, life: 0, value: 0, crit: false, color: 'white' });
-const newParticle = () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, maxLife: 0, size: 1, color: '#fff', grav: 0 });
+// `sprId` lets a particle be a real sprite (a rubble chunk, a shadow wisp) rather than a 1px
+// rect. -1 keeps the cheap path, which is still what the overwhelming majority of them use.
+const newParticle = () => ({
+  alive: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, maxLife: 0,
+  size: 1, color: '#fff', grav: 0, sprId: -1, drag: 0,
+});
 // Expanding rings and beam flashes from abilities. Purely cosmetic -- damage is applied by the
 // ability itself, so these never need to be queried.
 const newFxShape = () => ({
   alive: false, kind: 0, x: 0, y: 0, r: 0, angle: 0, width: 0,
   color: '#fff', life: 0, maxLife: 0,
+  // `seed` drives the deterministic jaggedness of cracks and lightning: the shape has to look
+  // identical every frame of its life, so the randomness is sampled from the seed at draw time
+  // rather than stored as a list of points.
+  seed: 0,
 });
 
 /** Walk-over item pickups: magnet, berry, bomb, chest. */
@@ -71,7 +90,13 @@ const newItem = () => ({
   alive: false, x: 0, y: 0, vx: 0, vy: 0, kind: 0, sprId: 0, age: 0, bob: 0,
 });
 
-const newZone = () => ({ alive: false, x: 0, y: 0, r: 0, life: 0, maxLife: 0, dps: 0, tick: 0, slow: 0, kind: 0, color: '#fff', hitId: 0 });
+// `pull` drags enemies toward the centre each tick -- a whirlpool is a zone, not a projectile.
+const newZone = () => ({
+  alive: false, x: 0, y: 0, r: 0, life: 0, maxLife: 0, dps: 0, tick: 0,
+  slow: 0, kind: 0, color: '#fff', hitId: 0, pull: 0,
+  // A zone that sets things alight rather than only grinding them down.
+  burn: 0,
+});
 
 // --- Pools and live arrays --------------------------------------------------
 
@@ -130,10 +155,21 @@ export function despawn(kind, arr, i) {
  * Recycle enemies marked dead during the tick. Runs once, after every collision pass, so that
  * swap-and-pop never reorders the array while grid indices into it are still being iterated.
  */
+/**
+ * Recycle everything killed this tick.
+ *
+ * Removal is swap-and-pop, which shortens `enemies` and invalidates any index the spatial grid
+ * still holds -- and the grid was built BEFORE this ran. Anything that walks the grid outside
+ * the tick loop then reads past the end of the array: a keypress landing between two frames is
+ * enough, which is exactly how firing an ability could crash. Rebuilding here closes the window
+ * for every grid consumer at once, rather than bounds-checking a dozen separate walk loops.
+ */
 export function sweepDead() {
+  let removed = 0;
   for (let i = enemies.length - 1; i >= 0; i--) {
-    if (!enemies[i].alive) despawn('enemies', enemies, i);
+    if (!enemies[i].alive) { despawn('enemies', enemies, i); removed++; }
   }
+  if (removed) rebuildGrid();
 }
 
 export function clearWorld() {

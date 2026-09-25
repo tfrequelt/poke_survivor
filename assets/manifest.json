@@ -1,28 +1,83 @@
 {
-  "_comment": "sheets: PMD walk sheets (8 direction rows x N frame columns). sprites: single-image overrides.",
+  "_comment": "sheets: PMD walk sheets (8 direction rows x N frame columns), keyed by the SHAPE name the game uses -- the folder on disk may be spelled differently. sprites: single-image overrides, optionally a {src,x,y,w,h} crop out of a packed sheet. images: whole sheets kept as canvases for the ground tilesets and backdrops. sfx: short one-shot sounds. attacks: forms whose Attack-Anim.png is loaded as a drawable sheet for the one-shot cast animation; the folder comes from the sheets entry of the same name.",
   "sheets": {
+    "azumarill": "assets/sprites/azumarill",
+    "butterfree": "assets/sprites/butterfree",
+    "caterpie": "assets/sprites/caterpie",
+    "crobat": "assets/sprites/crobat",
     "dartrix": "assets/sprites/dartrix",
     "decidueye": "assets/sprites/decidueye",
+    "delibird": "assets/sprites/delibird",
+    "diglett": "assets/sprites/diglet",
+    "dugtrio": "assets/sprites/dugtrio",
     "eevee": "assets/sprites/eevee",
+    "gastly": "assets/sprites/gastly",
+    "gengar": "assets/sprites/gengar",
+    "geodude": "assets/sprites/goedude",
+    "graveler": "assets/sprites/graveler",
+    "haunter": "assets/sprites/haunter",
     "jolteon": "assets/sprites/jolteon",
+    "linoone": "assets/sprites/linoone",
+    "marill": "assets/sprites/marill",
+    "metapod": "assets/sprites/metapod",
+    "mightyena": "assets/sprites/mightyena",
+    "ninetales": "assets/sprites/ninetales",
+    "pidgeot": "assets/sprites/pidgeot",
+    "pidgeotto": "assets/sprites/pidgeotto",
+    "pidgey": "assets/sprites/pidgey",
+    "poochyena": "assets/sprites/poochyena",
     "quagsire": "assets/sprites/quagsire",
+    "raticate": "assets/sprites/raticate",
+    "rattata": "assets/sprites/rattata",
     "rowlet": "assets/sprites/rowlet",
     "umbreon": "assets/sprites/umbreon",
     "vaporeon": "assets/sprites/vaporeon",
-    "wooper": "assets/sprites/wooper"
+    "vulpix": "assets/sprites/vulpix",
+    "wooper": "assets/sprites/wooper",
+    "zigzagoon": "assets/sprites/zigzagoon",
+    "zubat": "assets/sprites/zubat"
   },
   "portraits": {
     "dartrix": "assets/portraits/dartrix_portrait.png",
     "decidueye": "assets/portraits/decidueye_portrait.png",
+    "delibird": "assets/portraits/delibird_portrait.png",
     "eevee": "assets/portraits/eevee_portrait.png",
+    "gastly": "assets/portraits/gastly_portrait.png",
     "jolteon": "assets/portraits/jolteon_portrait.png",
     "quagsire": "assets/portraits/quagisre_portrait.png",
     "rowlet": "assets/portraits/rowlet_portrait.png",
     "umbreon": "assets/portraits/umbreon_portrait.png",
     "vaporeon": "assets/portraits/vaporeon_portrait.png",
+    "vulpix": "assets/portraits/vulpix_portrait.png",
     "wooper": "assets/portraits/wooper_portrait.png"
   },
-  "sprites": {},
+  "sprites": {
+    "coin": {
+      "src": "assets/pmd/items.png",
+      "x": 1,
+      "y": 6,
+      "w": 14,
+      "h": 11,
+      "anchor": "center",
+      "key": "#eaffea"
+    },
+    "item_berry": {
+      "src": "assets/pmd/items.png",
+      "x": 81,
+      "y": 31,
+      "w": 15,
+      "h": 12,
+      "anchor": "center",
+      "key": "#eaffea"
+    }
+  },
+  "sfx": {
+    "evolve": "assets/sounds/213. Evolution.mp3",
+    "select": "assets/sounds/bip_button.mp3",
+    "move_fire": "assets/sounds/fire_move.mp3",
+    "move_cut": "assets/sounds/cut_move.mp3",
+    "move_dark": "assets/sounds/dark_move.mp3"
+  },
   "music": {
     "menu": [
       "assets/musics/01. Pokémon Exploration Team Theme.mp3"
@@ -41,5 +96,48 @@
       "assets/musics/05. Beach Cave.mp3",
       "assets/musics/89. Miracle Sea.mp3"
     ]
+  },
+  "images": {
+    "woods": "assets/pmd/woods.png",
+    "cave": "assets/pmd/cave.png",
+    "backgrounds": "assets/pmd/backgrounds.png",
+    "status": {
+      "src": "assets/pmd/status.png",
+      "key": "#007890"
+    },
+    "mtthunder": "assets/pmd/mt_thunder.png",
+    "title": {
+      "src": "assets/pmd/title.png",
+      "optional": true
+    },
+    "wheel": {
+      "src": "assets/pmd/wheel.png",
+      "optional": true
+    }
+  },
+  "attacks": [
+    "wooper",
+    "quagsire",
+    "eevee",
+    "vaporeon",
+    "jolteon",
+    "umbreon",
+    "rowlet",
+    "dartrix",
+    "decidueye",
+    "gastly",
+    "haunter",
+    "gengar",
+    "vulpix",
+    "ninetales",
+    "delibird"
+  ],
+  "anims": {
+    "wooper": "Sleep",
+    "eevee": "TailWhip",
+    "rowlet": "Shake",
+    "vulpix": "RearUp",
+    "delibird": "Hop",
+    "gastly": "Lick"
   }
 }

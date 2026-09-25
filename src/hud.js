@@ -8,6 +8,8 @@ import { ctx, VW, VH } from './render.js';
 import { drawText, drawTextCentered, textWidth, drawSprite } from './sprites.js';
 import { formatTime, formatNum, clamp } from './util.js';
 import { enemies } from './world.js';
+import { panel, messageWindow, wrap } from './win.js';
+import { bankTotal } from './save.js';
 
 const PAD = 6;
 
@@ -83,19 +85,30 @@ function drawAbilities() {
   }
 }
 
-/** Short centred announcement -- awakenings, stage name, pickups. Fades in and out. */
+/**
+ * Short centred announcement -- awakenings, stage name, pickups -- in a Mystery Dungeon message
+ * window. Fades in and out, and sizes itself to the text rather than spanning the whole screen.
+ */
 function drawBanner() {
   const b = G.banner;
   const k = Math.min(1, b.t / 0.4) * Math.min(1, (3.0 - b.t) / 0.25);
-  const y = 74;
+  const lines = [b.text.toUpperCase()];
+  if (b.sub) for (const line of wrap(b.sub, 40)) lines.push(line);
+
+  let widest = 0;
+  for (const line of lines) widest = Math.max(widest, textWidth(line));
+  const w = Math.min(VW - 24, widest + 28);
+  const x = Math.round((VW - w) / 2);
+  const y = 70;
+
   ctx.globalAlpha = Math.max(0, Math.min(1, k));
-  ctx.fillStyle = '#101018';
-  ctx.fillRect(0, y - 4, VW, b.sub ? 26 : 16);
-  ctx.fillStyle = '#ffd166';
-  ctx.fillRect(0, y - 4, VW, 1);
-  ctx.fillRect(0, y + (b.sub ? 21 : 11), VW, 1);
-  drawTextCentered(ctx, b.text, VW / 2, y, 'gold');
-  if (b.sub) drawTextCentered(ctx, b.sub.toUpperCase().slice(0, 52), VW / 2, y + 11, 'white');
+  const h = Math.max(24, lines.length * 10 + 11);
+  panel(x, y, w, h, { accent: '#ffd166' });
+  let ty = y + 6;
+  for (let i = 0; i < lines.length; i++) {
+    drawTextCentered(ctx, lines[i], VW / 2, ty, i === 0 ? 'gold' : 'white');
+    ty += 10;
+  }
   ctx.globalAlpha = 1;
 }
 
@@ -151,11 +164,16 @@ function drawTallies() {
 function drawRunOver() {
   ctx.fillStyle = 'rgba(8,8,18,0.72)';
   ctx.fillRect(0, 0, VW, VH);
-  const mid = VH / 2;
-  drawTextCentered(ctx, G.won ? 'VICTORY' : 'YOU FAINTED', VW / 2, mid - 24, G.won ? 'gold' : 'red');
-  drawTextCentered(ctx, `SURVIVED ${formatTime(G.runTime)}`, VW / 2, mid - 6, 'white');
-  drawTextCentered(ctx, `LEVEL ${G.level}   ${formatNum(G.kills)} KO   ${formatNum(G.coins)} GOLD`, VW / 2, mid + 6, 'dim');
-  drawTextCentered(ctx, 'R RESTART    Q CHANGE PARTNER', VW / 2, mid + 26, 'green');
+  const w = 264, x = Math.round((VW - w) / 2), y = Math.round(VH / 2) - 42;
+  messageWindow(x, y, w, [
+    G.won ? 'VICTORY!' : 'YOU FAINTED...',
+    '',
+    `SURVIVED ${formatTime(G.runTime)}`,
+    `LEVEL ${G.level}   ${formatNum(G.kills)} KO`,
+    `+${formatNum(G.coins)} GOLD   BANK ${formatNum(bankTotal())}`,
+    '',
+    'R RESTART    Q CHANGE PARTNER',
+  ], { center: true, accent: G.won ? '#ffd166' : '#ff9f9f', lineHeight: 11 });
 }
 
 /** Dev overlay drawn in-canvas (the outer one in render.js is native-resolution text). */

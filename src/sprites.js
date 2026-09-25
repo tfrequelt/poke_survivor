@@ -14,10 +14,12 @@ import { SHAPES, PALETTES } from './data/art.js';
 import { FONT, FONT_COLORS, GLYPH_W, GLYPH_H, B32 } from './data/font.js';
 import { getOverride, getSheet } from './assets.js';
 
-// PMD walk sheets are 8 directions x N frames x 2 flash variants per form, which is far more
-// atlas area than the drawn art needed. 2048 leaves comfortable headroom.
+// PMD walk sheets are 8 directions x N frames x 2 flash variants per form. One form is roughly
+// 160k pixels, and the roster is now twelve player forms plus fifteen enemies -- which is what
+// pushed this past a 2048 square. Kept 2048 WIDE so it stays inside the 4096-per-side limit
+// mobile GPUs impose, and tall instead; 8.4M pixels is 33MB of canvas, paid once at boot.
 const ATLAS_W = 2048;
-const ATLAS_H = 2048;
+const ATLAS_H = 4096;
 
 export const ATLAS = document.createElement('canvas');
 export const FRAMES = [];          // { sx, sy, w, h, ox, oy } indexed by numeric frame id
@@ -68,7 +70,9 @@ function shelfPacker(w, h) {
   const alloc = function (iw, ih) {
     if (penX + iw > w) { shelfY += shelfH; penX = 0; shelfH = 0; }
     if (shelfY + ih > h) {
-      throw new Error(`sprites: atlas full at ${w}x${h} -- raise ATLAS_W/ATLAS_H`);
+      throw new Error(
+        `sprites: atlas full at ${w}x${h} (needed a ${iw}x${ih} cell at row ${shelfY}) -- ` +
+        'raise ATLAS_H, or register fewer sheet variants');
     }
     const r = { sx: penX, sy: shelfY };
     penX += iw;
@@ -88,17 +92,20 @@ function shelfPacker(w, h) {
  * Frame ids for a pair are laid out so the hot path can do plain arithmetic:
  *     id = base + flash * (nf * 2) + frame * 2 + dir      (dir: 0 = left, 1 = right)
  */
-export function registerSprite(shape, palette, rot = 0) {
+export function registerSprite(shape, palette, rot = 0, fallback = null) {
   const key = `${shape}:${palette}`;
   let e = registry.get(key);
   if (!e) {
-    const s = SHAPES[shape];
-    if (!s) throw new Error(`sprites: unknown shape "${shape}"`);
+    // `shape` may name a PMD sheet rather than authored pixels -- there is no drawn Pidgeotto.
+    // `fallback` is the generic shape to draw if that folder is missing, which is what keeps a
+    // deleted or mistyped asset folder from turning into a boot failure.
+    const s = SHAPES[shape] || (fallback ? SHAPES[fallback] : null);
+    if (!s) throw new Error(`sprites: unknown shape "${shape}"${fallback ? ` (fallback "${fallback}" also unknown)` : ''}`);
     // nf/nd below are provisional: buildAtlas overwrites them if a PMD sheet is supplied.
     // rot = 0 means the usual left/right pair. rot = N bakes N evenly spaced angles instead,
     // which is how a leaf missile or a boomerang can point anywhere without a ctx transform.
     e = {
-      key, shape, palette, base: -1,
+      key, shape, palette, base: -1, src: s,
       nf: s.frames.length, nd: rot || 2, rot,
       w: s.w, h: s.h, ox: s.ox, oy: s.oy,
     };
@@ -145,7 +152,7 @@ export function buildAtlas() {
   const alloc = shelfPacker(ATLAS_W, ATLAS_H);
 
   for (const e of registry.values()) {
-    const shape = SHAPES[e.shape];
+    const shape = e.src;
     // A supplied image replaces the drawn art for this shape entirely, including its dimensions.
     const over = getOverride(e.shape);
     // A PMD sheet supplies 8 direction rows and N frame columns, which slots straight into the
@@ -155,7 +162,10 @@ export function buildAtlas() {
       e.w = sheet.w; e.h = sheet.h; e.ox = sheet.ox; e.oy = sheet.oy;
       e.nf = sheet.cols; e.nd = 8; e.sheet = true;
     } else if (over) {
-      e.w = over.w; e.h = over.h; e.ox = over.w >> 1; e.oy = over.h - 2;
+      e.w = over.w; e.h = over.h;
+      e.ox = over.w >> 1;
+      // A creature stands on the ground; a coin or a berry is drawn centred on its position.
+      e.oy = over.anchor === 'center' ? over.h >> 1 : over.h - 2;
     }
     e.base = FRAMES.length;
 
@@ -181,7 +191,15 @@ export function buildAtlas() {
             // sheet already contains every direction drawn by hand.
             const { sx, sy } = alloc(sw, sh);
             blitSheet(buf, sheet, f, d, sx, sy, flash === 1);
-            FRAMES.push({ sx, sy, w: sw, h: sh, ox: sox, oy: soy });
+            // Every cell has its OWN ground point, read from the sheet's shadow data -- see
+            // readAnchors in assets.js. One anchor shared across directions is what made Eevee
+            // float, and one shared across frames is what made a walk cycle slide.
+            const ai = (d * e.nf + f) * 2;
+            FRAMES.push({
+              sx, sy, w: sw, h: sh,
+              ox: sheet.anchors ? sheet.anchors[ai] : sox,
+              oy: sheet.anchors ? sheet.anchors[ai + 1] : soy,
+            });
           } else {
             const mirror = d === 0;                 // d 0 = left = mirrored source
             const { sx, sy } = alloc(sw, sh);
@@ -207,7 +225,9 @@ export function buildAtlas() {
 
   const ms = performance.now() - t0;
   const fill = alloc.usedRows() / ATLAS_H;
-  if (fill > 0.85) console.warn(`sprites: atlas ${Math.round(fill * 100)}% full`);
+  if (fill > 0.85) {
+    console.warn(`sprites: atlas ${Math.round(fill * 100)}% full (${alloc.usedRows()}/${ATLAS_H} rows)`);
+  }
   if (FRAMES.length > 4000) console.warn(`sprites: ${FRAMES.length} frames is a lot`);
   return { frames: FRAMES.length, ms, fill };
 }

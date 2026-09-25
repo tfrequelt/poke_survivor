@@ -151,17 +151,24 @@ export function updatePickups(dt, onXp, onCoin) {
 
 export const PICKUP_KINDS = {
   magnet: { shape: 'icon_pulse', palette: 'xp_mid', label: 'MAGNET' },
-  berry:  { shape: 'orb', palette: 'crab', label: 'SITRUS BERRY' },
+  // A shape of its own rather than the xp orb's: overriding `orb` with the PMD berry sprite
+  // would repaint every XP orb on the field too. `fallback` keeps the drawn orb as its art
+  // until an image is supplied.
+  berry:  { shape: 'item_berry', fallback: 'orb', palette: 'crab', label: 'SITRUS BERRY' },
   bomb:   { shape: 'icon_quake', palette: 'fire', label: 'BLAST SEED' },
   chest:  { shape: 'prop_crate', palette: 'gold', label: 'TREASURE' },
+  // Appended deliberately: dropPickup stores KIND_KEYS.indexOf(kind) as a number on the live
+  // entity, so adding a key at the END is safe and inserting one in the middle would renumber
+  // every item already lying on the ground.
+  present: { shape: 'icon_gift', fallback: 'orb', palette: 'gift', label: 'PRESENT' },
 };
 
 const KIND_KEYS = Object.keys(PICKUP_KINDS);
 let KIND_SPR = {};
 
-/** (shape, palette) pairs the item pickups need in the atlas. */
+/** (shape, palette, fallbackShape) triples the item pickups need in the atlas. */
 export function itemSpritePairs() {
-  return KIND_KEYS.map((k) => [PICKUP_KINDS[k].shape, PICKUP_KINDS[k].palette]);
+  return KIND_KEYS.map((k) => [PICKUP_KINDS[k].shape, PICKUP_KINDS[k].palette, PICKUP_KINDS[k].fallback]);
 }
 
 export function initItemSprites() {

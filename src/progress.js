@@ -65,6 +65,7 @@ function candidates() {
       });
     } else {
       if (G.weapons.length >= MAX_WEAPONS) continue;
+      if (!weaponOffered(w)) continue;              // strict type gating -- see weaponOffered
       // Eevee's Adaptability nudges new weapons to show up more often.
       const bonus = G.character && G.character.id === 'eevee' ? 1.1 : 1;
       out.push({
@@ -103,9 +104,23 @@ function candidates() {
 function availableAbilities() {
   const c = G.character;
   if (!c) return [];
-  const formId = G.form ? G.form.id : c.id;
-  return ABILITIES.filter((a) =>
-    a.owner === c.id && (a.form === c.id || a.form === formId));
+  const line = G.form ? G.form.line : [c.id];
+  return ABILITIES.filter((a) => a.owner === c.id && (a.form === c.id || line.includes(a.form)));
+}
+
+/**
+ * Can this form be OFFERED this weapon?
+ *
+ * Strictly by type: Wooper is shown Water and Ground weapons and nothing else. A weapon already
+ * owned is exempt -- evolving must never strand a weapon at the level it happened to be when the
+ * type changed, and taking something away from the player is a much worse feeling than the pool
+ * narrowing. Signature weapons are likewise always legal for their owner.
+ */
+export function weaponOffered(def) {
+  if (!def.type) return true;                       // untyped data is a bug, not a lockout
+  if (def.owner && G.character && def.owner === G.character.id) return true;
+  const types = (G.form && G.form.types) || [];
+  return types.includes(def.type);
 }
 
 /**
@@ -275,6 +290,8 @@ export function applyEvolution(ev, branch) {
     if (chosen.palette) G.form.palette = chosen.palette;
     if (chosen.name) G.form.name = chosen.name;
     if (chosen.id) G.form.id = chosen.id;
+    if (chosen.types) G.form.types = chosen.types.slice();
+    if (chosen.id && !G.form.line.includes(chosen.id)) G.form.line.push(chosen.id);
   }
   ensureStats();
 
@@ -295,6 +312,11 @@ export function initForm(character) {
     name: character.name,
     shape: character.shape,
     palette: character.palette,
+    types: character.types ? character.types.slice() : [],
+    // Every form id this creature has BEEN, not just the current one. An ability is unlocked by
+    // a form, and losing access to it on the next evolution -- which is what checking only the
+    // current id did -- means an ability you never happened to draft becomes unreachable.
+    line: [character.id],
     stats: { ...character.stats },
   };
   G.evolvedAt.clear();

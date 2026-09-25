@@ -4,11 +4,12 @@
 // data file resolved through the AI registry below, so adding an enemy never touches this file.
 
 import { G } from './state.js';
-import { clamp, dist2, TAU } from './util.js';
+import { clamp, dist2, TAU, clampToBounds } from './util.js';
 import {
   enemies, spawn, despawn, rebuildGrid, cellRange, cellStart, cellItems, CELL, GW,
 } from './world.js';
 import { ENEMIES, ENEMY_BY_ID } from './data/enemies.js';
+import { damageOverTime } from './combat.js';
 import { dirFromAngle } from './assets.js';
 import { spriteBase, spriteInfo } from './sprites.js';
 
@@ -102,7 +103,30 @@ export function spawnAtRing(def, rng) {
   const a = rng() * TAU;
   const r = SPAWN_MIN + rng() * (SPAWN_MAX - SPAWN_MIN);
   const p = G.player;
-  return spawnEnemy(def, p.x + Math.cos(a) * r, p.y + Math.sin(a) * r);
+  const pt = ringPoint(p.x, p.y, a, r, rng);
+  return spawnEnemy(def, pt.x, pt.y);
+}
+
+const _pt = { x: 0, y: 0 };
+
+/**
+ * A point on the spawn ring that is inside the arena.
+ *
+ * Clamping a ring point to the bounds would pile every spawn into the corners once the player
+ * hugs a wall, so this resamples the ANGLE instead and only falls back to a clamp if the ring
+ * somehow has no valid arc at all.
+ */
+export function ringPoint(cx, cy, angle, r, rng) {
+  const b = G.bounds;
+  let a = angle;
+  for (let i = 0; i < 12; i++) {
+    _pt.x = cx + Math.cos(a) * r;
+    _pt.y = cy + Math.sin(a) * r;
+    if (!b || (_pt.x > b.minX && _pt.x < b.maxX && _pt.y > b.minY && _pt.y < b.maxY)) return _pt;
+    a = (rng ? rng() : Math.random()) * TAU;
+  }
+  clampToBounds(_pt, b, 16);
+  return _pt;
 }
 
 export function spawnEnemy(def, x, y, opts) {
@@ -132,6 +156,7 @@ export function spawnEnemy(def, x, y, opts) {
   e.prop = !!def.prop;
   e.harmless = !!def.harmless;
   e.stunT = 0; e.weakenT = 0;
+  e.burnT = 0; e.burnDps = 0; e.burnTick = 0;
   // Scenery must not scale with the difficulty curve, or a minute-18 bush needs a whole clip.
   if (def.noScale) {
     e.maxHp = e.hp = def.hp;
@@ -199,6 +224,9 @@ export function combatantCount() {
   return n;
 }
 
+/** Burn damage is paid every quarter second, matching updateZones' cadence. */
+export const BURN_TICK = 0.25;
+
 export function updateEnemies(dt, separationOn) {
   const p = G.player;
   if (!p) return;
@@ -212,6 +240,20 @@ export function updateEnemies(dt, separationOn) {
     if (e.flash > 0) e.flash -= dt;
     if (e.slowT > 0) { e.slowT -= dt; if (e.slowT <= 0) e.slow = 0; }
     if (e.weakenT > 0) e.weakenT -= dt;
+
+    // Burn pays out in instalments on the same quarter-second cadence the ground zones use, so
+    // a burning crowd and a crowd standing in a pool of fire cost the same to run. This can
+    // kill: the loop already runs backwards and killEnemy only clears `alive`, so the sweep at
+    // the end of the tick picks the body up like any other death.
+    if (e.burnT > 0) {
+      e.burnT -= dt;
+      e.burnTick -= dt;
+      if (e.burnTick <= 0) {
+        e.burnTick = BURN_TICK;
+        if (damageOverTime(e, e.burnDps * BURN_TICK)) continue;
+      }
+      if (e.burnT <= 0) e.burnDps = 0;
+    }
 
     // A stunned enemy keeps its velocity for knockback but stops steering and stops advancing,
     // so Earthquake and Thunderbolt actually buy the player breathing room.
@@ -235,6 +277,10 @@ export function updateEnemies(dt, separationOn) {
       e.knockY *= decay;
       if (Math.abs(e.knockX) < 1 && Math.abs(e.knockY) < 1) { e.knockX = 0; e.knockY = 0; }
     }
+
+    // Knockback is what actually drives things through a wall -- a chaser would only ever press
+    // against it -- so the clamp goes after both the steering and the impulse.
+    if (clampToBounds(e, G.bounds, e.r)) { e.knockX = 0; e.knockY = 0; }
 
     if (e.nd === 8) {
       if (e.vx || e.vy) e.dir = dirFromAngle(Math.atan2(e.vy, e.vx));
@@ -261,7 +307,11 @@ export function initEnemyDefs() {
   for (const def of ENEMIES) {
     def.aiIdx = aiIndex(def.ai);
     def.sprBase = spriteBase(def.shape, def.palette);
-    def.sprEliteBase = spriteBase(def.shape, 'elite');
+    // A PMD-sheet enemy has no separate elite recolour -- the sheet is its own colours -- so it
+    // reuses its normal frames. Elites still read as elites: they are larger and carry a bar.
+    def.sprEliteBase = spriteInfo(def.shape, 'elite')
+      ? spriteBase(def.shape, 'elite')
+      : def.sprBase;
     const info = spriteInfo(def.shape, def.palette);
     def.sprDirs = info ? info.nd : 2;
     def.sprFrames = info ? info.nf : 2;

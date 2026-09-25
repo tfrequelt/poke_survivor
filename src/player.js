@@ -4,7 +4,7 @@
 
 import { G } from './state.js';
 import { moveAxis } from './input.js';
-import { dist2 } from './util.js';
+import { dist2, clampToBounds } from './util.js';
 import { enemies, cellRange, cellStart, cellItems, GW } from './world.js';
 import { damagePlayer } from './combat.js';
 import { ensureStats } from './stats.js';
@@ -31,6 +31,10 @@ export function createPlayer(x = 0, y = 0) {
     regenAcc: 0,
     shieldT: 0,            // Protect Bubble -- blocks contact damage outright
     rootT: 0,              // Hyperbeam channel -- cannot move while firing
+    // A one-shot attack animation, started by casting an ability. It overrides the walk frames
+    // while it runs; `actT` counts UP so the renderer can index the real PMD frame durations.
+    actT: 0,
+    actDur: 0,
   };
 }
 
@@ -46,6 +50,7 @@ export function updatePlayer(dt) {
   p.vy = rooted ? 0 : axis.y * s.moveSpeed;
   p.x += p.vx * dt;
   p.y += p.vy * dt;
+  clampToBounds(p, G.bounds, p.r);
 
   p.moving = !rooted && (axis.x !== 0 || axis.y !== 0);
   p.stillTime = p.moving ? 0 : p.stillTime + dt;
@@ -63,6 +68,13 @@ export function updatePlayer(dt) {
     p.frame = 0;
   }
 
+  // The attack animation runs on its own clock. It is deliberately advanced AFTER the walk
+  // block above, which rewrites p.frame every tick and would otherwise fight it.
+  if (p.actDur > 0) {
+    p.actT += dt;
+    if (p.actT >= p.actDur) { p.actT = 0; p.actDur = 0; }
+  }
+
   if (p.iframes > 0) p.iframes -= dt;
 
   // Regen is applied in whole points so the HUD never shows a fractional bar creeping.
@@ -78,11 +90,27 @@ export function updatePlayer(dt) {
   contactDamage(p, dt);
 
   if (p.hp <= 0 && !G.runOver) {
+    // A revive bought from the Kecleon Shop spends itself here: back up at half health, with a
+    // long mercy window so you are not immediately killed again by the crowd that did it.
+    if (G.revivesLeft > 0) {
+      G.revivesLeft--;
+      p.hp = Math.max(1, Math.round(ensureStats().maxHp * 0.5));
+      p.iframes = REVIVE_IFRAMES;
+      if (onRevive) onRevive(p, G.revivesLeft);
+      return;
+    }
     p.hp = 0;
     G.runOver = true;
     G.won = false;
   }
 }
+
+/** Seconds of invulnerability after getting back up. Far longer than an ordinary hit's. */
+export const REVIVE_IFRAMES = 2.5;
+
+/** Set by main.js so getting up can shake the screen and say so, without importing upward. */
+export let onRevive = null;
+export function setReviveFx(fn) { onRevive = fn; }
 
 /**
  * Enemy -> player contact. One small grid query per tick rather than a scan of every enemy.
@@ -105,7 +133,7 @@ function contactDamage(p, dt) {
         if (e.contactCd > 0) { e.contactCd -= dt; continue; }
         const rr = p.r + e.r;
         if (dist2(p.x, p.y, e.x, e.y) > rr * rr) continue;
-        const dmg = e.weakenT > 0 ? e.dmg * 0.7 : e.dmg;
+        const dmg = (e.weakenT > 0 ? e.dmg * 0.7 : e.dmg) * (G.stats.contactMult || 1);
         if (damagePlayer(dmg)) e.contactCd = CONTACT_CD;
       }
     }

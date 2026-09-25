@@ -8,10 +8,25 @@
 //   4. props -- destructible bushes/rocks/crates, spawned by the world, not drawn here
 //
 // `scatter` entries are drawn as small rect clusters; `shape` picks the arrangement.
+//
+// A stage with a `tileset` draws its ground from a PMD map instead (see data/tilesets.js). The
+// four procedural layers stay as its fallback, so a missing image costs the stage its artwork
+// and nothing else.
+//
+// `arena` is the playable floor, in pixels, centred on the origin. The stage wall is drawn just
+// outside it and stops the player, the enemies and the camera. 3456 is 144 tiles of 24px --
+// about five screens across and nine tall, which is enough to keep running for twenty minutes
+// without the edge ever feeling close.
 
 export const STAGES = [
   {
     id: 'grass', name: 'Grass Route',
+    arena: { w: 3456, h: 3456 },
+    // Drawn from the ripped Tiny Woods map (see data/tilesets.js). The `ground` block below is
+    // still the fallback if assets/pmd/woods.png is missing.
+    tileset: 'woods',
+    color: '#5fd35f',
+    blurb: 'Open fields and a worn path. The gentlest start.',
     hpMult: 1.00, spsMult: 1.00, coinMult: 1.00,
     ground: {
       base: '#2f7a3a',
@@ -30,10 +45,14 @@ export const STAGES = [
       { id: 'rock', weight: 3 },
       { id: 'crate', weight: 1 },
     ],
-    propDensity: 0.020,
+    propDensity: 0.14,
   },
   {
     id: 'cave', name: 'Damp Cave',
+    arena: { w: 2880, h: 2880 },
+    tileset: 'mtthunder',
+    color: '#9f8fe8',
+    blurb: 'Crystal dark. Tougher swarms, richer pockets.',
     hpMult: 1.10, spsMult: 1.10, coinMult: 1.15,
     ground: {
       base: '#2a2735',
@@ -51,10 +70,13 @@ export const STAGES = [
       { id: 'rock', weight: 8 },
       { id: 'crate', weight: 2 },
     ],
-    propDensity: 0.026,
+    propDensity: 0.16,
   },
   {
     id: 'beach', name: 'Sunset Beach',
+    arena: { w: 3840, h: 3456 },
+    color: '#f0c070',
+    blurb: 'Wide open sand. Nothing slows the tide down.',
     hpMult: 1.20, spsMult: 1.20, coinMult: 1.30,
     ground: {
       base: '#d8c48a',
@@ -67,25 +89,36 @@ export const STAGES = [
         { color: '#7ac8d8', shape: 'shell', density: 0.012 },
       ],
       path: { color: '#6fbcd8', width: 40, spacing: 900 },
+      // Sunset Beach has no PMD tileset, so its arena edge is drawn: the sand simply runs out
+      // into the sea. `edge` is the wet band at the waterline.
+      outside: '#1b5f88',
+      edge: '#6fbcd8',
     },
     props: [
       { id: 'rock', weight: 5 },
       { id: 'bush', weight: 2 },
       { id: 'crate', weight: 2 },
     ],
-    propDensity: 0.018,
+    propDensity: 0.12,
   },
 ];
 
 export const STAGE_BY_ID = Object.fromEntries(STAGES.map((s) => [s.id, s]));
 
-/** Destructible scenery. Breaking one drops pickups, which is what earns it a place on the map. */
-export const PROPS = {
-  bush:  { shape: 'prop_bush', palette: 'grass', hp: 12, r: 8, coin: 0.35, pickup: 0.14 },
-  rock:  { shape: 'prop_rock', palette: 'rock', hp: 26, r: 8, coin: 0.45, pickup: 0.10 },
-  crate: { shape: 'prop_crate', palette: 'vermin', hp: 18, r: 8, coin: 0.70, pickup: 0.45 },
-};
+/**
+ * The sprites destructible scenery needs in the atlas.
+ *
+ * The scenery's own stats -- health, radius, what it drops -- live with the other static enemies
+ * in data/enemies.js, because that is what a prop actually is. There used to be a second table
+ * here carrying its own hp and drop numbers; nothing read them, and they had already drifted out
+ * of agreement with the live ones.
+ */
+export const PROP_SPRITES = [
+  ['prop_bush', 'grass'],
+  ['prop_rock', 'rock'],
+  ['prop_crate', 'vermin'],
+];
 
 export function propSpritePairs() {
-  return Object.values(PROPS).map((p) => [p.shape, p.palette]);
+  return PROP_SPRITES;
 }

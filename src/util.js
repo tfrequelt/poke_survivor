@@ -109,3 +109,20 @@ export function formatTime(sec) {
 export function formatNum(n) {
   return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
+
+/**
+ * Hold an entity inside the arena. `r` is its radius, so a body stops with its edge against the
+ * wall rather than its centre. Returns true if it was actually moved, which the caller can use
+ * to kill velocity into the wall.
+ *
+ * A null `b` means the stage is unbounded and nothing happens.
+ */
+export function clampToBounds(e, b, r = 0) {
+  if (!b) return false;
+  let hit = false;
+  if (e.x < b.minX + r) { e.x = b.minX + r; hit = true; }
+  else if (e.x > b.maxX - r) { e.x = b.maxX - r; hit = true; }
+  if (e.y < b.minY + r) { e.y = b.minY + r; hit = true; }
+  else if (e.y > b.maxY - r) { e.y = b.maxY - r; hit = true; }
+  return hit;
+}
