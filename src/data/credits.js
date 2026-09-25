@@ -87,6 +87,14 @@ export const CREDITS = [
   })),
   { line: '' },
 
+  { heading: 'SOUND EFFECTS' },
+  { line: 'Spinning prize wheel sound effect', color: 'gold' },
+  { line: 'from ORANGE FREE SOUNDS.', color: 'gold' },
+  { line: '' },
+  { line: 'orangefreesounds.com/', color: 'blue' },
+  { line: 'spinning-prize-wheel-sound-effect/', color: 'blue' },
+  { line: '' },
+
   { heading: 'MUSIC' },
   { line: 'Tracks from the POKEMON MYSTERY DUNGEON', color: 'gold' },
   { line: 'soundtrack, composed by Arata Iiyoshi,', color: 'dim' },
@@ -95,8 +103,9 @@ export const CREDITS = [
   { line: '' },
 
   { heading: 'EVERYTHING ELSE' },
-  { line: 'Code, sound effects, UI and fallback art', color: 'dim' },
-  { line: 'made for this project.', color: 'dim' },
+  { line: 'Code, UI, the synthesised chiptune', color: 'dim' },
+  { line: 'soundtrack and every fallback sound and', color: 'dim' },
+  { line: 'sprite were made for this project.', color: 'dim' },
   { line: '' },
   { line: 'Pokemon is a trademark of Nintendo,', color: 'dim' },
   { line: 'Game Freak and Creatures Inc.', color: 'dim' },

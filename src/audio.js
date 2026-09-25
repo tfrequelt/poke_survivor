@@ -416,12 +416,20 @@ export const currentMusicEl = () => (musicEls ? musicEls[activeSlot] : null);
 
 const sampleBytes = new Map();      // id -> ArrayBuffer, not yet decoded
 const samples = new Map();          // id -> AudioBuffer, ready to play
+const sampleGain = new Map();       // id -> playback gain; anything absent plays at 1
 
 /** Hand over the raw files loaded from the manifest. Safe to call before initAudio. */
-export function setSfxFiles(map) {
+export function setSfxFiles(map, gains) {
   for (const [id, bytes] of map) sampleBytes.set(id, bytes);
+  if (gains) for (const [id, g] of gains) sampleGain.set(id, g);
   if (ctx) decodePending();
 }
+
+/** What a supplied sample plays at. Exported so a probe can check the manifest reached here. */
+export const sampleGainFor = (id) => {
+  const g = sampleGain.get(id);
+  return typeof g === 'number' ? g : 1;
+};
 
 function decodePending() {
   for (const [id, bytes] of sampleBytes) {
@@ -442,7 +450,7 @@ function playSample(id, detune, now) {
   src.buffer = buf;
   if (detune) src.playbackRate.value = Math.pow(2, detune / 12);
   const g = ctx.createGain();
-  g.gain.value = 1;
+  g.gain.value = sampleGainFor(id);
   src.connect(g);
   g.connect(sfxBus);
   src.start(now);

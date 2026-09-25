@@ -434,14 +434,26 @@ export async function loadSheets(manifest) {
 /** sfx id -> ArrayBuffer, awaiting decode. */
 export const sfxFiles = new Map();
 
+/**
+ * sfx id -> playback gain, for the ids whose manifest entry asked for one.
+ *
+ * A synthesised sound carries its own `gain` in its recipe; a supplied file had no way to say
+ * how loud it should be, so one mastered hotter than the rest could only be fixed by re-exporting
+ * it. An entry may now be `{ src, gain }`, exactly as an `images` entry may be `{ src, key }`.
+ */
+export const sfxGains = new Map();
+
 export async function loadSfx(manifest) {
   const m = (manifest && manifest.sfx) || {};
   const ids = Object.keys(m);
   if (!ids.length) return 0;
 
   const results = await Promise.allSettled(ids.map(async (id) => {
-    const res = await fetch(m[id], { cache: 'no-cache' });
-    if (!res.ok) throw new Error(`${res.status} ${m[id]}`);
+    const e = m[id];
+    const src = typeof e === 'string' ? e : e.src;
+    if (typeof e === 'object' && typeof e.gain === 'number') sfxGains.set(id, e.gain);
+    const res = await fetch(src, { cache: 'no-cache' });
+    if (!res.ok) throw new Error(`${res.status} ${src}`);
     return [id, await res.arrayBuffer()];
   }));
   let n = 0;

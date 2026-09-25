@@ -178,24 +178,63 @@ the synthesised version of that sound completely:
 }
 ```
 
+An entry may also be an object, to set how loud the sample plays:
+
+```json
+{ "sfx": { "wheel_spin": { "src": "assets/sounds/wheel.mp3", "gain": 0.6 } } }
+```
+
+A synthesised sound carries a `gain` in its recipe; before this a supplied file had no way to say
+how loud it should be, so one mastered hotter than the rest could only be fixed by re-exporting
+it. `gain` is a plain multiplier, 1 being the file as recorded.
+
 Every id is optional — anything you do not supply keeps its chiptune version, so a half-filled
-folder is a perfectly normal state. Five are supplied today: `evolve` (the Mystery Dungeon
-evolution jingle, which also ducks the stage music for its length), `select`, and the three move
-sounds. The ids the game plays are:
+folder is a perfectly normal state. The ids the game plays:
 
 | group | ids |
 |---|---|
 | shots | `shoot_water` `shoot_normal` `shoot_grass` `shoot_rock` `shoot_bolt` |
 | combat | `hit` `crit` `kill` `hurt` |
 | pickups | `xp` `coin` `levelup` `pickup` |
-| abilities | `ability` `quake` `beam` `shield` |
-| moves | `move_fire` (Flamethrower, Fire Spin) `move_cut` (Spectral Arrow) `move_dark` (Dark Pulse) |
+| ability fallbacks | `ability` `quake` `beam` `shield` |
 | events | `boss` `evolve` `select` `confirm` |
+| wheel | `wheel_spin` |
+| moves | one per ability — see below |
 
-Keep them **short** — these are decoded into memory rather than streamed, and `hit` fires many
-times a second. Anything over about half a second will sound wrong regardless. WAV, OGG and MP3
-all work. The 45 ms per-id rate limit and the 14-voice cap apply to samples exactly as they do to
-the synthesised sounds, so a dense fight cannot turn into a wall of noise.
+### Move sounds
+
+Every ability names its own sound in `sound:` in
+[`src/data/abilities.js`](../src/data/abilities.js), and the manifest maps that id to a file:
+
+| id | ability | id | ability |
+|---|---|---|---|
+| `move_shield` | Protect Bubble | `move_hyperbeam` | Hyperbeam |
+| `move_quake` | Earthquake | `move_thunder` / `move_electric` | Thunderbolt (picks one) |
+| `move_whistle` | Homing Leaf | `move_bubble` | Hydro Pump |
+| `move_air` | Spectral Arrow | `move_dark` | Dark Pulse |
+| `move_fire` | Flamethrower | `move_shortdark` | Night Shade |
+| `move_bigfire` / `move_flame` | Fire Spin (picks one) | `move_ghost` | Lick |
+| `move_throw` | Present | `move_hail` | Blizzard |
+
+`sound` may be an **array of two**, and one is chosen at random on every cast — the choice comes
+from the cosmetic RNG, so it cannot shift anything the run's seed decides.
+
+The sound lives on the ability rather than in a table keyed on its effect because Dark Pulse,
+Night Shade and Lick all share the `drainRings` effect and have to sound nothing like each other.
+If a file is missing the ability falls back to a chiptune chosen by effect, so emptying this
+folder leaves the game audible rather than silent.
+
+### Keep them short
+
+These are decoded into memory rather than streamed, and `hit` fires many times a second. Anything
+over about half a second will sound wrong for the constant ones. WAV, OGG and MP3 all work. The
+45 ms per-id rate limit and the 14-voice cap apply to samples exactly as they do to the
+synthesised sounds, so a dense fight cannot turn into a wall of noise.
+
+Two ids are exceptions, because nothing fires them in bulk: the ability move sounds, which run up
+to a couple of seconds, and `wheel_spin` — the prize wheel spins for **exactly as long as that
+sample lasts**, so a longer or shorter file changes how long the wheel turns. Neither is ducked;
+the stage music keeps playing underneath.
 
 ## UI window frames
 

@@ -59,7 +59,7 @@ import { CHARACTERS, CHARACTER_BY_ID, characterSpritePairs } from './data/charac
 import { enemySpritePairs } from './data/enemies.js';
 import { weaponSpritePairs } from './data/weapons.js';
 import { STAGE_BY_ID, STAGES, propSpritePairs } from './data/stages.js';
-import { loadAssets, pickMusic, getSheet, sfxFiles, getAttack } from './assets.js';
+import { loadAssets, pickMusic, getSheet, sfxFiles, sfxGains, getAttack } from './assets.js';
 import {
   initAudio, audioReady, sfx, playTrack, playOnce, setIntensity, stopTrack,
   setVolume, toggleMute, settings as audioSettings, TITLE, ROUTE, BOSS, FANFARE,
@@ -113,7 +113,7 @@ async function boot() {
   assetStats = await loadAssets();
   // Supplied samples override the synthesised sounds of the same id. Handed over before the
   // context exists; audio.js decodes them the moment one does.
-  setSfxFiles(sfxFiles);
+  setSfxFiles(sfxFiles, sfxGains);
 
   // Register every sprite pair the data asks for, then compile the atlas once.
   for (const [shape, pal, fb] of characterSpritePairs()) registerSprite(shape, pal, 0, fb);
@@ -340,7 +340,14 @@ function installHooks() {
     G.banner = { text: 'BACK ON YOUR FEET', sub: left > 0 ? `${left} LEFT` : '', t: 2.2 };
   });
 
-  itemEffects.present = () => { G.pendingWheel = true; };
+  itemEffects.present = () => {
+    G.pendingWheel = true;
+    // Opening a present takes Present's own cooldown off. The wheel freezes the run for three
+    // seconds, and coming out of it unable to throw the next one is the one moment Delibird's
+    // gimmick works against itself. Guarded on the slot: the ability is drafted, not given.
+    const q = G.abilities[0];
+    if (q) q.cd = 0;
+  };
   itemEffects.magnet = () => magnetAll();
   itemEffects.berry = () => {
     const p = G.player;
@@ -507,7 +514,11 @@ function handleKey(code) {
   // "restart" everywhere else.
   if (G.mode === MODES.LEVELUP) return levelUpKey(code);
   if (G.mode === MODES.EVOLVE_CHOICE) return evolveChoiceKey(code);
-  if (G.mode === MODES.EVOLVING) return;        // the cutscene owns the screen
+  if (G.mode === MODES.EVOLVING) {
+    // The cutscene owns the screen, and swallows everything until it has finished playing.
+    if (evo && evo.done && (code === 'Enter' || code === 'Space')) finishEvolution();
+    return;
+  }
   if (G.mode === MODES.WHEEL) return wheelKey(code);
 
   if (isAction(code, 'restart')) return startRun(G.character, bootParams);
@@ -703,15 +714,35 @@ function castAbility(slot) {
   const p = G.player;
   const atk = p && G.form ? getAttack(G.form.shape) : null;
   if (atk) { p.actT = 0; p.actDur = atk.total; }
-  const byEffect = {
-    shield: 'shield', shockwaveRings: 'quake', drainRings: 'move_dark',
-    beam: 'beam', jet: 'beam', chain: 'shoot_bolt',
-    skyStrike: 'shoot_bolt', wave: 'shoot_water',
-    flameCone: 'move_fire', firePit: 'move_fire', pierceLine: 'move_cut',
-    blizzard: 'shoot_water',
-  };
-  sfx(byEffect[a.def.effect] || 'ability');
+  sfx(abilitySound(a.def));
   return true;
+}
+
+/**
+ * Chiptune stand-ins, by effect. Only ever reached when the supplied file for an ability is
+ * missing: every asset in this project is optional, and emptying the sounds folder has to leave
+ * the abilities audible rather than silent.
+ */
+const FALLBACK_SFX = {
+  shield: 'shield', shockwaveRings: 'quake', drainRings: 'quake',
+  beam: 'beam', jet: 'beam', chain: 'shoot_bolt',
+  skyStrike: 'shoot_bolt', wave: 'shoot_water',
+  flameCone: 'quake', firePit: 'quake', pierceLine: 'shoot_grass',
+  multiHoming: 'shoot_grass', present: 'pickup', blizzard: 'shoot_water',
+};
+
+/**
+ * Which sound a cast of `def` plays.
+ *
+ * `def.sound` may name two files, and the choice comes from G.rngFx -- the COSMETIC stream.
+ * Drawing it from G.rngRun would let which of two flame sounds you hear shift every gameplay
+ * roll that followed it, and a seed would stop replaying identically.
+ */
+function abilitySound(def) {
+  const want = def.sound;
+  const id = Array.isArray(want) ? want[(G.rngFx() * want.length) | 0] : want;
+  if (id && sampleDuration(id) > 0) return id;
+  return FALLBACK_SFX[def.effect] || 'ability';
 }
 
 /** Point the player at a form's sprite and adopt its direction/frame counts. */
@@ -983,8 +1014,12 @@ function presentGap() {
 }
 
 function openWheel() {
-  startWheel();
-  sfx('levelup');
+  // Spin for exactly as long as the sound lasts, so the wheel stops on the beat the ticking
+  // does. Falls back to the wheel's own default when only the synthesised version exists.
+  startWheel(sampleDuration('wheel_spin'));
+  // Over the stage music rather than in place of it: this is a short effect, not a cutscene,
+  // so nothing is ducked.
+  sfx('wheel_spin');
   setMode(MODES.WHEEL);
   resetAccumulator();
 }
@@ -1101,13 +1136,26 @@ function beginCutscene(ev, branch) {
   resetAccumulator();
 }
 
+/**
+ * The cutscene runs on raw dt and then HOLDS on its last frame until the player presses Enter.
+ *
+ * It is the one moment in a run worth looking at, and resuming on a timer meant it was over
+ * before you had read which form you got or what its note said -- and dropped you straight back
+ * into a crowd that had been waiting for you.
+ *
+ * `evo.t` keeps advancing while it holds, which is what keeps the starburst turning behind the
+ * new sprite rather than freezing the screen solid.
+ */
 function updateEvolution(dt) {
   if (!evo) return;
   evo.t += dt;
-  if (evo.t < EVO_TOTAL) return;
+  if (evo.t >= EVO_TOTAL) evo.done = true;
+}
 
+function finishEvolution() {
+  if (!evo) return;
   // The shockwave that lands with the new form clears the immediate area, and the player gets a
-  // moment of invulnerability so a 2-second freeze can never be what killed them.
+  // moment of invulnerability so the pause can never be what killed them.
   killAll(120);
   addShake(0.8);
   G.player.iframes = 1.5;

@@ -170,9 +170,7 @@ export const SFX = {
   select:      { type: 'blip', freq: 880, dur: 0.05, wave: 'pulse50', gain: 0.10 },
   confirm:     { type: 'chord', notes: [660, 990], dur: 0.12, wave: 'pulse50', gain: 0.12 },
 
-  // Move sounds. Each has a supplied sample in assets/sounds that overrides it; these chiptune
-  // versions are what plays if that folder is empty, which is the rule for every id here.
-  move_fire:   { type: 'noise', dur: 0.32, hp: 700, gain: 0.16 },
-  move_cut:    { type: 'sweep', from: 1800, to: 400, dur: 0.13, wave: 'pulse12', gain: 0.13 },
-  move_dark:   { type: 'sweep', from: 400, to: 90, dur: 0.34, wave: 'triangle', gain: 0.18 },
+
+  // The prize wheel. The supplied sample is the real one; this is the fallback.
+  wheel_spin:  { type: 'sweep', from: 900, to: 220, dur: 1.20, wave: 'pulse25', gain: 0.12 },
 };

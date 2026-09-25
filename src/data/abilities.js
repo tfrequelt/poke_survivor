@@ -12,6 +12,11 @@
 //
 // `levels` index 0 is level 1 and is empty; index N is what reaching level N+1 grants.
 // Rhythm: damage at 2/4, cooldown at 3, signature bump at 5.
+//
+// `sound` is the supplied sample played on cast, or an ARRAY of two picked between on every use.
+// It lives here rather than in a table keyed on `effect` because three different abilities share
+// the `drainRings` effect and have to sound nothing like each other. If the file is missing, the
+// chiptune fallback for that effect plays instead -- see castAbility in main.js.
 
 export const ABILITIES = [
   // --- Wooper ---------------------------------------------------------------
@@ -20,7 +25,7 @@ export const ABILITIES = [
     owner: 'wooper', form: 'wooper',
     icon: 'icon_shield', palette: 'water',
     desc: 'Shield that blocks all contact damage, then bursts.',
-    effect: 'shield',
+    effect: 'shield', sound: 'move_shield',
     cooldown: 12, duration: 3.0, radius: 34, damage: 60, knockback: 90,
     levels: [
       {}, { damage: +25 }, { cooldownMul: 0.88 }, { damage: +35 }, { duration: +1.2, radius: +8 },
@@ -31,7 +36,7 @@ export const ABILITIES = [
     owner: 'wooper', form: 'quagsire',
     icon: 'icon_quake', palette: 'rock',
     desc: 'Shockwaves that stun and split the ground open. Flyers are immune.',
-    effect: 'shockwaveRings',
+    effect: 'shockwaveRings', sound: 'move_quake',
     cooldown: 20, waves: 3, waveGap: 0.28, radius: 108, damage: 90,
     stun: 1.0, knockback: 70, growth: 320,
     // The fissures outlive the shockwave and keep hurting whatever stands in them, which is what
@@ -48,7 +53,7 @@ export const ABILITIES = [
     owner: 'rowlet', form: 'rowlet',
     icon: 'icon_leaf', palette: 'grass',
     desc: 'Heavy leaf blades seek separate targets and cut through them.',
-    effect: 'multiHoming',
+    effect: 'multiHoming', sound: 'move_whistle',
     cooldown: 10, count: 5, damage: 34, speed: 200, pierce: 2,
     duration: 2.4, homingTurn: 5.5, range: 260,
     levels: [
@@ -60,7 +65,7 @@ export const ABILITIES = [
     owner: 'rowlet', form: 'dartrix',
     icon: 'icon_arrow', palette: 'ghostly',
     desc: 'Pierces a line, executes the wounded, leaves a burning trail.',
-    effect: 'pierceLine',
+    effect: 'pierceLine', sound: 'move_air',
     cooldown: 22, damage: 220, length: 340, width: 11,
     execute: 0.15, trailDps: 40, trailTime: 3.0, arrows: 1,
     levels: [
@@ -76,7 +81,7 @@ export const ABILITIES = [
     owner: 'vulpix', form: 'vulpix',
     icon: 'icon_flame', palette: 'fire',
     desc: 'A sustained cone of fire. Everything caught in it burns.',
-    effect: 'flameCone',
+    effect: 'flameCone', sound: 'move_fire',
     // Channelled: `channel` seconds of held fire, re-hitting on `tick` so walking into the jet
     // hurts rather than only being there at the instant it started.
     cooldown: 11, channel: 1.3, tick: 0.14, damage: 17,
@@ -91,7 +96,7 @@ export const ABILITIES = [
     owner: 'vulpix', form: 'ninetales',
     icon: 'icon_flame', palette: 'fire',
     desc: 'A vortex of flame that holds a crowd in place and cooks it.',
-    effect: 'firePit',
+    effect: 'firePit', sound: ['move_bigfire', 'move_flame'],
     cooldown: 20, radius: 84, duration: 5.0, damage: 46, dps: 34,
     slow: 0.62, burn: 30, knockback: 40,
     levels: [
@@ -105,7 +110,7 @@ export const ABILITIES = [
     owner: 'delibird', form: 'delibird',
     icon: 'icon_gift', palette: 'gift',
     desc: 'Lobs a gift. Four times in five it detonates; the fifth time it patches you up.',
-    effect: 'present',
+    effect: 'present', sound: 'move_throw',
     // `channel` is the flight time -- the gift is in the air and the outcome is already decided,
     // which is what makes the wait feel like a wait rather than a delay.
     cooldown: 9, channel: 0.55, damage: 120, radius: 62, range: 230,
@@ -119,7 +124,7 @@ export const ABILITIES = [
     owner: 'delibird', form: 'delibird_hustle',
     icon: 'icon_frost', palette: 'ice',
     desc: 'A storm across the whole screen. Little damage, but nothing moves through it.',
-    effect: 'blizzard',
+    effect: 'blizzard', sound: 'move_hail',
     cooldown: 24, channel: 5.0, tick: 0.35, radius: 210, damage: 15,
     slow: 0.55, knockback: 0,
     levels: [
@@ -133,7 +138,7 @@ export const ABILITIES = [
     owner: 'eevee', form: 'eevee',
     icon: 'icon_beam', palette: 'normal',
     desc: 'Wide beam. Massive damage, but you cannot move while firing.',
-    effect: 'beam',
+    effect: 'beam', sound: 'move_hyperbeam',
     cooldown: 14, channel: 1.0, tick: 0.1, damage: 26,
     length: 300, width: 16, knockback: 18,
     levels: [
@@ -145,7 +150,7 @@ export const ABILITIES = [
     owner: 'eevee', form: 'jolteon',
     icon: 'icon_bolt', palette: 'electric',
     desc: 'Lightning falls from the sky into a zone and leaves it crackling.',
-    effect: 'skyStrike',
+    effect: 'skyStrike', sound: ['move_thunder', 'move_electric'],
     // Strikes rain into a marked circle rather than chaining target to target. It hits harder in
     // one place instead of dribbling damage across a line of enemies, which is the point: Jolteon
     // is the burst form, and the chain behaviour already belongs to the Spark Chain weapon.
@@ -160,7 +165,7 @@ export const ABILITIES = [
     owner: 'eevee', form: 'vaporeon',
     icon: 'icon_jet', palette: 'water',
     desc: 'A wall of water rolls out, sweeping everything aside and healing you.',
-    effect: 'wave',
+    effect: 'wave', sound: 'move_bubble',
     // A single front that sweeps outward: each enemy is hit once as it passes, and shoved hard.
     cooldown: 16, travel: 0.8, range: 240, band: 26, spread: 1.15,
     damage: 95, knockback: 300, lifesteal: 0.8,
@@ -169,7 +174,7 @@ export const ABILITIES = [
     ],
   },
   {
-    id: 'dark_pulse', name: 'Dark Pulse', slot: 1,
+    id: 'dark_pulse', sound: 'move_dark', name: 'Dark Pulse', slot: 1,
     owner: 'eevee', form: 'umbreon',
     icon: 'icon_pulse', palette: 'ghostly',
     desc: 'Rings of darkness that linger, weaken, and drain life back to you.',
@@ -185,7 +190,7 @@ export const ABILITIES = [
 
   // --- Gastly ---------------------------------------------------------------
   {
-    id: 'night_shade', name: 'Night Shade', slot: 0,
+    id: 'night_shade', sound: 'move_shortdark', name: 'Night Shade', slot: 0,
     owner: 'gastly', form: 'gastly',
     icon: 'icon_shade', palette: 'shadowy',
     desc: 'Spreads a shadow across the ground that eats away at whatever stands in it.',
@@ -200,7 +205,7 @@ export const ABILITIES = [
     formUpgrade: { form: 'gengar', damage: +70, waves: +2 },
   },
   {
-    id: 'lick', name: 'Lick', slot: 1,
+    id: 'lick', sound: 'move_ghost', name: 'Lick', slot: 1,
     owner: 'gastly', form: 'haunter',
     icon: 'icon_lick', palette: 'poison',
     desc: 'Drags the life out of everything nearby and puts it back into you.',

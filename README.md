@@ -38,6 +38,7 @@ python -m http.server 8000  # -> http://localhost:8000
 | `Q` / `E` | First / second ability |
 | `Esc` / `P` | Pause |
 | `1`-`3` / arrows + `Enter` | Choose on any card screen |
+| `Enter` | Dismiss the evolution cutscene |
 | `R` | Reroll on level-up, restart otherwise |
 | `B` / `S` | Banish / skip a level-up (press `B` twice to confirm) |
 | `Q` (paused / after a run) | Back to partner select |
@@ -79,6 +80,10 @@ Other URL parameters: `?seed=`, `?t=` (start N seconds into a run), `?char=`, `?
 Each partner has two abilities, exclusive to it, drafted from the level-up screen. The first is
 guaranteed to appear within three level-ups; the second unlocks when you evolve at level 10.
 
+Evolving plays a cutscene that **holds on its last frame until you press Enter**, so you get to
+read which form you landed on and what it changed before being dropped back into the crowd. The
+new form lands with a shockwave that clears the area and a second and a half of invulnerability.
+
 | Partner | `Q` | `E` (after evolving) |
 |---|---|---|
 | Wooper | **Protect Bubble** -- shield that blocks all contact damage, then bursts | **Earthquake** (Quagsire) -- shockwaves that stun; flying enemies are immune |
@@ -89,6 +94,10 @@ guaranteed to appear within three level-ups; the second unlocks when you evolve 
 | Gastly | **Night Shade** -- spreads a shadow that eats away at whatever stands in it | **Lick** (Haunter) -- drags the life out of everything nearby |
 | Vulpix | **Flamethrower** -- a held cone of fire that leaves everything in it burning | **Fire Spin** (Ninetales) -- a vortex of flame that holds a crowd in place and cooks it |
 | Delibird | **Present** -- lobs a gift: four times in five it detonates, the fifth time it heals you | **Blizzard** (Hustle) -- a storm across the whole screen; little damage, but nothing moves through it |
+
+Every ability has its own sound, named on the ability itself rather than derived from what it
+does -- Dark Pulse, Night Shade and Lick are all built from the same ring effect and have to sound
+nothing like each other. Fire Spin and Thunderbolt each pick between two files on every cast.
 
 Both abilities level 1-5 through further level-up draws. The HUD shows each slot's icon, its key,
 and a cooldown that drains as it recharges. Below 20% health a `!` appears over your Pokémon's
@@ -181,6 +190,9 @@ spins a wheel:
 | A large stat bonus | 12% |
 | Three levels | 6% |
 
+Collecting one also takes Present's own cooldown off, so coming out of a three-second wheel
+unable to throw the next one is not a thing that happens.
+
 The prize is decided from the run seed the moment the wheel starts -- the spin is an animation of
 a result that already exists. Trading a move in opens a second page showing everything you own
 plus **Keep Everything**, which is a real option and still pays out. The offered move always
@@ -210,10 +222,15 @@ jackpot. New scenery keeps appearing as you move, but only ever out of sight bey
 edge, and never above a hard cap. Weapons and abilities never *target* scenery; you break it with
 shots that pass through it and with area damage.
 
-The roster is built as **evolution lines**: Rattata early and Raticate later, Caterpie then
-Metapod then Butterfree, Zubat into Crobat, Geodude into Graveler, Marill into Azumarill,
-Zigzagoon into Linoone, Poochyena into Mightyena. The swarm visibly grows up over a run rather
-than only gaining a health multiplier.
+The roster is 29 species built as **evolution lines**: Rattata into Raticate, Caterpie through
+Metapod into Butterfree, Zubat into Crobat, Geodude into Graveler, Marill into Azumarill,
+Zigzagoon into Linoone, Poochyena into Mightyena, Spearow into Fearow, Poliwag through Poliwhirl
+into Poliwrath, and Roggenrola through Boldore into Gigalith. The swarm visibly grows up over a
+run rather than only gaining a health multiplier.
+
+Each stage draws from its own slice of that roster: the Poliwag line and Marill line to the beach,
+the Roggenrola line and Geodude line to the cave, and Skarmory — fast, armoured and airborne at
+once, which nothing else manages — to the cave and the grass.
 
 **Revives** bought from the shop are spent automatically: at zero health you get back up at half
 health with a two and a half second mercy window, and everything nearby dies. Only when you have

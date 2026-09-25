@@ -85,67 +85,105 @@ export const ENEMIES = [
     stages: ['cave', 'grass'], from: 2, to: 12, weight: 8,
   },
 
+  {
+    id: 'spearow', name: 'Spearow', dex: 10,
+    shape: 'spearow', fallback: 'bat', palette: 'vermin',
+    hp: 13, dmg: 6, speed: 40, r: 4, mass: 0.8, xp: 2,
+    ai: 'sine', coinChance: 0.06, flying: true,
+    stages: ['grass', 'beach'], from: 1, to: 10, weight: 9,
+  },
+  {
+    id: 'poliwag', name: 'Poliwag', dex: 11,
+    shape: 'poliwag', fallback: 'round_big', palette: 'water',
+    hp: 15, dmg: 5, speed: 32, r: 4, mass: 0.9, xp: 1,
+    ai: 'chase', coinChance: 0.06,
+    stages: ['beach'], from: 0, to: 9, weight: 10,
+  },
+  {
+    id: 'roggenrola', name: 'Roggenrola', dex: 12,
+    shape: 'roggenrola', fallback: 'round_big', palette: 'rock',
+    // Barely moves, but it soaks. The cave's answer to a player who has bought no pierce.
+    hp: 34, dmg: 7, speed: 13, r: 4.5, mass: 2.4, xp: 2,
+    ai: 'chase', coinChance: 0.08, armor: 2, knockResist: 0.55,
+    stages: ['cave'], from: 1, to: 11, weight: 8,
+  },
+
   // --- mid: the evolutions arrive ------------------------------------------
   {
-    id: 'metapod', name: 'Metapod', dex: 10,
+    id: 'metapod', name: 'Metapod', dex: 13,
     shape: 'metapod', fallback: 'bug', palette: 'grub',
     hp: 80, dmg: 6, speed: 9, r: 5.5, mass: 4, xp: 4,
     ai: 'chase', coinChance: 0.12, armor: 3, knockResist: 0.85,
     stages: ['grass'], from: 5, to: 16, weight: 5,
   },
   {
-    id: 'raticate', name: 'Raticate', dex: 11,
+    id: 'raticate', name: 'Raticate', dex: 14,
     shape: 'raticate', fallback: 'quad_small', palette: 'rattail',
     hp: 52, dmg: 12, speed: 34, r: 5, mass: 1.8, xp: 4,
     ai: 'rusher', coinChance: 0.09,
     stages: ['grass', 'beach'], from: 6, to: 20, weight: 8,
   },
   {
-    id: 'pidgeotto', name: 'Pidgeotto', dex: 12,
+    id: 'pidgeotto', name: 'Pidgeotto', dex: 15,
     shape: 'pidgeotto', fallback: 'bat', palette: 'vermin',
     hp: 44, dmg: 11, speed: 42, r: 4.5, mass: 1, xp: 4,
     ai: 'rusher', coinChance: 0.08, flying: true,
     stages: ['grass', 'beach'], from: 7, to: 20, weight: 7,
   },
   {
-    id: 'crobat', name: 'Crobat', dex: 13,
+    id: 'crobat', name: 'Crobat', dex: 16,
     shape: 'crobat', fallback: 'bat', palette: 'ghostly',
     hp: 40, dmg: 10, speed: 52, r: 4.5, mass: 0.8, xp: 4,
     ai: 'orbit', coinChance: 0.08, flying: true,
     stages: ['cave', 'beach'], from: 8, to: 20, weight: 7,
   },
   {
-    id: 'dugtrio', name: 'Dugtrio', dex: 14,
+    id: 'dugtrio', name: 'Dugtrio', dex: 17,
     shape: 'dugtrio', fallback: 'round_big', palette: 'vermin',
     hp: 78, dmg: 14, speed: 36, r: 5.5, mass: 2.2, xp: 5,
     ai: 'rusher', coinChance: 0.11,
     stages: ['cave'], from: 9, to: 20, weight: 6,
   },
 
+  {
+    id: 'poliwhirl', name: 'Poliwhirl', dex: 18,
+    shape: 'poliwhirl', fallback: 'round_big', palette: 'water',
+    hp: 58, dmg: 12, speed: 34, r: 5, mass: 1.6, xp: 4,
+    ai: 'chase', coinChance: 0.09,
+    stages: ['beach', 'cave'], from: 6, to: 18, weight: 7,
+  },
+  {
+    id: 'boldore', name: 'Boldore', dex: 19,
+    shape: 'boldore', fallback: 'round_big', palette: 'rock',
+    hp: 105, dmg: 14, speed: 16, r: 5.5, mass: 3.6, xp: 5,
+    ai: 'charge', coinChance: 0.12, armor: 3, knockResist: 0.75,
+    stages: ['cave'], from: 7, to: 19, weight: 6,
+  },
+
   // --- late: the ones you have to respect ----------------------------------
   {
-    id: 'butterfree', name: 'Butterfree', dex: 15,
+    id: 'butterfree', name: 'Butterfree', dex: 20,
     shape: 'butterfree', fallback: 'bug', palette: 'poison',
     hp: 90, dmg: 13, speed: 30, r: 5.5, mass: 1.2, xp: 6,
     ai: 'sine', coinChance: 0.12, flying: true,
     stages: ['grass', 'cave'], from: 11, to: 20, weight: 5,
   },
   {
-    id: 'graveler', name: 'Graveler', dex: 16,
+    id: 'graveler', name: 'Graveler', dex: 21,
     shape: 'graveler', fallback: 'round_big', palette: 'rock',
     hp: 160, dmg: 17, speed: 14, r: 6.5, mass: 4.5, xp: 7,
     ai: 'charge', coinChance: 0.16, armor: 4, knockResist: 0.8,
     stages: ['cave', 'grass'], from: 10, to: 20, weight: 4,
   },
   {
-    id: 'pidgeot', name: 'Pidgeot', dex: 17,
+    id: 'pidgeot', name: 'Pidgeot', dex: 22,
     shape: 'pidgeot', fallback: 'bat', palette: 'vermin',
     hp: 130, dmg: 18, speed: 48, r: 6, mass: 1.6, xp: 8,
     ai: 'charge', coinChance: 0.18, flying: true, knockResist: 0.55,
     stages: ['beach', 'grass'], from: 13, to: 20, weight: 4,
   },
   {
-    id: 'azumarill', name: 'Azumarill', dex: 18,
+    id: 'azumarill', name: 'Azumarill', dex: 23,
     shape: 'azumarill', fallback: 'round_big', palette: 'water',
     hp: 120, dmg: 15, speed: 30, r: 6, mass: 3.2, xp: 6,
     // The board's paymaster, a role Delibird held before it became a partner: slow, tough, and
@@ -154,7 +192,7 @@ export const ENEMIES = [
     stages: ['beach', 'cave'], from: 9, to: 20, weight: 5,
   },
   {
-    id: 'linoone', name: 'Linoone', dex: 19,
+    id: 'linoone', name: 'Linoone', dex: 24,
     shape: 'linoone', fallback: 'quad_small', palette: 'rattail',
     hp: 62, dmg: 13, speed: 58, r: 5, mass: 1.4, xp: 5,
     // The fastest thing in the game. It will reach you; the question is what is behind it.
@@ -162,11 +200,42 @@ export const ENEMIES = [
     stages: ['grass', 'beach'], from: 8, to: 20, weight: 7,
   },
   {
-    id: 'mightyena', name: 'Mightyena', dex: 20,
+    id: 'mightyena', name: 'Mightyena', dex: 25,
     shape: 'mightyena', fallback: 'quad_small', palette: 'shadowy',
     hp: 96, dmg: 16, speed: 46, r: 5.5, mass: 1.9, xp: 6,
     ai: 'rusher', coinChance: 0.12, armor: 1,
     stages: ['cave', 'grass'], from: 10, to: 20, weight: 6,
+  },
+  {
+    id: 'fearow', name: 'Fearow', dex: 26,
+    shape: 'fearow', fallback: 'bat', palette: 'vermin',
+    hp: 110, dmg: 16, speed: 56, r: 5.5, mass: 1.5, xp: 6,
+    ai: 'rusher', coinChance: 0.10, flying: true, knockResist: 0.5,
+    stages: ['grass', 'beach'], from: 11, to: 20, weight: 6,
+  },
+  {
+    id: 'skarmory', name: 'Skarmory', dex: 27,
+    shape: 'skarmory', fallback: 'bat', palette: 'flying',
+    // Fast, armoured and airborne at once, which nothing else on the board manages. Ground
+    // effects miss it and knockback barely moves it -- it has to be shot down.
+    hp: 120, dmg: 15, speed: 50, r: 5.5, mass: 1.8, xp: 7,
+    ai: 'orbit', coinChance: 0.14, flying: true, armor: 4, knockResist: 0.6,
+    stages: ['cave', 'grass'], from: 10, to: 20, weight: 5,
+  },
+  {
+    id: 'poliwrath', name: 'Poliwrath', dex: 28,
+    shape: 'poliwrath', fallback: 'round_big', palette: 'water',
+    hp: 175, dmg: 19, speed: 28, r: 6.5, mass: 4, xp: 8,
+    ai: 'charge', coinChance: 0.16, armor: 3, knockResist: 0.75,
+    stages: ['beach'], from: 12, to: 20, weight: 4,
+  },
+  {
+    id: 'gigalith', name: 'Gigalith', dex: 29,
+    shape: 'gigalith', fallback: 'round_big', palette: 'rock',
+    // The heaviest thing on the board. It will not be pushed and it will not be rushed.
+    hp: 230, dmg: 21, speed: 13, r: 7, mass: 5.5, xp: 9,
+    ai: 'charge', coinChance: 0.20, armor: 6, knockResist: 0.88,
+    stages: ['cave'], from: 13, to: 20, weight: 3,
   },
 ];
 

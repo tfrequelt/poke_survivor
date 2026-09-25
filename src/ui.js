@@ -978,6 +978,12 @@ export function drawEvolution(evo) {
       }
     }
   }
+
+  // The cutscene holds here until the player is ready. At the top, because the bottom third is
+  // already carrying the two name lines and the form's note.
+  if (evo.done && (evo.t * 1.6) % 1 < 0.72) {
+    drawTextCentered(ctx, 'PRESS ENTER TO CONTINUE', cx, 24, 'white');
+  }
 }
 
 // --- Evolution choice (Eevee's branch) --------------------------------------

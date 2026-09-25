@@ -49,6 +49,7 @@ const BIG = [
   { stat: 'pierce', op: 'flat', value: 2, label: '+2 PIERCE' },
 ];
 
+/** How long a spin lasts when nothing overrides it. */
 export const SPIN_TIME = 2.6;
 
 export const wheel = {
@@ -59,6 +60,7 @@ export const wheel = {
   to: 0,              // rotation it eases into
   index: 0,           // the winning segment
   note: '',           // what the prize actually did, once it is applied
+  spinTime: SPIN_TIME, // this spin's duration; matched to the sound effect when there is one
   cursor: 0,
   choices: [],        // the swap page: owned weapons, plus "keep everything"
   incoming: null,     // the weapon offered in exchange
@@ -85,8 +87,13 @@ function replacementPool() {
     !G.banished.has(w.id) && weaponOffered(w));
 }
 
-export function startWheel() {
+/**
+ * `seconds` lets the caller match the spin to the length of the sound playing over it, so the
+ * wheel stops on the same beat the ticking does rather than a third of a second early.
+ */
+export function startWheel(seconds) {
   wheel.phase = 'spin';
+  wheel.spinTime = seconds > 0.4 ? seconds : SPIN_TIME;
   wheel.t = 0;
   wheel.note = '';
   wheel.cursor = 0;
@@ -109,7 +116,7 @@ export function startWheel() {
 export function updateWheel(dt) {
   if (wheel.phase !== 'spin') return false;
   wheel.t += dt;
-  const k = Math.min(1, wheel.t / SPIN_TIME);
+  const k = Math.min(1, wheel.t / wheel.spinTime);
   // Cubic ease-out: fast off the mark, and the last half-second is the part worth watching.
   const e = 1 - Math.pow(1 - k, 3);
   wheel.angle = wheel.from + (wheel.to - wheel.from) * e;
