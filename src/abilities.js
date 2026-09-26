@@ -21,7 +21,8 @@ export const ABILITY_SLOTS = 2;
 
 /** Set by main.js so effects can emit particles/shake without importing upward. */
 export const fx = {
-  burst: null, ring: null, beam: null, shake: null, heal: null,
+  burst: null, ring: null, beam: null, shake: null, heal: null, boom: null,
+  dart: null, fireburst: null,
   // Added for the ability visual pass: a ground fissure, a strike from the sky, a wave front,
   // and a particle that is a sprite rather than a coloured pixel.
   crack: null, bolt: null, wave: null, motes: null,
@@ -33,6 +34,48 @@ export const fx = {
  * Fold the ability's per-level grants and the player's stats into one resolved block.
  * Mutates a cached object on the slot, so casting never allocates.
  */
+/**
+ * The slot currently running `effect`, or null. Lets the renderer ask "is a blizzard up" without
+ * knowing which slot a form happens to keep it in, or which forms have it at all.
+ */
+/**
+ * The slot running an ability that declares `visual`, or null.
+ *
+ * Keyed on the visual rather than on the effect because effects are shared: Night Shade and
+ * Dark Pulse are both `drainRings` and must not look remotely alike.
+ */
+export function activeVisual(name) {
+  for (let slot = 0; slot < ABILITY_SLOTS; slot++) {
+    const a = G.abilities[slot];
+    if (a && a.activeT > 0 && a.def.visual === name) return a;
+  }
+  return null;
+}
+
+export function activeAbility(effect) {
+  for (let slot = 0; slot < ABILITY_SLOTS; slot++) {
+    const a = G.abilities[slot];
+    if (a && a.activeT > 0 && a.def.effect === effect) return a;
+  }
+  return null;
+}
+
+/**
+ * The effects that put something in the air and publish gx/gy for the renderer to draw. Listed
+ * rather than flagged on the definitions because it is the EFFECT that decides whether there is
+ * a thing in flight at all, not the ability wearing it.
+ */
+const THROWN = ['present', 'fireShot', 'shadowOrb'];
+
+/** Whatever is currently in the air, or null. */
+export function thrownItem() {
+  for (const e of THROWN) {
+    const a = activeAbility(e);
+    if (a) return a;
+  }
+  return null;
+}
+
 export function abilityStats(a) {
   const def = a.def;
   const o = a.resolved;
@@ -129,6 +172,9 @@ export function addAbility(id) {
     // zx/zy is the marked spot a sky strike rains into; it is chosen once, on cast, so the
     // strikes stay together even as the player keeps running.
     zx: 0, zy: 0,
+    // Where a thrown item is right now, along its arc. The renderer reads these rather than
+    // recomputing the arc, so the maths exists in exactly one place.
+    gx: 0, gy: 0,
     resolved: {},
   };
   abilityStats(a);
@@ -306,7 +352,8 @@ const EFFECT = {
       damageLine(p.x, p.y, ang, st.length, st.width, st.damage, hitId, {
         execute: st.execute, knockback: 40,
       });
-      if (fx.beam) fx.beam(p.x, p.y, ang, st.length, st.width, '#c0b8e0', 0.25);
+      // The arrow, not a drawn beam: it flies the length of the shot, turned to face along it.
+      if (fx.dart) fx.dart(p.x, p.y, ang, st.length, 0.24);
 
       // Burn corridor: a chain of small zones along the shot.
       const steps = Math.max(2, Math.round(st.length / 40));
@@ -344,27 +391,37 @@ const EFFECT = {
   },
 
   /**
-   * Flamethrower: a held cone in front of the player.
+   * Flamethrower: a spinning fire star thrown at the nearest enemy, bursting where it lands.
    *
-   * Aimed at the nearest enemy on cast and then LOCKED, rather than tracking: a jet of fire
-   * that silently followed whatever was closest would never miss, and the decision about which
-   * way to point it is the whole skill of the move.
+   * The target is picked on cast and LOCKED. A shot that silently tracked whatever was closest
+   * would never miss, and choosing when to throw it is the whole skill of the move.
    */
-  flameCone(a, st, p) {
-    const idx = nearestEnemyIdx(p.x, p.y, st.range + 90);
-    a.angle = idx >= 0
-      ? Math.atan2(enemies[idx].y - p.y, enemies[idx].x - p.x)
-      : (p.dir ? 0 : Math.PI);
+  fireShot(a, st, p) {
+    const idx = nearestEnemyIdx(p.x, p.y, st.range);
+    if (idx >= 0) {
+      a.zx = enemies[idx].x; a.zy = enemies[idx].y;
+    } else {
+      // Nothing in range: throw it as far as it goes, in the direction being faced.
+      a.zx = p.x + (p.dir ? st.range : -st.range);
+      a.zy = p.y;
+    }
+    a.angle = Math.atan2(a.zy - p.y, a.zx - p.x);
     a.activeT = a.def.channel;
     a.tickT = 0;
-    if (fx.shake) fx.shake(0.18);
+    a.gx = p.x; a.gy = p.y;
   },
 
-  /** Fire Spin: a lasting vortex of flame dropped on a crowd. */
+  /**
+   * Fire Spin: a vortex of flame that wraps around Vulpix and travels with it.
+   *
+   * Centred on the caster rather than dropped at range, so it is something you carry into a
+   * crowd. The zone follows the player for its whole life -- see ZONE.FIRE in updateZones --
+   * which is the only way the ring of flame can stay drawn around the Pokemon without the
+   * picture and the hitbox drifting apart.
+   */
   firePit(a, st, p) {
-    const idx = nearestEnemyIdx(p.x, p.y, 260);
-    const zx = idx >= 0 ? enemies[idx].x : p.x;
-    const zy = idx >= 0 ? enemies[idx].y : p.y;
+    const zx = p.x;
+    const zy = p.y;
 
     // The burst on arrival, so the cast lands rather than only starting something.
     damageCircle(zx, zy, st.radius, st.damage, nextHitId(), {
@@ -380,12 +437,11 @@ const EFFECT = {
       z.dps = st.dps;
       z.tick = 0;
       z.slow = st.slow;
-      z.kind = ZONE.BURN;
+      z.kind = ZONE.FIRE;
       z.color = '#f08828';
       z.hitId = 0;
       z.burn = st.burn;
     }
-    if (fx.ring) fx.ring(zx, zy, st.radius, '#ffd870', 0.4);
     if (fx.shake) fx.shake(0.35);
   },
 
@@ -411,6 +467,26 @@ const EFFECT = {
     a.activeT = st.channel;
     a.tickT = 0;
     if (fx.shake) fx.shake(0.3);
+  },
+
+  /**
+   * Shadow Ball: an orb thrown at the nearest enemy that damages what it drifts past.
+   *
+   * The target is picked on cast and held, so the orb's path is a decision rather than a
+   * guarantee -- aiming it through a crowd is worth more than aiming it at one thing.
+   */
+  shadowOrb(a, st, p) {
+    const idx = nearestEnemyIdx(p.x, p.y, st.range);
+    if (idx >= 0) {
+      a.zx = enemies[idx].x; a.zy = enemies[idx].y;
+    } else {
+      a.zx = p.x + (p.dir ? st.range : -st.range);
+      a.zy = p.y;
+    }
+    a.angle = Math.atan2(a.zy - p.y, a.zx - p.x);
+    a.activeT = a.def.channel;
+    a.tickT = 0;
+    a.gx = p.x; a.gy = p.y;
   },
 
   /** Thunderbolt: instant chain between nearby enemies. */
@@ -562,46 +638,67 @@ export function updateAbilities(dt) {
         break;
       }
 
-      case 'flameCone': {
+      case 'shadowOrb': {
+        const k = 1 - Math.max(0, a.activeT) / a.def.channel;
+        a.gx = p.x + (a.zx - p.x) * k;
+        a.gy = p.y + (a.zy - p.y) * k;
+
+        // Gnawing at what it passes. A fresh hit id each tick, so something walking alongside
+        // the orb keeps taking damage rather than being spent on the first touch.
         a.tickT -= dt;
         if (a.tickT <= 0) {
           a.tickT = a.def.tick;
-          // A filled wedge, not a band: inner radius 0 so point-blank still burns.
-          damageRing(p.x, p.y, 0, st.range, st.damage, nextHitId(), {
+          damageCircle(a.gx, a.gy, st.radius * 0.55, st.damage * 0.16, nextHitId(), {
+            weaken: a.def.weaken || 0, canCrit: false,
+          });
+        }
+
+        if (prev > 0 && a.activeT <= 0) {
+          const hits = damageCircle(a.zx, a.zy, st.radius, st.damage, nextHitId(), {
             knockback: a.def.knockback || 0,
-            angle: a.angle,
-            spread: st.spread,
+            weaken: a.def.weaken || 0,
+          });
+          if (hits > 0 && a.def.lifesteal && fx.heal) fx.heal(Math.round(hits * a.def.lifesteal));
+          if (fx.ring) fx.ring(a.zx, a.zy, st.radius, '#7a6ab0', 0.35);
+          if (fx.burst) fx.burst(a.zx, a.zy, 22, '#c8bcf0');
+          if (fx.shake) fx.shake(0.3);
+        }
+        break;
+      }
+
+      case 'fireShot': {
+        // Straight line, not an arc: this is thrown hard rather than lobbed, and the sheet's
+        // spinning star reads as a flat trajectory.
+        const k = 1 - Math.max(0, a.activeT) / a.def.channel;
+        a.gx = p.x + (a.zx - p.x) * k;
+        a.gy = p.y + (a.zy - p.y) * k;
+
+        if (prev > 0 && a.activeT <= 0) {
+          damageCircle(a.zx, a.zy, st.radius, st.damage, nextHitId(), {
+            knockback: a.def.knockback || 0,
             burn: st.burn,
             burnT: a.def.burnT || 4,
           });
-        }
-        // The jet itself. Drawn as a spray of embers along the cone rather than one shape, so it
-        // reads as fire and keeps working at any range the level-ups push it to.
-        if (fx.burst) {
-          for (let i = 0; i < 3; i++) {
-            const ang = a.angle + (G.rngFx() - 0.5) * st.spread * 2;
-            const d = Math.pow(G.rngFx(), 0.6) * st.range;
-            fx.burst(p.x + Math.cos(ang) * d, p.y + Math.sin(ang) * d, 2,
-              G.rngFx() < 0.5 ? '#ffd870' : '#f08828');
-          }
+          if (fx.fireburst) fx.fireburst(a.zx, a.zy, st.radius, 0.5);
+          if (fx.shake) fx.shake(0.4);
         }
         break;
       }
 
       case 'present': {
-        // The gift in flight: a low arc from the player to the marked spot.
+        // The gift in flight: a low arc from the player to the marked spot. Its position is
+        // published on the ability and drawn as the actual present sprite -- this used to emit
+        // two particles a frame instead, which read as a thin red line and nothing else.
         const k = 1 - Math.max(0, a.activeT) / a.def.channel;
-        const gx = p.x + (a.zx - p.x) * k;
-        const gy = p.y + (a.zy - p.y) * k - Math.sin(k * Math.PI) * 42;
-        if (fx.burst) fx.burst(gx, gy, 2, a.wavesLeft ? '#e84050' : '#9ad8f4');
+        a.gx = p.x + (a.zx - p.x) * k;
+        a.gy = p.y + (a.zy - p.y) * k - Math.sin(k * Math.PI) * 42;
 
         if (prev > 0 && a.activeT <= 0) {
           if (a.wavesLeft) {
             damageCircle(a.zx, a.zy, st.radius, st.damage, nextHitId(), {
               knockback: a.def.knockback || 0, stun: 0.25,
             });
-            if (fx.ring) fx.ring(a.zx, a.zy, st.radius, '#e84050', 0.4);
-            if (fx.burst) fx.burst(a.zx, a.zy, 26, '#ffd166');
+            if (fx.boom) fx.boom(a.zx, a.zy, st.radius, 0.45);
             if (fx.shake) fx.shake(0.5);
           } else if (fx.heal) {
             // The consolation prize, and the reason it is worth firing into an empty room.
@@ -778,6 +875,8 @@ export function updateZones(dt) {
     // Expanding fronts and vortices are not "a circle that ticks", so they take their own path.
     if (z.kind === ZONE.NOVA || z.kind === ZONE.NOVA_STATIC) { updateNova(z, dt); continue; }
     if (z.kind === ZONE.VORTEX) { updateVortex(z, dt); continue; }
+    // A fire vortex is carried, not placed: it rides the player and then ticks like any other.
+    if (z.kind === ZONE.FIRE && G.player) { z.x = G.player.x; z.y = G.player.y; }
 
     z.tick -= dt;
     if (z.tick <= 0) {

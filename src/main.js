@@ -39,7 +39,7 @@ import { abilitySpritePairs } from './data/abilities.js';
 import { FX, fxSprites } from './fx.js';
 import {
   initPickupSprites, initItemSprites, dropXp, dropCoin, updatePickups,
-  updateItems, dropPickup, dropRandomPickup, magnetAll, itemEffects, itemSpritePairs,
+  updateItems, dropPickup, dropRandomPickup, magnetAll, itemEffects, itemSpritePairs, orbSpritePairs,
 } from './pickups.js';
 import {
   grantXp, grantCoins, initForm, xpToNext, rollOffers, takeOffer,
@@ -127,7 +127,7 @@ async function boot() {
   for (const [shape, pal, rot] of abilitySpritePairs()) registerSprite(shape, pal, rot || 0);
   for (const [shape, pal] of propSpritePairs()) registerSprite(shape, pal);
   for (const [shape, pal, fb] of itemSpritePairs()) registerSprite(shape, pal, 0, fb);
-  for (const pal of ['xp_small', 'xp_mid', 'xp_big', 'xp_huge']) registerSprite('orb', pal);
+  for (const [shape, pal] of orbSpritePairs()) registerSprite(shape, pal);
   registerSprite('coin', 'gold');
   registerSprite('pokeball', 'crab');
   atlasStats = buildAtlas();
@@ -273,7 +273,7 @@ function installHooks() {
       dropCoin(e.x, e.y, G.rngRun() < 0.15 ? 5 : 1);
     }
     // Elites always leave something worth walking to.
-    if (e.elite) dropPickup(e.x, e.y, 'chest');
+    if (e.elite) dropPickup(e.x, e.y, 'elixir');
     burst(e.x, e.y, e.elite ? 10 : 5, e.elite ? '#ffd166' : '#ffffff');
     sfx('kill');
   };
@@ -295,6 +295,9 @@ function installHooks() {
     pushFx(FX.BOLT, x, y, height, 0, '#fff05a', life, 0, (G.rngFx() * 65535) | 0);
   abilityFx.wave = (x, y, r, angle, spread, life) =>
     pushFx(FX.WAVE, x, y, r, angle, '#5ab6ef', life, spread);
+  abilityFx.boom = (x, y, r, life) => pushFx(FX.BOOM, x, y, r, 0, '#ffffff', life);
+  abilityFx.dart = (x, y, angle, len, life) => pushFx(FX.DART, x, y, len, angle, '#ffffff', life);
+  abilityFx.fireburst = (x, y, r, life) => pushFx(FX.FIREBURST, x, y, r, 0, '#ffffff', life);
   abilityFx.motes = motes;
   // Each weapon family gets its own shot sound, picked from the projectile's palette.
   const SHOT_SFX = {
@@ -358,8 +361,8 @@ function installHooks() {
     addShake(0.9);
     G.hitstop = 0.08;
   };
-  itemEffects.chest = () => {
-    // A chest is the weapon-evolution trigger, and pays out gold either way.
+  itemEffects.elixir = () => {
+    // The elixir is the weapon-evolution trigger, and pays out gold either way.
     const evolved = tryEvolveWeapon();
     grantCoins(20 + ((G.rngRun() * 20) | 0));
     if (!evolved) G.pendingLevelUps++;
@@ -727,7 +730,7 @@ const FALLBACK_SFX = {
   shield: 'shield', shockwaveRings: 'quake', drainRings: 'quake',
   beam: 'beam', jet: 'beam', chain: 'shoot_bolt',
   skyStrike: 'shoot_bolt', wave: 'shoot_water',
-  flameCone: 'quake', firePit: 'quake', pierceLine: 'shoot_grass',
+  fireShot: 'quake', firePit: 'quake', pierceLine: 'shoot_grass', shadowOrb: 'shoot_bolt',
   multiHoming: 'shoot_grass', present: 'pickup', blizzard: 'shoot_water',
 };
 
@@ -1305,7 +1308,7 @@ function bossDrops(e) {
   const per = Math.max(1, Math.round(e.xp / orbs));
   scatter(e.x, e.y, orbs, 34 + tier * 6, (x, y) => dropXp(x, y, per));
   scatter(e.x, e.y, 6 + tier * 2, 30 + tier * 6, (x, y) => dropCoin(x, y, 5 + ((G.rngRun() * 6) | 0)));
-  dropPickup(e.x, e.y, tier >= 3 ? 'chest' : 'berry');
+  dropPickup(e.x, e.y, tier >= 3 ? 'elixir' : 'berry');
   burst(e.x, e.y, 26, '#ffd166');
   addShake(0.7);
   sfx('kill');

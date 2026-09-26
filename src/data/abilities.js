@@ -80,22 +80,21 @@ export const ABILITIES = [
     id: 'flamethrower', name: 'Flamethrower', slot: 0,
     owner: 'vulpix', form: 'vulpix',
     icon: 'icon_flame', palette: 'fire',
-    desc: 'A sustained cone of fire. Everything caught in it burns.',
-    effect: 'flameCone', sound: 'move_fire',
-    // Channelled: `channel` seconds of held fire, re-hitting on `tick` so walking into the jet
-    // hurts rather than only being there at the instant it started.
-    cooldown: 11, channel: 1.3, tick: 0.14, damage: 17,
-    range: 132, spread: 0.62, knockback: 10,
-    burn: 26, burnT: 4.0,
+    desc: 'Hurls a spinning fire star. It bursts where it lands and leaves everything burning.',
+    effect: 'fireShot', sound: 'move_fire',
+    // `channel` is the flight time. The star spins for those frames, then stops and the burst
+    // plays where it landed -- the two halves of the sheet this is drawn from.
+    cooldown: 11, channel: 0.45, damage: 95, radius: 58, range: 250,
+    knockback: 45, burn: 30, burnT: 4.0,
     levels: [
-      {}, { damage: +7 }, { cooldownMul: 0.88 }, { damage: +9 }, { range: +42, spread: +0.18 },
+      {}, { damage: +35 }, { cooldownMul: 0.88 }, { damage: +45 }, { radius: +20, burn: +10 },
     ],
   },
   {
     id: 'fire_spin', name: 'Fire Spin', slot: 1,
     owner: 'vulpix', form: 'ninetales',
     icon: 'icon_flame', palette: 'fire',
-    desc: 'A vortex of flame that holds a crowd in place and cooks it.',
+    desc: 'A vortex of flame that wraps around you and travels with you, cooking whatever follows.',
     effect: 'firePit', sound: ['move_bigfire', 'move_flame'],
     cooldown: 20, radius: 84, duration: 5.0, damage: 46, dps: 34,
     slow: 0.62, burn: 30, knockback: 40,
@@ -112,8 +111,9 @@ export const ABILITIES = [
     desc: 'Lobs a gift. Four times in five it detonates; the fifth time it patches you up.',
     effect: 'present', sound: 'move_throw',
     // `channel` is the flight time -- the gift is in the air and the outcome is already decided,
-    // which is what makes the wait feel like a wait rather than a delay.
-    cooldown: 9, channel: 0.55, damage: 120, radius: 62, range: 230,
+    // which is what makes the wait feel like a wait rather than a delay. Kept under half a
+    // second so the blast lands on the throw sound rather than after it.
+    cooldown: 9, channel: 0.4, damage: 120, radius: 62, range: 230,
     knockback: 80, healChance: 0.20, heal: 0.30,
     levels: [
       {}, { damage: +45 }, { cooldownMul: 0.88 }, { damage: +60 }, { radius: +22, heal: +0.10 },
@@ -190,32 +190,34 @@ export const ABILITIES = [
 
   // --- Gastly ---------------------------------------------------------------
   {
-    id: 'night_shade', sound: 'move_shortdark', name: 'Night Shade', slot: 0,
+    id: 'shadow_orb', sound: 'move_shortdark', name: 'Shadow Ball', slot: 0,
     owner: 'gastly', form: 'gastly',
     icon: 'icon_shade', palette: 'shadowy',
-    desc: 'Spreads a shadow across the ground that eats away at whatever stands in it.',
-    effect: 'drainRings',
-    cooldown: 13, waves: 2, waveGap: 0.3, radius: 84, damage: 46,
-    weaken: 3.0, growth: 240, lifesteal: 0.2,
+    desc: 'Hurls an orb of shadow. It gnaws at everything it passes, then bursts on its target.',
+    effect: 'shadowOrb', visual: 'shadowOrb',
+    // `channel` is the flight time. The orb chews on whatever it drifts past on the way, which
+    // is what makes throwing it THROUGH a crowd better than throwing it at the nearest thing.
+    cooldown: 12, channel: 0.55, range: 260,
+    damage: 90, radius: 62, knockback: 30, tick: 0.09,
+    weaken: 2.0, lifesteal: 0.3,
+    levels: [
+      {}, { damage: +32 }, { cooldownMul: 0.88 }, { damage: +40 }, { radius: +20, damage: +20 },
+    ],
+  },
+  {
+    id: 'night_shade', sound: 'move_ghost', name: 'Night Shade', slot: 1,
+    owner: 'gastly', form: 'haunter',
+    icon: 'icon_pulse', palette: 'ghost',
+    desc: 'Opens a shadow over the ground that drains whatever stands in it.',
+    effect: 'drainRings', visual: 'nightShade',
+    cooldown: 15, waves: 3, waveGap: 0.3, radius: 84, damage: 46,
+    weaken: 3.0, growth: 240, lifesteal: 0.9,
     zoneTime: 6.0, zoneDps: 30, zoneSlow: 0.3,
     levels: [
       {}, { damage: +18 }, { cooldownMul: 0.88 }, { damage: +24 }, { waves: +1, radius: +18 },
     ],
     // Gengar does not hand you a third ability -- it makes this one enormous.
     formUpgrade: { form: 'gengar', damage: +70, waves: +2 },
-  },
-  {
-    id: 'lick', sound: 'move_ghost', name: 'Lick', slot: 1,
-    owner: 'gastly', form: 'haunter',
-    icon: 'icon_lick', palette: 'poison',
-    desc: 'Drags the life out of everything nearby and puts it back into you.',
-    effect: 'drainRings',
-    cooldown: 15, waves: 3, waveGap: 0.16, radius: 62, damage: 40,
-    weaken: 2.0, growth: 200, lifesteal: 1.6,
-    zoneTime: 3.0, zoneDps: 20, zoneSlow: 0.2,
-    levels: [
-      {}, { damage: +16 }, { cooldownMul: 0.9 }, { damage: +20 }, { waves: +1, radius: +16 },
-    ],
   },
 ];
 

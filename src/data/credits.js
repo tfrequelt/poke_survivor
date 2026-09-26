@@ -23,9 +23,9 @@ const RIPS = [
   ['69118', 'STATUS ICONS', 'low health, burn'],
   ['5422', 'FONT AND WINDOW', 'window styling'],
   ['163902', 'POISON MOVES', 'bundled'],
-  ['39320', 'GHOST MOVES', 'bundled'],
+  ['39320', 'GHOST MOVES', 'shadow ball, night shade'],
   ['41323', 'DARK MOVES', 'bundled'],
-  ['40562', 'FIRE MOVES', 'bundled'],
+  ['40562', 'FIRE MOVES', 'flamethrower, fire spin'],
   ['41326', 'ROCK MOVES', 'bundled'],
 ];
 
@@ -38,9 +38,10 @@ const RIPS = [
 const OTHER_RIPS = [
   ['snes', 'ff6', '6705', 'FINAL FANTASY VI', 'thunderbolt'],
   ['game_boy_advance', 'finalfantasy4advance', '5814', 'FINAL FANTASY IV ADVANCE', 'wave'],
-  ['mobile', 'rockbotthemachinewars', '159762', 'ROCKBOT: THE MACHINE WARS', 'explosion'],
+  ['mobile', 'rockbotthemachinewars', '159762', 'ROCKBOT: THE MACHINE WARS', "Present's blast"],
   ['mobile', 'graalonlineera', '147250', 'GRAAL ONLINE ERA', 'water particles'],
   ['game_boy_advance', 'pokemonfireredleafgreen', '28883', 'POKEMON FIRERED/LEAFGREEN', 'R/S moves'],
+  ['pc_computer', 'soulsaveronlineghostonline', '578741', 'SOULSAVER ONLINE / GHOST ONLINE', "Spectral Arrow's arrow"],
 ];
 
 export const CREDITS = [

@@ -91,9 +91,9 @@ new form lands with a shockwave that clears the area and a second and a half of 
 | Eevee | **Hyperbeam** -- massive damage, but you cannot move while firing | **Thunderbolt** (Jolteon) -- lightning falls from the sky into a marked circle and leaves it crackling |
 | Eevee | | **Hydro Pump** (Vaporeon) -- a wave front that sweeps outward, shoving and healing |
 | Eevee | | **Dark Pulse** (Umbreon) -- rings that leave a lasting pool of shadow |
-| Gastly | **Night Shade** -- spreads a shadow that eats away at whatever stands in it | **Lick** (Haunter) -- drags the life out of everything nearby |
-| Vulpix | **Flamethrower** -- a held cone of fire that leaves everything in it burning | **Fire Spin** (Ninetales) -- a vortex of flame that holds a crowd in place and cooks it |
-| Delibird | **Present** -- lobs a gift: four times in five it detonates, the fifth time it heals you | **Blizzard** (Hustle) -- a storm across the whole screen; little damage, but nothing moves through it |
+| Gastly | **Shadow Ball** -- an orb thrown at a target that gnaws at everything it drifts past, then bursts | **Night Shade** (Haunter) -- opens a shadow that drains whatever stands in it |
+| Vulpix | **Flamethrower** -- hurls a spinning fire star that bursts where it lands, leaving everything burning | **Fire Spin** (Ninetales) -- a vortex of flame that wraps around you and moves with you |
+| Delibird | **Present** -- throws the gift on a short arc: four times in five it detonates, the fifth time it heals you | **Blizzard** (Hustle) -- hail falls across the whole screen; little damage, but nothing moves through it |
 
 Every ability has its own sound, named on the ability itself rather than derived from what it
 does -- Dark Pulse, Night Shade and Lick are all built from the same ring effect and have to sound
@@ -208,11 +208,14 @@ Enemies, destructible scenery and mini-bosses drop items you walk over:
 | **Magnet** | Vacuums every XP orb and coin on the field |
 | **Sitrus Berry** | Heals 30% of max HP |
 | **Blast Seed** | Clears the screen |
-| **Treasure** | Evolves a maxed weapon (if you hold its paired item), and pays gold |
+| **Elixir** | Evolves a maxed weapon (if you hold its paired item), otherwise grants a level. Pays gold either way |
 | **Present** | Delibird only -- freezes the run and spins the prize wheel |
 
-XP orbs come in four tiers by value, differing in size and colour -- a Graveler visibly out-drops
-a Rattata. Mini-bosses arrive at 5:00, 10:00 and 15:00 (Raticate, Graveler, Pidgeot), with
+XP orbs come in **ten tiers** by value, differing in size and colour on a rarity ladder: green,
+lime, teal, blue, violet, rose, ember, gold, magenta, white. Seven of those fall inside the 1-9
+range the roster actually drops, so a Gigalith visibly out-drops a Rattata rather than both
+landing on the same green pip; the last three are for elites, boss payouts and the merged orbs
+the entity cap produces. Mini-bosses arrive at 5:00, 10:00 and 15:00 (Raticate, Graveler, Pidgeot), with
 Butterfree as the final boss at 20:00. A boss pays out like one: a spray of a dozen or more orbs
 and coins you can see from across the screen, plus exactly one power-up.
 

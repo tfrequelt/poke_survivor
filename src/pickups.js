@@ -11,17 +11,28 @@ import { ensureStats } from './stats.js';
 
 // Tier thresholds, and the SIZE each tier draws at.
 //
-// These used to be 0 / 12 / 60 while every enemy in the game drops 1-5 XP -- so every orb was
-// tier 0 and they all looked identical. Thresholds now sit inside the real drop range, so a
-// Cragfist (5) visibly out-drops a Rattail (1), and elites and bosses reach the top tiers.
+// The thresholds are the whole point, and they have been wrong twice. They started at 0/12/60
+// while enemies dropped 1-5, so every orb was tier 0 and they all looked identical. Four tiers
+// at 0/3/8/25 fixed that but still had two colours carrying nearly every orb, because the
+// roster drops 1-9 and only two tiers fall inside that.
+//
+// Ten tiers now, with SEVEN of them inside the 1-9 range where the overwhelming majority of
+// drops land -- so a Gigalith (9) looks nothing like a Rattata (1) -- and three more above it
+// for elites (x12), boss orbs and the merged orbs the cap produces.
 const TIERS = [
-  { min: 0, palette: 'xp_small', scale: 1.0 },
-  { min: 3, palette: 'xp_mid', scale: 1.35 },
-  { min: 8, palette: 'xp_big', scale: 1.7 },
-  { min: 25, palette: 'xp_huge', scale: 2.2 },
+  { min: 0, palette: 'xp_small', scale: 1.00 },
+  { min: 2, palette: 'xp_leaf', scale: 1.10 },
+  { min: 3, palette: 'xp_aqua', scale: 1.20 },
+  { min: 4, palette: 'xp_mid', scale: 1.30 },
+  { min: 5, palette: 'xp_violet', scale: 1.40 },
+  { min: 6, palette: 'xp_rose', scale: 1.50 },
+  { min: 8, palette: 'xp_ember', scale: 1.65 },
+  { min: 12, palette: 'xp_big', scale: 1.85 },
+  { min: 25, palette: 'xp_huge', scale: 2.10 },
+  { min: 60, palette: 'xp_flare', scale: 2.40 },
 ];
 
-let TIER_SPR = [0, 0, 0, 0];
+let TIER_SPR = TIERS.map(() => 0);
 let COIN_SPR = 0;
 
 export function initPickupSprites() {
@@ -30,6 +41,9 @@ export function initPickupSprites() {
 }
 
 export const tierScale = (t) => TIERS[t].scale;
+
+/** How many orb tiers there are, so the renderer can normalise against it rather than guess. */
+export const TIER_COUNT = TIERS.length;
 
 function tierOf(v) {
   for (let i = TIERS.length - 1; i >= 0; i--) if (v >= TIERS[i].min) return i;
@@ -146,25 +160,41 @@ export function updatePickups(dt, onXp, onCoin) {
 
 // --- Item pickups -----------------------------------------------------------
 //
-// Magnet / berry / bomb / chest. These share the orb's collection loop but are walked over
-// rather than vacuumed, so the player has to choose to go and get them.
+// Magnet / berry / bomb / elixir / present. These share the orb's collection loop but are walked
+// over rather than vacuumed, so the player has to choose to go and get them.
 
+/**
+ * Each pickup names a SHAPE OF ITS OWN rather than reusing one already in the atlas: overriding
+ * `orb` with a ripped sprite would repaint every XP orb on the field too. `fallback` is the drawn
+ * shape used until an image is supplied, so a missing or mistyped crop degrades to a plain orb
+ * rather than failing the boot.
+ *
+ * KEY ORDER IS LOAD-BEARING. dropPickup stores KIND_KEYS.indexOf(kind) as a number on the live
+ * entity, so a key may be renamed in place or appended at the end, but moving one renumbers every
+ * pickup already lying on the ground.
+ */
 export const PICKUP_KINDS = {
-  magnet: { shape: 'icon_pulse', palette: 'xp_mid', label: 'MAGNET' },
-  // A shape of its own rather than the xp orb's: overriding `orb` with the PMD berry sprite
-  // would repaint every XP orb on the field too. `fallback` keeps the drawn orb as its art
-  // until an image is supplied.
-  berry:  { shape: 'item_berry', fallback: 'orb', palette: 'crab', label: 'SITRUS BERRY' },
-  bomb:   { shape: 'icon_quake', palette: 'fire', label: 'BLAST SEED' },
-  chest:  { shape: 'prop_crate', palette: 'gold', label: 'TREASURE' },
-  // Appended deliberately: dropPickup stores KIND_KEYS.indexOf(kind) as a number on the live
-  // entity, so adding a key at the END is safe and inserting one in the middle would renumber
-  // every item already lying on the ground.
+  magnet:  { shape: 'item_orb', fallback: 'orb', palette: 'xp_mid', label: 'MAGNET' },
+  berry:   { shape: 'item_berry', fallback: 'orb', palette: 'crab', label: 'SITRUS BERRY' },
+  bomb:    { shape: 'item_voltorb', fallback: 'orb', palette: 'fire', label: 'BLAST SEED' },
+  // Was "chest" and drawn as a gold crate. It is the only pickup that grants a level-up, so it
+  // now looks like what it does.
+  elixir:  { shape: 'item_elixir', fallback: 'orb', palette: 'gold', label: 'ELIXIR' },
   present: { shape: 'icon_gift', fallback: 'orb', palette: 'gift', label: 'PRESENT' },
 };
 
 const KIND_KEYS = Object.keys(PICKUP_KINDS);
 let KIND_SPR = {};
+
+/**
+ * (shape, palette) pairs the XP orbs need in the atlas.
+ *
+ * Derived from TIERS rather than listed again at the call site: main.js used to hold its own
+ * copy of the palette names, so adding a tier registered nine sprites and asked for ten.
+ */
+export function orbSpritePairs() {
+  return TIERS.map((t) => ['orb', t.palette]);
+}
 
 /** (shape, palette, fallbackShape) triples the item pickups need in the atlas. */
 export function itemSpritePairs() {
@@ -177,7 +207,7 @@ export function initItemSprites() {
 
 /** Hooks assigned by main.js so collecting an item can reach the systems that apply it. */
 export const itemEffects = {
-  magnet: null, berry: null, bomb: null, chest: null, onCollect: null,
+  magnet: null, berry: null, bomb: null, elixir: null, present: null, onCollect: null,
 };
 
 export function dropPickup(x, y, kind) {
@@ -196,7 +226,7 @@ export function dropPickup(x, y, kind) {
 /** Weighted random drop -- what a destroyed crate or a lucky kill yields. */
 export function dropRandomPickup(x, y) {
   const r = G.rngRun();
-  const kind = r < 0.40 ? 'berry' : r < 0.72 ? 'magnet' : r < 0.92 ? 'bomb' : 'chest';
+  const kind = r < 0.40 ? 'berry' : r < 0.72 ? 'magnet' : r < 0.92 ? 'bomb' : 'elixir';
   return dropPickup(x, y, kind);
 }
 

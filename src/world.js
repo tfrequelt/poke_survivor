@@ -85,7 +85,7 @@ const newFxShape = () => ({
   seed: 0,
 });
 
-/** Walk-over item pickups: magnet, berry, bomb, chest. */
+/** Walk-over item pickups: magnet, berry, bomb, elixir, present. */
 const newItem = () => ({
   alive: false, x: 0, y: 0, vx: 0, vy: 0, kind: 0, sprId: 0, age: 0, bob: 0,
 });

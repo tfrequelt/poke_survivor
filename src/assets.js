@@ -72,6 +72,44 @@ function keyOutPacked(img, hex, tol = 10) {
 }
 
 /**
+ * Key out the background by FLOODING IN FROM THE BORDER instead of matching colour everywhere.
+ *
+ * Needed when a sprite is cut out of a dungeon tile rather than off the sheet's flat backdrop:
+ * the Voltorb trap's own outline is drawn in exactly the tile's floor colour, so keying by
+ * colour punches holes straight through its face. Only background that is connected to the edge
+ * of the crop is really background, and that is what this removes.
+ */
+function floodKeyPacked(img, hex, tol = 10) {
+  const n = parseInt(hex.slice(1), 16);
+  const kr = (n >> 16) & 255, kg = (n >> 8) & 255, kb = n & 255;
+  const { w, h, data } = img;
+  const match = (i) => {
+    const v = data[i];
+    return Math.abs((v & 255) - kr) <= tol &&
+           Math.abs(((v >>> 8) & 255) - kg) <= tol &&
+           Math.abs(((v >>> 16) & 255) - kb) <= tol;
+  };
+
+  const seen = new Uint8Array(w * h);
+  // An explicit stack, not recursion: a 16x16 crop is small but this also runs on tilesets.
+  const stack = [];
+  for (let x = 0; x < w; x++) { stack.push(x, x + (h - 1) * w); }
+  for (let y = 0; y < h; y++) { stack.push(y * w, y * w + w - 1); }
+
+  while (stack.length) {
+    const i = stack.pop();
+    if (seen[i] || !match(i)) continue;
+    seen[i] = 1;
+    data[i] = 0;
+    const x = i % w, y = (i / w) | 0;
+    if (x > 0) stack.push(i - 1);
+    if (x < w - 1) stack.push(i + 1);
+    if (y > 0) stack.push(i - w);
+    if (y < h - 1) stack.push(i + w);
+  }
+}
+
+/**
  * Load the manifest and every sprite it lists. Never throws: a missing manifest is the normal
  * case (no assets supplied), and one broken entry must not take the others down with it.
  */
@@ -91,6 +129,7 @@ export async function loadAssets() {
   await loadSfx(manifest);
   await loadUi(manifest);
   await loadImages(manifest);
+  await loadSequences(manifest);
   await loadAttacks(manifest);
 
   const sprites = (manifest && manifest.sprites) || {};
@@ -107,8 +146,12 @@ export async function loadAssets() {
       // for a creature standing on the ground and wrong for a coin, which is drawn centred.
       px.anchor = (typeof e === 'object' && e.anchor) || 'bottom';
       // Sheet rips are saved on a flat backdrop rather than with alpha, so a sprite cut out of
-      // one arrives inside a coloured box unless that colour is keyed out.
-      if (typeof e === 'object' && e.key) keyOutPacked(px, e.key, e.tolerance);
+      // one arrives inside a coloured box unless that colour is keyed out. `flood` limits that
+      // to background reachable from the border, for a sprite whose own colours collide with it.
+      if (typeof e === 'object' && e.key) {
+        if (e.flood) floodKeyPacked(px, e.key, e.tolerance);
+        else keyOutPacked(px, e.key, e.tolerance);
+      }
       return [name, px];
     });
   }));
@@ -356,6 +399,89 @@ export async function loadAttacks(manifest) {
   for (const r of await Promise.allSettled(jobs)) {
     if (r.status === 'fulfilled') { animSheets.set(r.value[0], r.value[1]); n++; }
     else console.warn('[assets] animation failed:', r.reason && r.reason.message);
+  }
+  return n;
+}
+
+// --- Numbered frame sequences -----------------------------------------------
+//
+// Some ripped effects ship as one PNG per frame rather than as a strip -- the hail weather
+// overlay is sixty-five of them. They are stitched into a single wide canvas at load, so
+// drawing a frame is one drawImage with a source offset, exactly like the explosion sheet, and
+// the renderer never holds sixty-five separate images.
+
+/** name -> { canvas, w, h, frames } where the canvas is frames * w wide. */
+export const seqSheets = new Map();
+
+export const getSequence = (name) => seqSheets.get(name);
+
+/** One PNG per frame: `dir` + `prefix` + a zero-padded number. */
+async function seqFromFiles(entry) {
+  const pad = entry.pad || 0;
+  const n = entry.frames;
+  const urls = [];
+  for (let i = 1; i <= n; i++) {
+    urls.push(`${entry.dir}/${entry.prefix || ''}${String(i).padStart(pad, '0')}.png`);
+  }
+
+  // All frames must be the same size, or the strip's source offsets stop lining up.
+  const imgs = await Promise.all(urls.map(decodeDrawable));
+  const w = imgs[0].w, h = imgs[0].h;
+  for (const img of imgs) {
+    if (img.w !== w || img.h !== h) throw new Error(`${entry.dir}: frames are not all ${w}x${h}`);
+  }
+
+  const c = document.createElement('canvas');
+  c.width = w * n;
+  c.height = h;
+  const cx = c.getContext('2d');
+  cx.imageSmoothingEnabled = false;
+  for (let i = 0; i < n; i++) cx.drawImage(imgs[i].canvas, i * w, 0);
+  return { canvas: c, w, h, frames: n };
+}
+
+/**
+ * Frames cut out of ONE sheet, as explicit rectangles.
+ *
+ * Ripped effect sheets are not laid out on a grid -- a flame that grows over its animation is
+ * drawn as big as it needs to be and no bigger, so the frames differ in size and spacing, and
+ * some sheets divide them with a magenta rule rather than with whitespace. `cells` therefore
+ * carries the measured rectangle for each frame plus where to place it inside a uniform cell:
+ * `[sx, sy, sw, sh, dx, dy]`. Getting that placement right is what keeps a growing blast
+ * centred and a rising one rising, instead of every frame snapping to the same corner.
+ */
+async function seqFromSheet(entry) {
+  const img = await decodeDrawable(entry.src);
+  if (entry.key) keyOut(img, entry.key, entry.tolerance);
+
+  const [w, h] = entry.cell;
+  const n = entry.cells.length;
+  const c = document.createElement('canvas');
+  c.width = w * n;
+  c.height = h;
+  const cx = c.getContext('2d');
+  cx.imageSmoothingEnabled = false;
+  for (let i = 0; i < n; i++) {
+    const [sx, sy, sw, sh, dx, dy] = entry.cells[i];
+    cx.drawImage(img.canvas, sx, sy, sw, sh, i * w + dx, dy, sw, sh);
+  }
+  return { canvas: c, w, h, frames: n };
+}
+
+const loadSequence = (entry) => (entry.cells ? seqFromSheet(entry) : seqFromFiles(entry));
+
+export async function loadSequences(manifest) {
+  const m = (manifest && manifest.sequences) || {};
+  const names = Object.keys(m);
+  if (!names.length) return 0;
+
+  const results = await Promise.allSettled(
+    names.map((name) => loadSequence(m[name]).then((s) => [name, s])),
+  );
+  let n = 0;
+  for (const r of results) {
+    if (r.status === 'fulfilled') { seqSheets.set(r.value[0], r.value[1]); n++; }
+    else console.warn('[assets] sequence failed:', r.reason && r.reason.message);
   }
   return n;
 }

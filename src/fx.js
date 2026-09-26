@@ -11,6 +11,10 @@ export const FX = {
   CRACK: 2,
   BOLT: 3,
   WAVE: 4,
+  // The rest are ripped sheets rather than drawn shapes. `r` carries the size each covers.
+  BOOM: 5,          // Present's blast, from explosion.png
+  DART: 6,          // an arrow travelling a line, from arrows.png -- `angle` is its heading
+  FIREBURST: 7,     // the back half of the Flamethrower sheet: the impact
 };
 
 /**
@@ -28,6 +32,9 @@ export const ZONE = {
   NOVA: 4,            // expands, and stays centred on the player
   NOVA_STATIC: 5,     // expands from where it was cast
   VORTEX: 6,
+  // Ticks like BURN, but stays centred on the player and draws itself from a ripped sheet
+  // rather than as a coloured blob.
+  FIRE: 7,
 };
 
 /** Projectile roles. `gen` on a projectile is one of these, not a free integer. */

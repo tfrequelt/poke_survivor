@@ -256,6 +256,70 @@ a quarter of the shorter side. Supplying a frame means the per-card accent colou
 (the image has no place to put them), which is the trade you are making by using one image for
 every window.
 
+### Cutting a sprite out of a tile
+
+`key` removes every pixel matching the backdrop colour, which is right for a sprite sitting on a
+sheet's flat background. It is wrong when the sprite is cut out of a **dungeon tile**, because the
+tile's floor colour can also appear inside the artwork -- the Voltorb trap's own outline is drawn
+in exactly its floor colour, so keying by colour punches holes straight through its face.
+
+`"flood": true` keys from the border inward instead, so only background actually connected to the
+edge of the crop is removed:
+
+```json
+"item_voltorb": {
+  "src": "assets/pmd/items.png",
+  "x": 157, "y": 148, "w": 13, "h": 15,
+  "anchor": "center", "key": "#554d55", "tolerance": 42, "flood": true
+}
+```
+
+Flooding also lets the tolerance go much wider than a plain key safely, since interior pixels are
+never at risk: 42 here takes the tile's darker floor shades with it while leaving the Voltorb's
+darkest red, which is 57 away, untouched.
+
+## Frame sequences
+
+Some ripped effects ship as one PNG per frame rather than as a strip. A `sequences` entry names
+the folder and how the files are numbered:
+
+```json
+"sequences": {
+  "hail": { "dir": "assets/pmd/hail/Hail", "prefix": "Hail", "pad": 2, "frames": 65 }
+}
+```
+
+That reads `Hail01.png` through `Hail65.png`. `pad` is how many digits the number is zero-padded
+to; leave it out for `Hail1.png`.
+
+The other form cuts frames out of **one sheet**, as explicit rectangles:
+
+```json
+"fx_blastburn": {
+  "src": "assets/pmd/fire_moves.png", "key": "#008080", "tolerance": 8,
+  "cell": [82, 76],
+  "cells": [[2, 39, 48, 45, 17, 15], ...]
+}
+```
+
+Each entry is `[sx, sy, sw, sh, dx, dy]`: where the frame is on the sheet, and where to place it
+inside the uniform cell. The placement is not decoration -- ripped effect sheets draw each frame
+only as big as it needs to be, so the frames differ in size and spacing. Centring them makes a
+blast grow from a fixed point; aligning them to a common baseline instead makes flames rise.
+Getting it wrong makes every frame snap to a corner and the animation jitter.
+
+Some sheets divide their frames with a **magenta rule** (`#ff00ff`) rather than whitespace, which
+is the only reliable way to split them -- `fire_moves.png` has gaps *inside* a frame wider than
+the gaps between frames.
+
+Every frame must be the same size, and they are stitched into **one wide canvas** at load, so
+drawing a frame is a single `drawImage` with a source offset rather than juggling sixty-five
+images. A sequence that fails to load is warned about and skipped, like every other asset.
+
+`hail` is the only one today: the weather overlay Delibird's Blizzard lays over the viewport.
+Its frames are 240x160, which is the GBA screen, so they are drawn **1:1 and tiled** -- scaling
+them up would turn the hailstones into boulders.
+
 ## Optional images
 
 Two images are ones the game is designed to run without, and are marked `optional` so a missing

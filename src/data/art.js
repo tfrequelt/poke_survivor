@@ -64,10 +64,19 @@ export const PALETTES = {
   earth:    ['.', '#3a2410', '#6b4620', '#9a6c36', '#c49a5e', '#101018', '#e0c088', '#ffffff', '#4e3018'],
 
   // --- pickups ---
-  xp_small: ['.', '#0d3a2a', '#2a9a6a', '#4ae0a0', '#c0ffe0', '#101018', '#ffffff', '#ffffff', '#186a48'],
-  xp_mid:   ['.', '#0d2a5a', '#2a6ac8', '#4a9ce8', '#c0e0ff', '#101018', '#ffffff', '#ffffff', '#184a8a'],
-  xp_big:   ['.', '#5a3a08', '#c89818', '#f0c838', '#fff0a8', '#101018', '#ffffff', '#ffffff', '#7a5410'],
-  xp_huge:  ['.', '#5a1046', '#a8288a', '#e858c0', '#ffd0f0', '#101018', '#ffffff', '#ffffff', '#7a1860'],
+  // The XP orb ramps, in tier order -- see TIERS in pickups.js. Ten of them, because four over a
+  // drop range of 1-9 meant two colours carried almost every orb in the game. Read as a rarity
+  // ladder: green, lime, teal, blue, violet, rose, ember, gold, magenta, white.
+  xp_small:  ['.', '#0d3a2a', '#2a9a6a', '#4ae0a0', '#c0ffe0', '#101018', '#ffffff', '#ffffff', '#186a48'],
+  xp_leaf:   ['.', '#2a3a08', '#7a9a18', '#b8e038', '#f0ffb0', '#101018', '#ffffff', '#ffffff', '#44540f'],
+  xp_aqua:   ['.', '#0d3a3a', '#2a9a9a', '#4ae0e0', '#c0ffff', '#101018', '#ffffff', '#ffffff', '#186a6a'],
+  xp_mid:    ['.', '#0d2a5a', '#2a6ac8', '#4a9ce8', '#c0e0ff', '#101018', '#ffffff', '#ffffff', '#184a8a'],
+  xp_violet: ['.', '#2a0d5a', '#5a2ac8', '#8a5ae8', '#d8c0ff', '#101018', '#ffffff', '#ffffff', '#40188a'],
+  xp_rose:   ['.', '#5a0d2a', '#c82a6a', '#e85a9c', '#ffc0dc', '#101018', '#ffffff', '#ffffff', '#8a184a'],
+  xp_ember:  ['.', '#5a2008', '#c85a18', '#f08c38', '#ffd8a8', '#101018', '#ffffff', '#ffffff', '#7a3410'],
+  xp_big:    ['.', '#5a3a08', '#c89818', '#f0c838', '#fff0a8', '#101018', '#ffffff', '#ffffff', '#7a5410'],
+  xp_huge:   ['.', '#5a1046', '#a8288a', '#e858c0', '#ffd0f0', '#101018', '#ffffff', '#ffffff', '#7a1860'],
+  xp_flare:  ['.', '#4a4a5a', '#a8a8c0', '#e0e0f0', '#ffffff', '#101018', '#ffffff', '#ffffff', '#6a6a80'],
   gold:     ['.', '#5a4408', '#c8a018', '#f0d038', '#fff4a8', '#101018', '#ffffff', '#ffffff', '#7a5c10'],
 };
 

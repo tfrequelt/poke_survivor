@@ -16,9 +16,12 @@ import {
 import {
   drawSprite, drawSpriteScaled, drawShadow, drawText, FRAMES, angleSlot,
 } from './sprites.js';
-import { tierScale } from './pickups.js';
+import { tierScale, TIER_COUNT } from './pickups.js';
 import { FX, ZONE, fxSprites } from './fx.js';
-import { getImage, getAttack } from './assets.js';
+import { getImage, getAttack, getSequence } from './assets.js';
+import { thrownItem, activeAbility, activeVisual } from './abilities.js';
+import { sampleDuration } from './audio.js';
+import { hash2 } from './util.js';
 
 const MARGIN = 28;                    // draw a little beyond the edge so nothing pops in visibly
 
@@ -39,10 +42,52 @@ export function drawEntities() {
   drawShadows(camOffX, camOffY);
   drawSortedActors(camOffX, camOffY);
   drawProjectiles(camOffX, camOffY);
+  drawThrown(camOffX, camOffY);
+  drawNightShade(camOffX, camOffY);
   drawFxShapes(camOffX, camOffY);
   drawShield(camOffX, camOffY);
   drawParticles(camOffX, camOffY);
   drawDamageNumbers(camOffX, camOffY);
+  drawWeather();
+}
+
+// The ripped hail overlay: 65 frames of 240x160, stitched into one strip at load. 240x160 is
+// the GBA screen, so drawing it 1:1 puts the hailstones at the same size relative to a Pokemon
+// as they were in the original -- scaling it up would make them boulders.
+const HAIL = { cycle: 2.2, tiles: 3 };
+
+/**
+ * Weather laid over the whole viewport, in SCREEN space rather than world space: a storm is
+ * around the player wherever they walk, and anchoring it to the world would slide it away.
+ *
+ * One cycle of the animation lasts as long as the hail sound, and it repeats for however long
+ * the ability channels -- the fall is a single burst of hail crossing the screen, so a five
+ * second blizzard is two and a bit waves of it rather than one burst and four seconds of
+ * silence. The three tile rows are phase-shifted so they do not fall in lockstep.
+ */
+function drawWeather() {
+  const a = activeAbility('blizzard');
+  if (!a) return;
+  const seq = getSequence('hail');
+  if (!seq) return;
+
+  const total = (a.resolved && a.resolved.channel) || a.def.channel || 1;
+  const elapsed = Math.max(0, total - a.activeT);
+  const cycle = sampleDuration('move_hail') || HAIL.cycle;
+  const base = (elapsed / cycle) * seq.frames;
+
+  const cols = Math.ceil(VW / seq.w);
+  const rows = Math.ceil(VH / seq.h);
+  for (let row = 0; row < rows; row++) {
+    // A third of the animation between rows, so the bands read as continuous hail.
+    const f = (((base + row * (seq.frames / rows)) | 0) % seq.frames + seq.frames) % seq.frames;
+    for (let col = 0; col < cols; col++) {
+      ctx.drawImage(
+        seq.canvas, f * seq.w, 0, seq.w, seq.h,
+        col * seq.w, row * seq.h, seq.w, seq.h,
+      );
+    }
+  }
 }
 
 /**
@@ -59,6 +104,220 @@ function jag(seed, i) {
 }
 
 /** Ability rings, beams, ground cracks, lightning and wave fronts. Drawn above the crowd. */
+// The ripped blast sheet: seven frames on a 56px pitch along its first row, on a teal backdrop
+// keyed out at load. Far too big for the atlas, so it is blitted straight from its canvas the
+// same way the attack sheets and the status icons are.
+const BOOM = { w: 56, h: 56, y: 3, frames: 7 };
+
+/** One frame of the explosion, scaled so the sheet's cell covers the blast radius. */
+function drawBoom(f, sx, sy, k) {
+  const img = getImage('explosion');
+  if (!img) return;
+  // k runs 1 -> 0 over the life, so the frame index runs forward.
+  const i = Math.min(BOOM.frames - 1, Math.max(0, ((1 - k) * BOOM.frames) | 0));
+  // The sheet's 56px cell maps to the blast DIAMETER, so the drawn shockwave lands where the
+  // damage did rather than a half-screen wider than it.
+  const d = f.r * 2;
+  ctx.drawImage(
+    img.canvas, i * BOOM.w, BOOM.y, BOOM.w, BOOM.h,
+    Math.round(sx - d / 2), Math.round(sy - d / 2), d, d,
+  );
+}
+
+/**
+ * An item an ability has in the air -- Delibird's present. Drawn as the very sprite the HUD
+ * shows in that ability's cooldown slot, so what leaves your hands is recognisably what the
+ * icon promised. Its position comes from the ability itself; the arc lives there, not here.
+ */
+function drawThrown(ox, oy) {
+  const a = thrownItem();
+  if (!a) return;
+  const sx = a.gx + ox, sy = a.gy + oy;
+  if (sx < -40 || sy < -40 || sx > VW + 40 || sy > VH + 40) return;
+
+  // A fire star draws itself from its own sheet; anything else is the ability's HUD icon, so
+  // what leaves your hands is recognisably what the cooldown slot promised.
+  if (a.def.effect === 'fireShot') {
+    if (drawFireStar(sx, sy, a.def.channel - a.activeT)) return;
+  }
+  if (a.def.effect === 'shadowOrb') {
+    if (drawShadowOrb(sx, sy, a.def.channel - a.activeT)) return;
+  }
+  if (a.def.iconBase === undefined) return;
+  drawShadow(ctx, sx, a.zy + oy, 1.1);
+  drawSpriteScaled(ctx, a.def.iconBase, sx, sy, 1);
+}
+
+// The Flamethrower sheet is one animation in two halves: the first eleven frames are the star
+// spinning as it flies, the last twelve are the burst where it lands. They are drawn by two
+// different things at two different times, so the split is named once here.
+const FIRE_FLY = 11;
+
+/**
+ * The two-frame shadow orb, alternating as it flies.
+ *
+ * Only two frames, so the rate matters: fast enough that the purple aura reads as swirling,
+ * slow enough that it is not a strobe.
+ */
+function drawShadowOrb(sx, sy, t) {
+  const seq = getSequence('fx_shadoworb');
+  if (!seq) return false;
+  const f = ((t * 14) | 0) % seq.frames;
+  ctx.drawImage(seq.canvas, f * seq.w, 0, seq.w, seq.h,
+    Math.round(sx - seq.w / 2), Math.round(sy - seq.h / 2), seq.w, seq.h);
+  return true;
+}
+
+/** Frames 0..10, looped: the star spinning while it is in the air. */
+function drawFireStar(sx, sy, t) {
+  const seq = getSequence('fx_flamethrower');
+  if (!seq) return false;
+  // Four distinct poses repeat across those eleven frames, so a brisk rate reads as a spin
+  // rather than a flicker.
+  const f = ((t * 24) | 0) % FIRE_FLY;
+  ctx.drawImage(seq.canvas, f * seq.w, 0, seq.w, seq.h,
+    Math.round(sx - seq.w / 2), Math.round(sy - seq.h / 2), seq.w, seq.h);
+  return true;
+}
+
+/**
+ * Frames 11..22, once: the burst.
+ *
+ * Drawn at the sheet's OWN size, exactly as the star that became it -- the two are one
+ * animation and the flame must not change scale halfway through it. The blast radius is
+ * deliberately not used here: the hitbox is wider than the drawing, which is normal for an
+ * explosion and much better than a sprite blown up to four times the size it was drawn at.
+ */
+function drawFireBurst(f, sx, sy, k) {
+  const seq = getSequence('fx_flamethrower');
+  if (!seq) return;
+  const n = seq.frames - FIRE_FLY;
+  const i = FIRE_FLY + Math.min(n - 1, Math.max(0, ((1 - k) * n) | 0));
+  ctx.drawImage(seq.canvas, i * seq.w, 0, seq.w, seq.h,
+    Math.round(sx - seq.w / 2), Math.round(sy - seq.h / 2), seq.w, seq.h);
+}
+
+/**
+ * Blast Burn's ring of flame, drawn by the vortex that owns it.
+ *
+ * It belongs to the zone rather than to a free-floating effect because the zone MOVES: it is
+ * carried by the player, and an effect pinned to where the cast happened would slide off it.
+ *
+ * Looped rather than stretched over the zone's life: eleven frames spread across five seconds
+ * is a slideshow, and the ring is meant to be burning the whole time.
+ */
+function drawFireRing(z, sx, sy, fade) {
+  const seq = getSequence('fx_blastburn');
+  if (!seq) return;
+  const i = ((z.maxLife - z.life) * 14 | 0) % seq.frames;
+  const d = z.r * 2;
+  const h = d * (seq.h / seq.w);
+  ctx.globalAlpha = fade;
+  ctx.drawImage(seq.canvas, i * seq.w, 0, seq.w, seq.h,
+    Math.round(sx - d / 2), Math.round(sy - h / 2), d, h);
+  ctx.globalAlpha = 1;
+}
+
+/**
+ * An arrow flying the length of a shot, turned to face along it.
+ *
+ * Rotated with a canvas transform rather than by baking sixteen angles into the atlas: this is
+ * one sprite drawn a handful of times for a quarter of a second, the atlas is already at 87%,
+ * and a real angle looks better than the nearest of sixteen.
+ */
+function drawDart(f, sx, sy, k) {
+  const seq = getSequence('fx_arrow');
+  if (!seq) return;
+  const t = 1 - k;                                   // 0 at the muzzle, 1 at the far end
+  const x = sx + Math.cos(f.angle) * f.r * t;
+  const y = sy + Math.sin(f.angle) * f.r * t;
+  ctx.save();
+  ctx.translate(Math.round(x), Math.round(y));
+  // The art points LEFT, so the heading is half a turn from the angle it is drawn at.
+  ctx.rotate(f.angle + Math.PI);
+  ctx.drawImage(seq.canvas, 0, 0, seq.w, seq.h, -seq.w / 2, -seq.h / 2, seq.w, seq.h);
+  ctx.restore();
+}
+
+/**
+ * Night Shade: the sheet's two circles, staged.
+ *
+ * The small circle opens, swells into the big one, and then the big one blinks on and off for
+ * the rest of the cast. The blink is the point -- a shadow that simply sat there would read as
+ * a decal, and the flicker is what makes it look like something is eating the ground.
+ *
+ * Drawn from the ability rather than pushed as an effect because the rings it accompanies are
+ * emitted at the player's CURRENT position on every wave; an effect pinned where the cast
+ * started would slide off them.
+ *
+ * The sheet's own art is a mottled red and blue, which is nobody's idea of a shadow, so it is
+ * laid over a dark pool and under a drift of shadow motes to carry the colour.
+ */
+function drawNightShade(ox, oy) {
+  const a = activeVisual('nightShade');
+  if (!a) return;
+  const seq = getSequence('fx_nightshade');
+  const p = G.player;
+  if (!seq || !p) return;
+
+  const st = a.resolved;
+  const total = Math.max(0.3, a.def.waves * a.def.waveGap + 0.1);
+  const t = Math.max(0, total - a.activeT);
+  const sx = p.x + ox, sy = p.y + oy;
+
+  const OPEN = 0.10;                      // the small circle alone
+  const GROW = 0.14;                      // it swells into the big one
+  let frame = 1;
+  let scale = 1;
+  if (t < OPEN) {
+    frame = 0;
+    scale = 0.5 + 0.5 * (t / OPEN);
+  } else if (t < OPEN + GROW) {
+    const k = (t - OPEN) / GROW;
+    frame = k < 0.5 ? 0 : 1;
+    scale = 0.9 + 0.25 * k;
+  } else {
+    // Blinking. Off for the shorter part of each cycle, so it reads as a flicker rather than
+    // as something that keeps disappearing.
+    if (((t - OPEN - GROW) * 9 % 1) > 0.72) return;
+  }
+
+  const d = st.radius * 2.1 * scale;
+  const h = d * (seq.h / seq.w);
+
+  // The pool underneath, the sheet's circle over it, and a violet wash on top. The sheet's own
+  // art is mottled red and blue, so without the wash Night Shade reads as a puddle of blood.
+  ctx.globalAlpha = 0.62;
+  ctx.fillStyle = '#120a20';
+  ctx.beginPath();
+  ctx.ellipse(sx, sy, d * 0.48, d * 0.48 * 0.62, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.globalAlpha = 0.5;
+  ctx.drawImage(seq.canvas, frame * seq.w, 0, seq.w, seq.h,
+    Math.round(sx - d / 2), Math.round(sy - h / 2), d, h);
+
+  ctx.globalAlpha = 0.34;
+  ctx.fillStyle = '#2a1848';
+  ctx.beginPath();
+  ctx.ellipse(sx, sy, d * 0.5, d * 0.5 * 0.62, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // Motes lifting off it, seeded off the tick so they are not a static pattern.
+  ctx.fillStyle = '#c8bcf0';
+  for (let i = 0; i < 10; i++) {
+    const s = (G.tick * 0.7 + i * 97) | 0;
+    const ang = hash2(s, i) * Math.PI * 2;
+    const rr = (0.35 + hash2(i, s) * 0.6) * d * 0.5;
+    const rise = ((G.tick * 0.9 + i * 13) % 26);
+    ctx.globalAlpha = 0.8 * (1 - rise / 26);
+    ctx.fillRect(Math.round(sx + Math.cos(ang) * rr),
+      Math.round(sy + Math.sin(ang) * rr * 0.6 - rise), 1, 2);
+  }
+  ctx.globalAlpha = 1;
+}
+
 function drawFxShapes(ox, oy) {
   for (let i = 0; i < fxShapes.length; i++) {
     const f = fxShapes[i];
@@ -78,6 +337,9 @@ function drawFxShapes(ox, oy) {
         break;
       }
 
+      case FX.BOOM: drawBoom(f, sx, sy, k); break;
+      case FX.DART: drawDart(f, sx, sy, k); break;
+      case FX.FIREBURST: drawFireBurst(f, sx, sy, k); break;
       case FX.CRACK: drawCrack(f, sx, sy, k); break;
       case FX.BOLT: drawBolt(f, sx, sy, k); break;
       case FX.WAVE: drawWave(f, sx, sy, k); break;
@@ -251,6 +513,11 @@ function drawZones(ox, oy) {
     const fade = Math.min(1, z.life / 0.4);
     const pulse = 1 + Math.sin(G.tick * 0.08 + z.x) * 0.04;
 
+    if (z.kind === ZONE.FIRE) {
+      drawFireRing(z, sx, sy, fade);
+      continue;
+    }
+
     if (z.kind === ZONE.DARK) {
       // A soft outer haze, a much darker core, and a rim that breathes.
       ctx.globalAlpha = 0.34 * fade;
@@ -339,7 +606,9 @@ function drawPickups(ox, oy) {
     if (o.tier === 0) {
       drawSprite(ctx, o.sprId, sx, sy);
     } else {
-      const pulse = 1 + Math.sin(G.tick * 0.14 + o.x) * 0.08 * o.tier;
+      // Amplitude grows with the tier but is normalised against the tier COUNT: this used to be
+      // 0.08 * tier, which was a sane 0.24 across four tiers and a wobbling 0.72 across ten.
+      const pulse = 1 + Math.sin(G.tick * 0.14 + o.x) * (0.05 + 0.07 * (o.tier / (TIER_COUNT - 1)));
       drawSpriteScaled(ctx, o.sprId, sx, sy, tierScale(o.tier) * pulse);
     }
   }
