@@ -14,7 +14,7 @@ import {
 } from './render.js';
 import {
   registerSprite, buildAtlas, spriteBase, spriteDirs, spriteInfo, angleSlot,
-  drawSprite, drawShadow, drawText, drawTextCentered,
+  drawSprite, drawShadow, drawText, drawTextCentered, drawLogo,
 } from './sprites.js';
 import {
   enemies, projectiles, orbs, coins, items, damageNumbers, particles, zones,
@@ -38,6 +38,9 @@ import {
 import { abilitySpritePairs } from './data/abilities.js';
 import { FX, fxSprites } from './fx.js';
 import {
+  STAIRS_AT, MAX_FLOOR, floorReward, floorBonus, floorLabel, stairsShape,
+} from './floors.js';
+import {
   initPickupSprites, initItemSprites, dropXp, dropCoin, updatePickups,
   updateItems, dropPickup, dropRandomPickup, magnetAll, itemEffects, itemSpritePairs, orbSpritePairs,
 } from './pickups.js';
@@ -47,7 +50,7 @@ import {
 } from './progress.js';
 import { updateDirector, resetDirector, catchUpSchedule, stressSpawn } from './director.js';
 import { updateProps, resetProps, clearProp } from './props.js';
-import { drawEntities } from './entities.js';
+import { drawEntities, setStairsSprite } from './entities.js';
 import { drawHud, debugLines } from './hud.js';
 import {
   ui, drawLevelUp, drawPause, drawTitle, drawSelect, drawStageSelect, drawEvolution, drawEvolutionChoice,
@@ -130,6 +133,11 @@ async function boot() {
   for (const [shape, pal] of orbSpritePairs()) registerSprite(shape, pal);
   registerSprite('coin', 'gold');
   registerSprite('pokeball', 'crab');
+  // Both flights, always: which one a stage uses is decided per stage, and the atlas has room.
+  // `orb` is the fallback shape, as for the other tiles cut out of items.png -- there are no
+  // drawn stairs, so a missing items.png must degrade to a blob rather than fail the boot.
+  registerSprite('stairs_down', 'rock', 0, 'orb');
+  registerSprite('stairs_up', 'rock', 0, 'orb');
   atlasStats = buildAtlas();
 
   initEnemyDefs();
@@ -137,8 +145,6 @@ async function boot() {
   initAbilityDefs(motionIndex('homing'));
   // Frame ids for the shared effect art, so the renderers never look anything up by name.
   fxSprites.bolt = spriteBase('fx_bolt', 'thunder');
-  fxSprites.wave = spriteBase('fx_wave', 'wave');
-  fxSprites.waveDirs = spriteDirs('fx_wave', 'wave');
   fxSprites.wisp = spriteBase('fx_wisp', 'shadowy');
   fxSprites.rubble = spriteBase('fx_rubble', 'earth');
   fxSprites.leafblade = spriteBase('fx_leafblade', 'leafblade');
@@ -218,6 +224,14 @@ async function boot() {
           spawnEnemy(def, p.x + Math.cos(a) * r, p.y + Math.sin(a) * r);
         }
       },
+      // The floor machinery, so a probe can assert placement and the schedule without having
+      // to sit through fifteen minutes of run time to see one staircase.
+      placeStairs: () => placeStairs(),
+      updateStairs: () => updateStairs(),
+      resetStairSchedule: () => { stairsSpawned = {}; },
+      bankRunGold: () => bankRunGold(),
+      takeStairs: () => { G.stairs.near = true; beginDescent(); },
+      floor: () => ({ floor: G.floor, label: floorLabel(), stairs: { ...G.stairs } }),
       // castAbility, not fireAbility: the harness should take the same path the game does,
       // including the sound and the attack animation.
       fire: (slot) => castAbility(slot),
@@ -270,7 +284,7 @@ function installHooks() {
 
     dropXp(e.x, e.y, e.xp);
     if (e.coinChance > 0 && G.rngRun() < e.coinChance) {
-      dropCoin(e.x, e.y, G.rngRun() < 0.15 ? 5 : 1);
+      dropCoin(e.x, e.y, Math.round((G.rngRun() < 0.15 ? 5 : 1) * floorReward()));
     }
     // Elites always leave something worth walking to.
     if (e.elite) dropPickup(e.x, e.y, 'elixir');
@@ -293,8 +307,6 @@ function installHooks() {
     pushFx(FX.CRACK, x, y, len, angle, color, life, 0, (G.rngFx() * 65535) | 0);
   abilityFx.bolt = (x, y, height, life) =>
     pushFx(FX.BOLT, x, y, height, 0, '#fff05a', life, 0, (G.rngFx() * 65535) | 0);
-  abilityFx.wave = (x, y, r, angle, spread, life) =>
-    pushFx(FX.WAVE, x, y, r, angle, '#5ab6ef', life, spread);
   abilityFx.boom = (x, y, r, life) => pushFx(FX.BOOM, x, y, r, 0, '#ffffff', life);
   abilityFx.dart = (x, y, angle, len, life) => pushFx(FX.DART, x, y, len, angle, '#ffffff', life);
   abilityFx.fireburst = (x, y, r, life) => pushFx(FX.FIREBURST, x, y, r, 0, '#ffffff', life);
@@ -396,11 +408,21 @@ function tryEvolveWeapon() {
   return false;
 }
 
+/**
+ * The stage a restart should land on: the one being played, not the one the URL booted with.
+ *
+ * Without this, startRun falls through to ?stage= and then to 'grass', so restarting a cave run
+ * kept the Pokemon and quietly changed the stage.
+ */
+const currentStageId = () => (G.stage ? G.stage.id : null);
+
 function startRun(character, q, stageId) {
   clearWorld();
   resetRunState();
   resetDirector();
   resetProps();
+  stairsSpawned = {};
+  descent = null;
 
   const id = stageId || (q && q.get('stage')) || 'grass';
   G.stage = STAGE_BY_ID[id] || STAGES[0];
@@ -441,12 +463,152 @@ function startRun(character, q, stageId) {
     while (G.level < want) { G.level++; G.xpNext = xpToNext(G.level); G.pendingLevelUps++; }
   }
 
+  // Which flight of stairs this stage draws is fixed for the run, so it is resolved here rather
+  // than looked up by name every frame.
+  setStairsSprite(spriteBase(stairsShape(G.stage), 'rock'));
+
   snapCamera(0, 0);
   setMode(MODES.PLAYING);
   resetAccumulator();
   setIntensity(0);
   startMusic(G.stage.id, ROUTE);
 }
+
+// --- Floors -----------------------------------------------------------------
+
+// How close the player has to be to read the prompt and take the stairs. Generous relative to
+// the 24px tile: hunting for the exact pixel is not the interesting part.
+const STAIRS_REACH = 18;
+const FADE_OUT = 0.45, FADE_HOLD = 0.12, FADE_IN = 0.45;
+const FADE_TOTAL = FADE_OUT + FADE_HOLD + FADE_IN;
+
+/** Non-null only during the fade between floors. */
+let descent = null;
+
+/**
+ * Put a staircase somewhere the player cannot see it appear.
+ *
+ * Rejection sampling rather than a ring at a fixed radius: a ring would put the stairs a
+ * predictable distance away every time, and near the arena wall it would clamp back into view.
+ * Arenas are 2880-3840px against a 640x360 view, so a uniform sample inside the bounds clears
+ * the camera on the first try almost every time.
+ */
+function placeStairs() {
+  const b = G.bounds, p = G.player;
+  if (!b || !p) return;
+  const padX = VW / 2 + 48, padY = VH / 2 + 48;
+
+  for (let i = 0; i < 40; i++) {
+    const x = b.minX + 64 + G.rngRun() * (b.maxX - b.minX - 128);
+    const y = b.minY + 64 + G.rngRun() * (b.maxY - b.minY - 128);
+    if (Math.abs(x - p.x) < padX && Math.abs(y - p.y) < padY) continue;
+    G.stairs.x = x; G.stairs.y = y;
+    G.stairs.active = true;
+    G.stairs.near = false;
+    return;
+  }
+  // Cornered in a small arena: fall back to a point on the despawn ring, which is already off
+  // screen in every direction.
+  const pt = ringPoint(p.x, p.y, G.rngRun() * Math.PI * 2, 520, G.rngRun);
+  G.stairs.x = pt.x; G.stairs.y = pt.y;
+  G.stairs.active = true;
+  G.stairs.near = false;
+}
+
+/**
+ * Spawn a staircase on schedule, and tell the HUD when the player is standing on one.
+ *
+ * The schedule is gated on there not already being one rather than on the mark alone: a
+ * staircase the player never found at 5:00 is still there at 10:00 instead of being joined by a
+ * second one, and the field never holds two.
+ */
+function updateStairs() {
+  const p = G.player;
+  if (!p) return;
+
+  // A mark is spent when it PASSES, not when it manages to place something. Spending it only on
+  // a successful placement means a player who leaves the 5:00 staircase standing until 16:00
+  // still has the 10:00 and 15:00 marks unspent -- so taking it late would hand them two more
+  // staircases back to back and the full depth bonus for four minutes of work.
+  for (const t of STAIRS_AT) {
+    if (G.runTime < t || stairsSpawned[t]) continue;
+    stairsSpawned[t] = true;
+    if (!G.stairs.active && G.floor < MAX_FLOOR && !G.won && !G.runOver) placeStairs();
+  }
+  G.stairs.near = G.stairs.active &&
+    Math.abs(p.x - G.stairs.x) < STAIRS_REACH && Math.abs(p.y - G.stairs.y) < STAIRS_REACH;
+}
+
+/** Which marks have already produced a staircase this run. Reset with the run. */
+let stairsSpawned = {};
+
+function beginDescent() {
+  if (descent || !G.stairs.active || !G.stairs.near) return;
+  // Not once the run is decided. The mode is still PLAYING through the victory beat while the
+  // boss's payout flies in, so a player who happened to be standing on a staircase when the boss
+  // died could otherwise press Enter and wipe the reward they just earned.
+  if (G.won || G.runOver) return;
+  descent = { t: 0, swapped: false };
+  G.stairs.active = false;
+  G.stairs.near = false;
+  sfx('stairs');
+  setMode(MODES.STAIRS);
+}
+
+/**
+ * The floor change itself, at the darkest point of the fade.
+ *
+ * A PARTIAL reset, and deliberately not startRun: the level, the build, the clock and the gold
+ * are the whole reason taking the stairs is a decision rather than a restart. What goes is the
+ * field -- every enemy, every uncollected orb and coin, and the scenery -- which is the real
+ * cost, since anything left on the floor above is left for good.
+ *
+ * The director is NOT reset. Its mini-boss and boss schedule runs off the global clock, so
+ * resetting it here would fire the 5:00 and 10:00 mini-bosses again on every new floor.
+ */
+function swapFloor() {
+  clearWorld();
+  resetProps();
+  G.floor++;
+
+  const p = G.player;
+  p.x = 0; p.y = 0;
+  p.vx = 0; p.vy = 0;
+  p.knockX = 0; p.knockY = 0;
+  // A moment of mercy on arrival, so the first thing that wanders in cannot punish a fade the
+  // player could not act during.
+  p.iframes = Math.max(p.iframes, 1.2);
+  snapCamera(0, 0);
+
+  G.banner.text = `${floorLabel()}`;
+  G.banner.sub = 'THE AIR FEELS HEAVIER';
+  G.banner.t = 2.4;
+}
+
+function updateDescent(dt) {
+  if (!descent) return;
+  descent.t += dt;
+  if (!descent.swapped && descent.t >= FADE_OUT) {
+    descent.swapped = true;
+    swapFloor();
+  }
+  if (descent.t >= FADE_TOTAL) {
+    descent = null;
+    setMode(MODES.PLAYING);
+    resetAccumulator();
+  }
+}
+
+/** 0 while the field is visible, 1 at the darkest point. Read by the renderer. */
+export function descentFade() {
+  if (!descent) return 0;
+  if (descent.t < FADE_OUT) return descent.t / FADE_OUT;
+  if (descent.t < FADE_OUT + FADE_HOLD) return 1;
+  return Math.max(0, 1 - (descent.t - FADE_OUT - FADE_HOLD) / FADE_IN);
+}
+
+/** The label to show on the black, or '' -- only once the floor has actually changed. */
+export const descentLabel = () => (descent && descent.swapped ? floorLabel() : '');
 
 /** Re-add every purchased rank as an ordinary stat modifier. */
 function applyShopMods() {
@@ -523,8 +685,9 @@ function handleKey(code) {
     return;
   }
   if (G.mode === MODES.WHEEL) return wheelKey(code);
+  if (G.mode === MODES.STAIRS) return;                    // the fade swallows everything
 
-  if (isAction(code, 'restart')) return startRun(G.character, bootParams);
+  if (isAction(code, 'restart')) return startRun(G.character, bootParams, currentStageId());
   // The ability keys are live during play, so "back to partner select" only applies once the run
   // is already stopped.
   if (isAction(code, 'ability1') && (G.runOver || G.mode === MODES.PAUSED)) return toSelect();
@@ -533,6 +696,9 @@ function handleKey(code) {
   if (isAction(code, 'pause')) return togglePause();
 
   if (G.mode === MODES.PLAYING) {
+    // Enter is otherwise unbound during play, so the staircase can own it outright rather than
+    // sharing a key with something the player might mean instead.
+    if (code === 'Enter' && G.stairs.near) return beginDescent();
     if (isAction(code, 'ability1')) return void castAbility(0);
     if (isAction(code, 'ability2')) return void castAbility(1);
   }
@@ -842,7 +1008,10 @@ function settingsKey(rawCode) {
     case 'resetKeys': resetBindings(); saveSettings(); ui.note = 'BINDINGS RESET'; break;
     case 'back': ui.page = 'main'; ui.cursor = 0; break;
     case 'menu': saveSettings(); toSelect(); break;
-    case 'restart': saveSettings(); setMode(MODES.PLAYING); startRun(G.character, bootParams); break;
+    case 'restart':
+      saveSettings(); setMode(MODES.PLAYING);
+      startRun(G.character, bootParams, currentStageId());
+      break;
     case 'close': closeSettings(); break;
   }
   sfx('confirm');
@@ -892,6 +1061,7 @@ function frame(now) {
     else startMusic('menu', TITLE);
   }
   if (G.mode === MODES.EVOLVING) updateEvolution(rawDt);
+  if (G.mode === MODES.STAIRS) updateDescent(rawDt);
   // The wheel animates while the simulation is frozen, so it runs on raw dt like the cutscene.
   if (G.mode === MODES.WHEEL) updateWheel(rawDt);
   updateCamera(rawDt);
@@ -927,6 +1097,7 @@ function stepSim(dt) {
   updatePlayer(dt);
   updatePickups(dt, (v) => { grantXp(v); sfx('xp'); }, (v) => { grantCoins(v); sfx('coin'); });
   updateItems(dt);
+  updateStairs();
   dropPresents(dt);
   updateFx(dt);
   if (G.banner.t > 0) G.banner.t -= dt;
@@ -971,7 +1142,9 @@ function stepSim(dt) {
 function bankRunGold() {
   if (G.banked) return 0;
   G.banked = true;
-  return bankGold(G.coins);
+  // The depth bonus is paid for FINISHING down there, not for visiting: dying on the bottom
+  // floor banks the gold that was actually collected and nothing more.
+  return bankGold(G.coins + (G.won ? floorBonus() : 0));
 }
 
 function openSummary() {
@@ -1191,7 +1364,11 @@ function drainBossQueue() {
 function spawnMiniboss(tier) {
   // Named, not "whatever is fifth in the stage list": that made the mini-boss silently change
   // identity every time the roster was reordered, which is a bug you only notice by accident.
-  let def = ENEMY_BY_ID[BOSS_TIERS[Math.min(BOSS_TIERS.length - 1, tier - 1)]];
+  //
+  // The stage's own list first. Species are exclusive to one stage now, so a global line-up
+  // would have the beach fighting a Graveler that never otherwise sets foot there.
+  const table = (G.stage && G.stage.bosses) || BOSS_TIERS;
+  let def = ENEMY_BY_ID[table[Math.min(table.length - 1, tier - 1)]];
   if (!def) {
     const pool = ENEMIES.filter((d) => !d.prop && d.stages.includes(G.stage.id));
     def = pool[pool.length - 1];
@@ -1369,6 +1546,30 @@ function updateFx(dt) {
 
 // --- Draw -------------------------------------------------------------------
 
+/**
+ * The fade between floors, drawn over everything including the HUD.
+ *
+ * Over the HUD on purpose: a black screen with a health bar still floating on it is not a black
+ * screen, and the point of the fade is that the player cannot see or act on the swap.
+ *
+ * The new floor's name appears once the swap has happened, so the label on the black is the
+ * floor being arrived at rather than the one being left.
+ */
+function drawDescent() {
+  const k = descentFade();
+  if (k <= 0) return;
+  ctx.fillStyle = `rgba(0,0,0,${k.toFixed(3)})`;
+  ctx.fillRect(0, 0, VW, VH);
+
+  const label = descentLabel();
+  // Only at full black, and faded with it, so the text never sits over a half-visible field.
+  if (label && k > 0.55) {
+    ctx.globalAlpha = Math.min(1, (k - 0.55) / 0.35);
+    drawLogo(ctx, label, VW / 2, VH / 2 - 16, 3, 'gold', 'dark');
+    ctx.globalAlpha = 1;
+  }
+}
+
 function draw() {
   if (dirView) { drawDirectionSheet(); present(); return; }
   if (atlasView) { drawAtlasShowcase(); present(); return; }
@@ -1407,6 +1608,8 @@ function draw() {
   else if (G.mode === MODES.WHEEL) drawWheel();
   else if (G.mode === MODES.PAUSED) drawPause();
   else if (G.mode === MODES.SETTINGS) drawSettings(true);
+
+  drawDescent();
 
   present();
 

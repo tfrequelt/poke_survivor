@@ -10,6 +10,7 @@ import { formatTime, formatNum, clamp } from './util.js';
 import { enemies } from './world.js';
 import { panel, messageWindow, wrap } from './win.js';
 import { bankTotal } from './save.js';
+import { floorLabel } from './floors.js';
 
 const PAD = 6;
 
@@ -20,6 +21,7 @@ export function drawHud() {
   drawTimer();
   drawTallies();
   if (G.banner.t > 0) drawBanner();
+  drawStairsPrompt();
   if (G.runOver) drawRunOver();
 }
 
@@ -147,6 +149,26 @@ function drawHealth() {
 
 function drawTimer() {
   drawTextCentered(ctx, formatTime(G.runTime), VW / 2, 9, 'white');
+  // Shown from the first floor rather than only once it changes, so the indicator is part of
+  // the furniture and a player who has never found the stairs still knows the number exists.
+  const f = floorLabel();
+  drawText(ctx, f, VW / 2 - textWidth(formatTime(G.runTime)) / 2 - textWidth(f) - 8, 9, 'gold');
+}
+
+/**
+ * The prompt for a staircase the player is standing on.
+ *
+ * Near the bottom of the screen rather than over the tile: the player's own sprite is on the
+ * tile, and a label there would be behind them half the time.
+ */
+function drawStairsPrompt() {
+  if (!G.stairs.near) return;
+  const msg = 'PRESS ENTER TO CONTINUE';
+  const w = textWidth(msg);
+  const x = Math.round((VW - w) / 2), y = VH - 34;
+  ctx.fillStyle = 'rgba(8,8,18,0.72)';
+  ctx.fillRect(x - 6, y - 4, w + 12, 15);
+  drawTextCentered(ctx, msg, VW / 2, y, 'gold');
 }
 
 function drawTallies() {

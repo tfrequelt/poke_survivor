@@ -216,6 +216,10 @@ Every ability names its own sound in `sound:` in
 | `move_bigfire` / `move_flame` | Fire Spin (picks one) | `move_ghost` | Lick |
 | `move_throw` | Present | `move_hail` | Blizzard |
 
+Two sounds are not abilities and are played by name from the code that fires them: `evolve`,
+`select`, `wheel_spin` and **`stairs`** — the last plays as the screen fades on the way to a new
+floor. Note the file it points at is `stairs_sounds.mp3`, plural.
+
 `sound` may be an **array of two**, and one is chosen at random on every cast — the choice comes
 from the cosmetic RNG, so it cannot shift anything the run's seed decides.
 
@@ -316,9 +320,23 @@ Every frame must be the same size, and they are stitched into **one wide canvas*
 drawing a frame is a single `drawImage` with a source offset rather than juggling sixty-five
 images. A sequence that fails to load is warned about and skipped, like every other asset.
 
-`hail` is the only one today: the weather overlay Delibird's Blizzard lays over the viewport.
-Its frames are 240x160, which is the GBA screen, so they are drawn **1:1 and tiled** -- scaling
-them up would turn the hailstones into boulders.
+The sequences today are `hail`, `fx_arrow`, `fx_flamethrower`, `fx_blastburn`, `fx_shadoworb`,
+`fx_nightshade` and `fx_tsunami`. `hail` is the only one in the per-file form; the rest are cut
+out of sheets.
+
+Two of them are worth copying when you add the next one:
+
+* **`hail`** is the weather overlay Delibird's Blizzard lays over the viewport. Its frames are
+  240x160, which is the GBA screen, so they are drawn **1:1 and tiled** -- scaling them up would
+  turn the hailstones into boulders.
+* **`fx_tsunami`** is Hydro Pump's wall of water: three 72x112 cells out of `wave.png`. It shows
+  two things. First, **one key can clear two backgrounds** -- the frames sit on a `#006464` panel
+  inside the sheet's own `#008080` field, and since those are 28 apart per channel, a tolerance of
+  30 takes both while the nearest colour the water actually uses (`#209090`, 32 away) survives
+  untouched. Second, art that has to cover a **variable length** is **tiled at its own size**
+  rather than stretched: the wall is as long as the ability's `wallLen` asks, drawn as however
+  many copies of the 112-tall cell that takes, spaced so the crest spans exactly the hitbox and
+  never a stride further. Stretching it would change the pixel size halfway through the game.
 
 ## Optional images
 

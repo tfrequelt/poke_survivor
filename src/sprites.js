@@ -15,10 +15,18 @@ import { FONT, FONT_COLORS, GLYPH_W, GLYPH_H, B32 } from './data/font.js';
 import { getOverride, getSheet } from './assets.js';
 
 // PMD walk sheets are 8 directions x N frames x 2 flash variants per form. One form is roughly
-// 160k pixels, and the roster is now twelve player forms plus fifteen enemies -- which is what
-// pushed this past a 2048 square. Kept 2048 WIDE so it stays inside the 4096-per-side limit
-// mobile GPUs impose, and tall instead; 8.4M pixels is 33MB of canvas, paid once at boot.
-const ATLAS_W = 2048;
+// 160k pixels, and the roster is now twelve player forms plus thirty-eight enemies -- which is
+// what pushed this to a full 4096 square. 4096 is exactly the per-side limit every GPU worth
+// targeting guarantees, so this is the largest it can safely be.
+//
+// Widening was chosen over the alternative of not baking the white hit-flash variant, which
+// would also have fit: that trades 33MB for a per-draw tint in the hottest loop in the game,
+// and the burn-icon work already measured what a few hundred extra draws a frame cost.
+//
+// Widening also packs BETTER, not just bigger -- a shelf wastes whatever is left at its end, and
+// twice the width halves the number of shelves. The sheets went from 3936 rows to 2064.
+// 16.8M pixels is 67MB of canvas, paid once at boot.
+const ATLAS_W = 4096;
 const ATLAS_H = 4096;
 
 export const ATLAS = document.createElement('canvas');

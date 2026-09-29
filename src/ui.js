@@ -21,6 +21,7 @@ import { settings as audioSettings } from './audio.js';
 import { bankTotal, rankOf } from './save.js';
 import { wheel, SEGMENTS } from './wheel.js';
 import { SHOP_ITEMS, rankCost } from './data/shop.js';
+import { floorLabel, floorBonus, floorOrdinal } from './floors.js';
 
 /** Set by main.js once the atlas exists. */
 export let ballSpr = -1;
@@ -63,23 +64,50 @@ const TYPE_COLORS = {
   WATER: '#4a90d9', GROUND: '#b8a038', NORMAL: '#a8a878',
   GRASS: '#78c850', FLYING: '#a890f0', ELECTRIC: '#f8d030', DARK: '#705848',
   GHOST: '#705898', POISON: '#a040a0',
+  // No starter is either of these, so the table only needed nine until the weapons started
+  // wearing the same badges -- and the weapon roster covers all eleven types.
+  FIRE: '#f08030', ICE: '#98d8d8',
 };
 
+// The badge is a 9px pill: a flat colour with a darker band along the bottom so it reads as a
+// raised tag rather than a coloured rectangle. Shared by the partner select and the level-up
+// cards, which is the point -- a Grass weapon and a Grass starter must look the same.
+const BADGE_H = 9, BADGE_PAD = 3, BADGE_GAP = 3;
+
+/** One badge, left-aligned at x. Returns its width so a caller can lay out a row of them. */
+function drawBadge(text, x, y, color) {
+  const w = textWidth(text) + BADGE_PAD * 2;
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, w, BADGE_H);
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.fillRect(x, y + BADGE_H - 2, w, 2);
+  drawText(ctx, text, x + BADGE_PAD, y + 1, 'dark');
+  return w;
+}
+
+/**
+ * A row of badges, CENTRED on cx.
+ *
+ * Both the partner select and the level-up cards go through here, which is the whole reason it
+ * exists: a Grass weapon and a Grass starter have to be the same badge in the same place, and
+ * two separate copies of this layout would not stay that way.
+ */
+function drawBadgeRow(badges, cx, y) {
+  if (!badges.length) return;
+  let total = -BADGE_GAP;
+  for (const b of badges) total += textWidth(b.text) + BADGE_PAD * 2 + BADGE_GAP;
+  let x = Math.round(cx - total / 2);
+  for (const b of badges) x += drawBadge(b.text, x, y, b.color) + BADGE_GAP;
+}
+
+/** A type badge descriptor. `type` may be lower case -- weapon defs store it that way. */
+function typeBadge(type) {
+  const t = String(type).toUpperCase();
+  return { text: t, color: TYPE_COLORS[t] || '#7a7a8a' };
+}
+
 function drawTypeBadges(label, cx, y) {
-  const types = label.split('/').map((t) => t.trim()).filter(Boolean);
-  const pad = 3;
-  let total = 0;
-  for (const t of types) total += textWidth(t) + pad * 2 + 3;
-  let x = Math.round(cx - (total - 3) / 2);
-  for (const t of types) {
-    const w = textWidth(t) + pad * 2;
-    ctx.fillStyle = TYPE_COLORS[t] || '#7a7a8a';
-    ctx.fillRect(x, y, w, 9);
-    ctx.fillStyle = 'rgba(0,0,0,0.25)';
-    ctx.fillRect(x, y + 7, w, 2);
-    drawText(ctx, t, x + pad, y + 1, 'dark');
-    x += w + 3;
-  }
+  drawBadgeRow(label.split('/').map((t) => t.trim()).filter(Boolean).map(typeBadge), cx, y);
 }
 
 /**
@@ -138,15 +166,26 @@ export function drawLevelUp() {
     drawText(ctx, KIND_LABEL[o.kind] || '', x + 8, CARD_Y + 8, 'dim');
     drawPips(o, x + CARD_W - 8, CARD_Y + 8, color);
 
-    drawText(ctx, o.name.toUpperCase(), x + 8, CARD_Y + 24, selected ? 'white' : 'white');
-    if (o.isNew) drawText(ctx, 'NEW', x + 8 + textWidth(o.name) + 8, CARD_Y + 24, 'gold');
+    drawText(ctx, o.name.toUpperCase(), x + 8, CARD_Y + 24, 'white');
     if (o.kind === 'ability') {
       drawText(ctx, o.slot === 0 ? 'KEY Q' : 'KEY E', x + CARD_W - 40, CARD_Y + 24, 'gold');
     }
 
+    // Tag row between the name and the description: the weapon's type, then NEW if it is one,
+    // centred exactly the way a starter's types are centred under its name.
+    //
+    // Its own line because the name row already ends in the ability's key hint, and a long name
+    // plus two tags does not fit 176px.
+    const tags = [];
+    if (o.type) tags.push(typeBadge(o.type));
+    if (o.isNew) tags.push({ text: 'NEW', color: '#ffd166' });
+    drawBadgeRow(tags, x + CARD_W / 2, CARD_Y + 34);
+
+    // Below the tag row with a clear gap. Five lines from here still finish well above the
+    // card number at CARD_H - 16, so nothing had to shrink to make room for the badges.
     const lines = wrap(o.desc, 26);
     for (let l = 0; l < lines.length && l < 5; l++) {
-      drawText(ctx, lines[l], x + 8, CARD_Y + 44 + l * 10, 'dim');
+      drawText(ctx, lines[l], x + 8, CARD_Y + 48 + l * 10, 'dim');
     }
 
     drawTextCentered(ctx, `${i + 1}`, x + CARD_W / 2, CARD_Y + CARD_H - 16, selected ? 'gold' : 'dim');
@@ -648,17 +687,24 @@ export function drawSummary() {
 
   drawLogo(ctx, 'VICTORY', VW / 2, 40, 3, 'gold', 'dark');
 
-  const w = 300, x = Math.round((VW - w) / 2);
-  messageWindow(x, 104, w, [
+  // The depth bonus is its own line rather than folded into the gold, so the reward for going
+  // down is visible as the reason it was worth going down.
+  const bonus = floorBonus();
+  const lines = [
     `${G.character ? G.character.name.toUpperCase() : ''} CLEARED ${G.stage ? G.stage.name.toUpperCase() : ''}`,
     '',
     `TIME      ${formatTime(G.runTime)}`,
     `LEVEL     ${G.level}`,
+    `FLOOR     ${floorLabel()}`,
     `DEFEATED  ${formatNum(G.kills)}`,
     '',
-    `GOLD EARNED   +${formatNum(G.coins)}`,
-    `BANK          ${formatNum(bankTotal())}`,
-  ], { accent: '#ffd166', lineHeight: 11 });
+  ];
+  if (bonus > 0) lines.push(`${floorOrdinal()} FLOOR BONUS  +${formatNum(bonus)}`);
+  lines.push(`GOLD EARNED   +${formatNum(G.coins)}`);
+  lines.push(`BANK          ${formatNum(bankTotal())}`);
+
+  const w = 300, x = Math.round((VW - w) / 2);
+  messageWindow(x, 104, w, lines, { accent: '#ffd166', lineHeight: 11 });
 
   drawTextCentered(ctx, 'SPEND IT AT THE KECLEON SHOP', VW / 2, VH - 42, 'blue');
   drawTextCentered(ctx, 'PRESS ANY KEY', VW / 2, VH - 26, 'dim');

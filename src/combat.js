@@ -168,6 +168,11 @@ export function damageCircle(x, y, r, dmg, hitId, opts = _opts) {
  */
 export function damageLine(x, y, angle, len, width, dmg, hitId, opts = _opts) {
   const dx = Math.cos(angle), dy = Math.sin(angle);
+  // Knockback runs along the line unless told otherwise. A WALL needs otherwise: the Tsunami is
+  // laid across the way it travels, so the two are ninety degrees apart, and shoving along the
+  // line would smear enemies sideways along the crest instead of sweeping them ahead of it.
+  const ka = opts.knockAngle === undefined ? angle : opts.knockAngle;
+  const kx = Math.cos(ka), ky = Math.sin(ka);
   // Query a circle covering the whole ray, then reject per-enemy by perpendicular distance.
   const midX = x + dx * len * 0.5, midY = y + dy * len * 0.5;
   const range = cellRange(midX, midY, len * 0.5 + width);
@@ -194,7 +199,7 @@ export function damageLine(x, y, angle, len, width, dmg, hitId, opts = _opts) {
         e.lastHitId = hitId;
         applyStatus(e, opts);
         const kb = opts.knockback || 0;
-        if (!damageEnemy(e, dmg, dx * kb, dy * kb, opts.canCrit !== false)) {
+        if (!damageEnemy(e, dmg, kx * kb, ky * kb, opts.canCrit !== false)) {
           if (opts.execute && e.hp <= e.maxHp * opts.execute && !e.boss) killEnemy(e);
         }
         hits++;

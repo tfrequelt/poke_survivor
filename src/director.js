@@ -9,6 +9,7 @@ import { enemies } from './world.js';
 import { ENEMIES } from './data/enemies.js';
 import { spawnAtRing, spawnEnemy, combatantCount, SPAWN_MIN, SPAWN_MAX } from './enemies.js';
 import { pickWeighted, TAU, clamp } from './util.js';
+import { floorPower, floorSwarm } from './floors.js';
 
 export const RUN_LENGTH = 20 * 60;        // seconds; the boss spawns at 20:00
 const SPAWN_INTERVAL = 0.5;               // the director ticks twice a second
@@ -99,12 +100,17 @@ export function updateDirector(dt) {
 
   // Published to enemies.js via G.curve so spawnEnemy() can scale a new enemy on creation.
   const c = G.curve;
+  // The floor multiplies the whole curve rather than shifting the clock: a deeper floor at 6:00
+  // is a harder 6:00, not a fast-forward to 12:00, so the set pieces still land where they were
+  // designed to and the roster still matches the minute.
+  const power = floorPower();
+  const swarm = floorSwarm();
   c.m = m;
-  c.hp = hpMult(m) * hpK;
-  c.dmg = dmgMult(m);
+  c.hp = hpMult(m) * hpK * power;
+  c.dmg = dmgMult(m) * power;
   c.spd = spdMult(m);
-  c.cap = t >= FINAL_SURGE ? 300 : aliveCap(m);
-  c.sps = sps(m) * spsK * spawnMultiplier(t);
+  c.cap = (t >= FINAL_SURGE ? 300 : aliveCap(m)) * swarm;
+  c.sps = sps(m) * spsK * spawnMultiplier(t) * swarm;
 
   spawnAcc += dt;
   while (spawnAcc >= SPAWN_INTERVAL) {

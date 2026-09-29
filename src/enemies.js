@@ -5,6 +5,7 @@
 
 import { G } from './state.js';
 import { clamp, dist2, TAU, clampToBounds } from './util.js';
+import { floorReward } from './floors.js';
 import {
   enemies, spawn, despawn, rebuildGrid, cellRange, cellStart, cellItems, CELL, GW,
 } from './world.js';
@@ -146,7 +147,7 @@ export function spawnEnemy(def, x, y, opts) {
   e.mass = def.mass * (elite ? 2.5 : 1);
   e.speed = def.speed * spdMul * (elite ? 0.85 : 1);
   e.dmg = def.dmg * dmgMul;
-  e.xp = def.xp * (elite ? 12 : 1);
+  e.xp = def.xp * (elite ? 12 : 1) * floorReward();
   e.armor = def.armor || 0;
   e.knockResist = def.knockResist || 0;
   e.coinChance = elite ? 1 : (def.coinChance || 0);

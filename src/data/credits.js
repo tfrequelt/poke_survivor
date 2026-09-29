@@ -19,7 +19,7 @@ const RIPS = [
   ['19788', 'MT THUNDER TILES', 'cave stage tiles'],
   ['75220', 'BEACH CAVE MAP', 'bundled'],
   ['5413', 'INTRO BACKGROUNDS', 'title screen'],
-  ['5426', 'ITEMS', 'coin, sitrus berry'],
+  ['5426', 'ITEMS', 'coin, berry, orb, elixir, traps, stairs'],
   ['69118', 'STATUS ICONS', 'low health, burn'],
   ['5422', 'FONT AND WINDOW', 'window styling'],
   ['163902', 'POISON MOVES', 'bundled'],
@@ -37,7 +37,7 @@ const RIPS = [
  */
 const OTHER_RIPS = [
   ['snes', 'ff6', '6705', 'FINAL FANTASY VI', 'thunderbolt'],
-  ['game_boy_advance', 'finalfantasy4advance', '5814', 'FINAL FANTASY IV ADVANCE', 'wave'],
+  ['game_boy_advance', 'finalfantasy4advance', '5814', 'FINAL FANTASY IV ADVANCE', 'Tsunami'],
   ['mobile', 'rockbotthemachinewars', '159762', 'ROCKBOT: THE MACHINE WARS', "Present's blast"],
   ['mobile', 'graalonlineera', '147250', 'GRAAL ONLINE ERA', 'water particles'],
   ['game_boy_advance', 'pokemonfireredleafgreen', '28883', 'POKEMON FIRERED/LEAFGREEN', 'R/S moves'],

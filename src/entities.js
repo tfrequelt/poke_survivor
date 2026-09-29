@@ -31,12 +31,18 @@ const NBANDS = Math.ceil((VH + MARGIN * 2) / BAND) + 1;
 const bandHead = new Int32Array(NBANDS);
 const bandNext = new Int32Array(1024);
 
+let stairsSpr = -1;
+
+/** Told by main.js which flight this stage uses, once, when the run starts. */
+export function setStairsSprite(id) { stairsSpr = id; }
+
 export function drawEntities() {
   const camOffX = toScreenX(0);
   const camOffY = toScreenY(0);
   burnMarksDrawn = 0;
 
   drawZones(camOffX, camOffY);
+  drawStairs(camOffX, camOffY);
   drawPickups(camOffX, camOffY);
   drawItems(camOffX, camOffY);
   drawShadows(camOffX, camOffY);
@@ -44,6 +50,7 @@ export function drawEntities() {
   drawProjectiles(camOffX, camOffY);
   drawThrown(camOffX, camOffY);
   drawNightShade(camOffX, camOffY);
+  drawTsunami(camOffX, camOffY);
   drawFxShapes(camOffX, camOffY);
   drawShield(camOffX, camOffY);
   drawParticles(camOffX, camOffY);
@@ -342,7 +349,6 @@ function drawFxShapes(ox, oy) {
       case FX.FIREBURST: drawFireBurst(f, sx, sy, k); break;
       case FX.CRACK: drawCrack(f, sx, sy, k); break;
       case FX.BOLT: drawBolt(f, sx, sy, k); break;
-      case FX.WAVE: drawWave(f, sx, sy, k); break;
 
       default: {
         // Beam: a tapering quad along the cast angle.
@@ -455,30 +461,54 @@ function drawBolt(f, sx, sy, k) {
  * The front of a travelling wave: crest sprites laid along an arc at the current radius, each
  * rotated to face the way the water is going, with a translucent body dragging behind it.
  */
-function drawWave(f, sx, sy, k) {
-  const spread = f.width || 1;
-  const r = f.r;
-  // Roughly one crest every 14px of arc, clamped so a large radius cannot flood the frame.
-  const n = Math.max(3, Math.min(20, Math.round((spread * 2 * r) / 14)));
-  const spr = fxSprites.wave;
+/**
+ * Hydro Pump's Tsunami: a wall of water rolling along the aim.
+ *
+ * Drawn by the ability rather than pushed as an effect because the crest MOVES -- it is a single
+ * wall at one place per frame, not a trail of fading arcs, and pinning it where the cast started
+ * would leave it behind.
+ *
+ * The sheet's cell is one section of crest standing on end: 72 across the thickness of the water
+ * and 112 along its length. A wall is as long as `wallLen` asks, so the art is TILED along the
+ * crest at its own size rather than stretched to fit -- the same reason the burst keeps its size,
+ * and it keeps the pixels square at any length the level-ups and Area push it to. The step is
+ * always under the cell's 112, so the tiles overlap slightly and the crest has no seams.
+ */
+function drawTsunami(ox, oy) {
+  const a = activeVisual('tsunami');
+  if (!a) return;
+  const seq = getSequence('fx_tsunami');
+  if (!seq) return;
 
-  // The body of water dragging behind the crest. Kept faint: several fronts overlap.
-  ctx.globalAlpha = k * 0.13;
-  ctx.fillStyle = '#2276bd';
-  ctx.beginPath();
-  ctx.moveTo(sx, sy);
-  ctx.ellipse(sx, sy, r, r * 0.62, 0, f.angle - spread, f.angle + spread);
-  ctx.closePath();
-  ctx.fill();
+  const len = a.resolved.wallLen;
+  const sx = a.gx + ox, sy = a.gy + oy;
+  if (sx < -len || sy < -len || sx > VW + len || sy > VH + len) return;
 
-  ctx.globalAlpha = Math.min(1, k * 1.5);
+  // Tiles are spaced so the drawn crest spans exactly `len` -- the outer two sit half a cell in
+  // from each end rather than centred on it, or the water would reach a stride further than the
+  // hitbox at both ends and promise reach that is not there. One tile per cell length at most,
+  // so the step never opens a seam.
+  const n = Math.max(1, Math.ceil(len / seq.h));
+  const span = Math.max(0, len - seq.h);
+  const step = n > 1 ? span / (n - 1) : 0;
+  const t = Math.max(0, a.def.travel - a.activeT);
+  const base = (t * 16) | 0;
+
+  ctx.save();
+  ctx.translate(Math.round(sx), Math.round(sy));
+  // The art already breaks to the right, so the heading IS the rotation -- no half turn.
+  ctx.rotate(a.angle);
+  ctx.globalAlpha = 0.92;
   for (let i = 0; i < n; i++) {
-    const a = f.angle - spread + (i / (n - 1)) * spread * 2;
-    const px = sx + Math.cos(a) * r;
-    const py = sy + Math.sin(a) * r * 0.62;
-    if (spr >= 0) drawSprite(ctx, spr + angleSlot(a, fxSprites.waveDirs), px, py);
+    // Neighbouring tiles run a frame apart so the crest churns along its length instead of
+    // pulsing as one slab.
+    const f = (base + i) % seq.frames;
+    const u = -span / 2 + step * i;
+    ctx.drawImage(seq.canvas, f * seq.w, 0, seq.w, seq.h,
+      Math.round(-seq.w / 2), Math.round(u - seq.h / 2), seq.w, seq.h);
   }
   ctx.globalAlpha = 1;
+  ctx.restore();
 }
 
 /** Protect Bubble, drawn around the player while it holds. */
@@ -621,6 +651,35 @@ function drawPickups(ox, oy) {
 }
 
 /** Item pickups bob and glow, because the player has to choose to walk to them. */
+/**
+ * The staircase, if one is on the field.
+ *
+ * Drawn with the zones and before every actor, because it is set INTO the floor: the player
+ * walks over it, not behind it. There is only ever one, so it reads straight off G rather than
+ * iterating a pool.
+ *
+ * The ring underneath pulses only while the player is standing on it, which is the same moment
+ * the prompt appears -- so the tile itself confirms the prompt is about this thing and not about
+ * something else on screen.
+ */
+function drawStairs(ox, oy) {
+  const s = G.stairs;
+  if (!s.active || stairsSpr < 0) return;
+  const sx = s.x + ox, sy = s.y + oy;
+  if (sx < -32 || sy < -32 || sx > VW + 32 || sy > VH + 32) return;
+
+  if (s.near) {
+    ctx.globalAlpha = 0.30 + Math.sin(G.runTime * 7) * 0.16;
+    ctx.strokeStyle = '#ffd166';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.ellipse(sx, sy, 17, 10, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  drawSpriteScaled(ctx, stairsSpr, sx, sy, 1);
+}
+
 function drawItems(ox, oy) {
   for (let i = 0; i < items.length; i++) {
     const it = items[i];

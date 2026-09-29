@@ -1,6 +1,10 @@
 {
   "_comment": "sheets: PMD walk sheets (8 direction rows x N frame columns), keyed by the SHAPE name the game uses -- the folder on disk may be spelled differently. sprites: single-image overrides, optionally a {src,x,y,w,h} crop out of a packed sheet. images: whole sheets kept as canvases for the ground tilesets and backdrops. sfx: short one-shot sounds. attacks: forms whose Attack-Anim.png is loaded as a drawable sheet for the one-shot cast animation; the folder comes from the sheets entry of the same name.",
   "sheets": {
+    "aggron": "assets/sprites/aggron",
+    "appletun": "assets/sprites/appletun",
+    "applin": "assets/sprites/applin",
+    "aron": "assets/sprites/aron",
     "azumarill": "assets/sprites/azumarill",
     "boldore": "assets/sprites/boldore",
     "butterfree": "assets/sprites/butterfree",
@@ -13,6 +17,7 @@
     "dugtrio": "assets/sprites/dugtrio",
     "eevee": "assets/sprites/eevee",
     "fearow": "assets/sprites/fearow",
+    "flapple": "assets/sprites/flapple",
     "gastly": "assets/sprites/gastly",
     "gengar": "assets/sprites/gengar",
     "geodude": "assets/sprites/goedude",
@@ -20,11 +25,13 @@
     "graveler": "assets/sprites/graveler",
     "haunter": "assets/sprites/haunter",
     "jolteon": "assets/sprites/jolteon",
+    "lairon": "assets/sprites/lairon",
     "linoone": "assets/sprites/linoone",
     "marill": "assets/sprites/marill",
     "metapod": "assets/sprites/metapod",
     "mightyena": "assets/sprites/mightyena",
     "ninetales": "assets/sprites/ninetales",
+    "palossand": "assets/sprites/palossand",
     "pidgeot": "assets/sprites/pidgeot",
     "pidgeotto": "assets/sprites/pidgeotto",
     "pidgey": "assets/sprites/pidgey",
@@ -37,8 +44,10 @@
     "rattata": "assets/sprites/rattata",
     "roggenrola": "assets/sprites/roggenrola",
     "rowlet": "assets/sprites/rowlet",
+    "sandygast": "assets/sprites/sandygast",
     "skarmory": "assets/sprites/skarmory",
     "spearow": "assets/sprites/spearow",
+    "tauros": "assets/sprites/tauros",
     "umbreon": "assets/sprites/umbreon",
     "vaporeon": "assets/sprites/vaporeon",
     "vulpix": "assets/sprites/vulpix",
@@ -107,6 +116,28 @@
       "key": "#554d55",
       "tolerance": 42,
       "flood": true
+    },
+    "stairs_down": {
+      "src": "assets/pmd/items.png",
+      "x": 51,
+      "y": 193,
+      "w": 24,
+      "h": 24,
+      "anchor": "center",
+      "key": "#808080",
+      "tolerance": 10,
+      "flood": true
+    },
+    "stairs_up": {
+      "src": "assets/pmd/items.png",
+      "x": 76,
+      "y": 193,
+      "w": 24,
+      "h": 24,
+      "anchor": "center",
+      "key": "#808080",
+      "tolerance": 10,
+      "flood": true
     }
   },
   "sfx": {
@@ -131,25 +162,32 @@
     "wheel_spin": {
       "src": "assets/sounds/Spinning-prize-wheel-sound-effect.mp3",
       "gain": 0.6
-    }
+    },
+    "stairs": "assets/sounds/stairs_sounds.mp3"
   },
   "music": {
     "menu": [
-      "assets/musics/01. Pokémon Exploration Team Theme.mp3"
+      "assets/musics/01. Pok\u00e9mon Exploration Team Theme.mp3"
     ],
     "grass": [
       "assets/musics/109. Murky Forest.mp3",
       "assets/musics/120. Southern Jungle.mp3",
-      "assets/musics/29. Apple Woods.mp3"
+      "assets/musics/29. Apple Woods.mp3",
+      "assets/musics/52. Dusk Forest.mp3"
     ],
     "cave": [
       "assets/musics/24. Waterfall Cave.mp3",
       "assets/musics/32. Mt. Horn.mp3",
-      "assets/musics/43. Crystal Cave.mp3"
+      "assets/musics/43. Crystal Cave.mp3",
+      "assets/musics/18. Mt. Bristle.mp3",
+      "assets/musics/93. Mt. Travail.mp3",
+      "assets/musics/116. Spring Cave.mp3"
     ],
     "beach": [
       "assets/musics/05. Beach Cave.mp3",
-      "assets/musics/89. Miracle Sea.mp3"
+      "assets/musics/89. Miracle Sea.mp3",
+      "assets/musics/136. In the Morning Sun.mp3",
+      "assets/musics/56. Brine Cave.mp3"
     ]
   },
   "images": {
@@ -567,6 +605,41 @@
           1,
           94,
           94,
+          0,
+          0
+        ]
+      ]
+    },
+    "fx_tsunami": {
+      "src": "assets/pmd/wave.png",
+      "key": "#006464",
+      "tolerance": 30,
+      "cell": [
+        72,
+        112
+      ],
+      "cells": [
+        [
+          503,
+          766,
+          72,
+          112,
+          0,
+          0
+        ],
+        [
+          577,
+          766,
+          72,
+          112,
+          0,
+          0
+        ],
+        [
+          651,
+          766,
+          72,
+          112,
           0,
           0
         ]

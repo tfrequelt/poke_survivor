@@ -60,7 +60,7 @@ function candidates() {
     if (owned) {
       if (owned.level >= w.levels.length) continue;
       out.push({
-        kind: 'weapon', id: w.id, name: w.name, desc: levelDesc(w, owned.level),
+        kind: 'weapon', id: w.id, name: w.name, desc: levelDesc(w, owned.level), type: w.type,
         level: owned.level + 1, max: w.levels.length, weight: 12,
       });
     } else {
@@ -69,7 +69,7 @@ function candidates() {
       // Eevee's Adaptability nudges new weapons to show up more often.
       const bonus = G.character && G.character.id === 'eevee' ? 1.1 : 1;
       out.push({
-        kind: 'weapon', id: w.id, name: w.name, desc: w.desc, isNew: true,
+        kind: 'weapon', id: w.id, name: w.name, desc: w.desc, isNew: true, type: w.type,
         level: 1, max: w.levels.length, weight: 9 * bonus,
       });
     }

@@ -38,7 +38,7 @@ python -m http.server 8000  # -> http://localhost:8000
 | `Q` / `E` | First / second ability |
 | `Esc` / `P` | Pause |
 | `1`-`3` / arrows + `Enter` | Choose on any card screen |
-| `Enter` | Dismiss the evolution cutscene |
+| `Enter` | Take the stairs (standing on them); dismiss the evolution cutscene |
 | `R` | Reroll on level-up, restart otherwise |
 | `B` / `S` | Banish / skip a level-up (press `B` twice to confirm) |
 | `Q` (paused / after a run) | Back to partner select |
@@ -89,7 +89,7 @@ new form lands with a shockwave that clears the area and a second and a half of 
 | Wooper | **Protect Bubble** -- shield that blocks all contact damage, then bursts | **Earthquake** (Quagsire) -- shockwaves that stun; flying enemies are immune |
 | Rowlet | **Homing Leaf** -- blades that seek separate targets and curve back | **Spectral Arrow** (Dartrix) -- pierces a line, executes the wounded, leaves a burning trail |
 | Eevee | **Hyperbeam** -- massive damage, but you cannot move while firing | **Thunderbolt** (Jolteon) -- lightning falls from the sky into a marked circle and leaves it crackling |
-| Eevee | | **Hydro Pump** (Vaporeon) -- a wave front that sweeps outward, shoving and healing |
+| Eevee | | **Hydro Pump** (Vaporeon) -- a tsunami: a wall of water that rolls out along the aim, sweeping everything ahead of it and healing you |
 | Eevee | | **Dark Pulse** (Umbreon) -- rings that leave a lasting pool of shadow |
 | Gastly | **Shadow Ball** -- an orb thrown at a target that gnaws at everything it drifts past, then bursts | **Night Shade** (Haunter) -- opens a shadow that drains whatever stands in it |
 | Vulpix | **Flamethrower** -- hurls a spinning fire star that bursts where it lands, leaving everything burning | **Fire Spin** (Ninetales) -- a vortex of flame that wraps around you and moves with you |
@@ -117,7 +117,8 @@ they make the second one enormous instead.
 
 ## Weapons and types
 
-Every weapon has a **Pokemon type**, and you are only ever offered weapons matching one of your
+Every weapon has a **Pokemon type**, shown on its level-up card as the same colour-coded badge
+the partner select uses, and you are only ever offered weapons matching one of your
 current form's types. Eleven types, six weapons each, **four weapon slots** -- so a run picks four
 out of six and no two partners play out of the same toolbox. Evolving changes the pool for future
 draws; it never takes away a weapon you already hold.
@@ -154,6 +155,38 @@ The first two are drawn from ripped PMD art, 24px tiles at a time. The interior 
 the rooms are, how big, where the clearings fall — is generated from the run seed per tile by
 `src/terrain.js` and never stored, so walking back over ground finds it exactly as you left it.
 Each stage keeps its procedural layers as a fallback if the image is missing.
+
+## Floors
+
+At **5:00, 10:00 and 15:00** a staircase appears somewhere in the arena, always outside the
+camera so you never see one arrive. Stand on it and press `Enter` to drop onto the next floor of
+the same stage. Ignoring it is a perfectly good run; the stairs are the only decision the game
+offers that is not a card.
+
+A deeper floor is the *same* stage — same tiles, same music, same roster — with the whole
+director curve multiplied:
+
+| Floor | Enemy HP / damage | Spawn rate and cap | XP and gold | Bonus on a win |
+|---|---|---|---|---|
+| 1st | — | — | — | — |
+| 2nd | ×1.35 | ×1.20 | ×1.50 | +200 |
+| 3rd | ×1.70 | ×1.40 | ×2.00 | +500 |
+| 4th | ×2.05 | ×1.60 | ×2.50 | +1000 |
+
+Reward outruns risk on purpose: the bottom floor is 2.05× as dangerous and 2.5× as generous.
+
+A cave counts **downward** — Damp Cave and Sunset Beach run `1F, -1F, -2F, -3F` and draw the
+descending flight — while Grass Route climbs a hillside and runs `1F, 2F, 3F, 4F`. The current
+floor sits next to the timer from the first minute.
+
+**What crosses with you:** the run clock, your level, XP, weapons, passives, abilities and the
+gold already collected. Your **current HP comes too, unhealed** — descending wounded is the
+gamble. **What does not:** every enemy, every uncollected orb and coin, and all the scenery. Sweep
+the floor before you take the stairs, because whatever is lying on it is left behind.
+
+The 20:00 boss and the mini-bosses run off the global clock, so a floor change never reschedules
+them, and a staircase left standing is not replaced — dawdle past 10:00 and 15:00 with the first
+one untaken and those marks are spent, so taking it at 16:00 gets you one floor, not three.
 
 ## Winning, and the Kecleon Shop
 
@@ -225,15 +258,30 @@ jackpot. New scenery keeps appearing as you move, but only ever out of sight bey
 edge, and never above a hard cap. Weapons and abilities never *target* scenery; you break it with
 shots that pass through it and with area damage.
 
-The roster is 29 species built as **evolution lines**: Rattata into Raticate, Caterpie through
-Metapod into Butterfree, Zubat into Crobat, Geodude into Graveler, Marill into Azumarill,
-Zigzagoon into Linoone, Poochyena into Mightyena, Spearow into Fearow, Poliwag through Poliwhirl
-into Poliwrath, and Roggenrola through Boldore into Gigalith. The swarm visibly grows up over a
-run rather than only gaining a health multiplier.
+The roster is 38 species built as **evolution lines**, and the swarm visibly grows up over a run
+rather than only gaining a health multiplier: the early form turns up in the first minutes and the
+final form late, so what you are fighting at 18:00 is the grown version of what opened the run.
 
-Each stage draws from its own slice of that roster: the Poliwag line and Marill line to the beach,
-the Roggenrola line and Geodude line to the cave, and Skarmory — fast, armoured and airborne at
-once, which nothing else manages — to the cave and the grass.
+**Every species belongs to exactly one stage.** Nothing is shared, so the three stages look like
+three different places rather than one roster reskinned:
+
+| Stage | Lines |
+|---|---|
+| **Grass** (14) | Rattata→Raticate, Caterpie→Metapod→Butterfree, Spearow→Fearow, Pidgey→Pidgeotto→Pidgeot, Applin→Flapple *and* Appletun, Tauros |
+| **Cave** (13) | Zubat→Crobat, Diglett→Dugtrio, Geodude→Graveler, Roggenrola→Boldore→Gigalith, Aron→Lairon→Aggron, Skarmory |
+| **Beach** (11) | Marill→Azumarill, Poliwag→Poliwhirl→Poliwrath, Zigzagoon→Linoone, Poochyena→Mightyena, Sandygast→Palossand |
+
+Skarmory and Tauros spawn only in the last few minutes, so you meet each as a mini-boss first and
+as a regular enemy afterwards.
+
+**Mini-bosses are per stage**, drawn from that stage's own roster — a global list had the beach
+fighting a Graveler that never otherwise sets foot there:
+
+| | 5:00 | 10:00 | 15:00 | 20:00 |
+|---|---|---|---|---|
+| Grass | Raticate | Tauros | Pidgeot | Butterfree |
+| Cave | Graveler | Skarmory | Aggron | Gigalith |
+| Beach | Linoone | Azumarill | Palossand | Poliwrath |
 
 **Revives** bought from the shop are spent automatically: at zero health you get back up at half
 health with a two and a half second mercy window, and everything nearby dies. Only when you have
@@ -253,9 +301,12 @@ per key, picked at random each time:
 | `menu` | Title, partner select and credits |
 | `grass` / `cave` / `beach` | Whichever stage the run is on |
 
+Fifteen tracks are wired today: one for `menu`, four for `grass`, six for `cave` and four for
+`beach`.
+
 Tracks stream rather than decode, so the ~35MB set costs nothing at boot. **Tracks do not loop:**
 when one finishes, a different track from the same list starts, so a twenty-minute run on a stage
-with three songs cycles through them.
+with four songs cycles through them.
 
 Sound effects are synthesised at runtime, and so is a **fallback chiptune**: if a key has no track
 listed, or the file fails to load, the synthesised theme takes over so the game is never silent.

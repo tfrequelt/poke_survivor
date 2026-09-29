@@ -20,9 +20,14 @@ export const MODES = {
   PAUSED: 'paused',
   SUMMARY: 'summary',
   WHEEL: 'wheel',
+  // The fade between floors. Deliberately NOT a sim mode -- see SIM_MODES below.
+  STAIRS: 'stairs',
 };
 
 /** Modes in which the simulation advances. Everything else freezes the world. */
+//
+// STAIRS is not here on purpose: the world holds still behind the black screen, so nothing can
+// walk into the player while the fade is covering the field.
 export const SIM_MODES = new Set([MODES.PLAYING]);
 
 export const G = {
@@ -52,6 +57,17 @@ export const G = {
   seed: 0,
   rngRun: null,     // gameplay RNG -- affects outcomes, must stay deterministic
   rngFx: null,      // cosmetic RNG -- particles etc, safe to desync
+
+  // --- the floor ---
+  //
+  // A run is twenty minutes whatever happens, but the player can trade safety for reward by
+  // taking the stairs at 5:00, 10:00 and 15:00 -- so the floor runs 1..4. Everything about a
+  // deeper floor is a multiplier (see director.js) rather than different content: same stage,
+  // same tiles, same music, harder enemies and richer drops.
+  floor: 1,
+  // At most ONE staircase is on the field at a time, so this is a plain record on G rather than
+  // another entity pool. `near` is republished every tick by the proximity check.
+  stairs: { x: 0, y: 0, active: false, near: false },
 
   // --- run configuration ---
   stage: null,      // stage definition
@@ -127,6 +143,8 @@ export function resetRunState() {
   G.revivesLeft = 0;
   G.pendingWheel = false;
   G.presentT = 0;
+  G.floor = 1;
+  G.stairs.x = 0; G.stairs.y = 0; G.stairs.active = false; G.stairs.near = false;
   G.player = null;
   G.form = null;
   G.bounds = null;

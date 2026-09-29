@@ -21,6 +21,12 @@
 export const STAGES = [
   {
     id: 'grass', name: 'Grass Route',
+    // The four the director calls for at 5, 10, 15 and 20 minutes. Per stage, because
+    // the roster is stage-exclusive -- a global list had the beach fighting a Graveler.
+    // Tauros at ten minutes, then loose on the field from sixteen.
+    bosses: ['raticate', 'tauros', 'pidgeot', 'butterfree'],
+    // Tiny Woods goes UP a hillside: 1F, 2F, 3F, 4F.
+    descend: false,
     arena: { w: 3456, h: 3456 },
     // Drawn from the ripped Tiny Woods map (see data/tilesets.js). The `ground` block below is
     // still the fallback if assets/pmd/woods.png is missing.
@@ -49,6 +55,12 @@ export const STAGES = [
   },
   {
     id: 'cave', name: 'Damp Cave',
+    // The four the director calls for at 5, 10, 15 and 20 minutes. Per stage, because
+    // the roster is stage-exclusive -- a global list had the beach fighting a Graveler.
+    // Skarmory at ten minutes, then loose in the tunnels from sixteen.
+    bosses: ['graveler', 'skarmory', 'aggron', 'gigalith'],
+    // A cave goes DOWN: 1F, -1F, -2F, -3F, drawn with the descending flight.
+    descend: true,
     arena: { w: 2880, h: 2880 },
     tileset: 'mtthunder',
     color: '#9f8fe8',
@@ -74,6 +86,12 @@ export const STAGES = [
   },
   {
     id: 'beach', name: 'Sunset Beach',
+    // The four the director calls for at 5, 10, 15 and 20 minutes. Per stage, because
+    // the roster is stage-exclusive -- a global list had the beach fighting a Graveler.
+    // No mini-boss doubles as a late spawn here; all four are ordinary beach residents.
+    bosses: ['linoone', 'azumarill', 'palossand', 'poliwrath'],
+    // Beach Cave goes down too -- it is a cave, whatever the sand suggests.
+    descend: true,
     arena: { w: 3840, h: 3456 },
     color: '#f0c070',
     blurb: 'Wide open sand. Nothing slows the tide down.',

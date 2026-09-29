@@ -165,12 +165,15 @@ export const ABILITIES = [
     owner: 'eevee', form: 'vaporeon',
     icon: 'icon_jet', palette: 'water',
     desc: 'A wall of water rolls out, sweeping everything aside and healing you.',
-    effect: 'wave', sound: 'move_bubble',
-    // A single front that sweeps outward: each enemy is hit once as it passes, and shoved hard.
-    cooldown: 16, travel: 0.8, range: 240, band: 26, spread: 1.15,
+    effect: 'wave', visual: 'tsunami', sound: 'move_bubble',
+    // A flat wall that advances, not an arc that widens -- the crest in the art is straight, and
+    // a spreading cone would not match the picture drawn on it. `wallLen` is how long the crest
+    // is, `band` how thick; each enemy is hit once as the wall rolls over it, and is shoved along
+    // with it rather than sideways.
+    cooldown: 16, travel: 0.8, range: 240, band: 26, wallLen: 240,
     damage: 95, knockback: 300, lifesteal: 0.8,
     levels: [
-      {}, { damage: +34 }, { cooldownMul: 0.9 }, { damage: +46 }, { range: +80, spread: +0.45 },
+      {}, { damage: +34 }, { cooldownMul: 0.9 }, { damage: +46 }, { range: +80, wallLen: +90 },
     ],
   },
   {
@@ -233,7 +236,6 @@ export const ABILITY_BY_ID = Object.fromEntries(ABILITIES.map((a) => [a.id, a]))
  */
 export const ABILITY_FX_SPRITES = [
   ['fx_leafblade', 'leafblade', 16],
-  ['fx_wave', 'wave', 16],
   ['fx_bolt', 'thunder', 0],
   ['fx_wisp', 'shadowy', 0],
   ['fx_rubble', 'earth', 0],

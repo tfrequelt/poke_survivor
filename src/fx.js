@@ -10,7 +10,6 @@ export const FX = {
   BEAM: 1,
   CRACK: 2,
   BOLT: 3,
-  WAVE: 4,
   // The rest are ripped sheets rather than drawn shapes. `r` carries the size each covers.
   BOOM: 5,          // Present's blast, from explosion.png
   DART: 6,          // an arrow travelling a line, from arrows.png -- `angle` is its heading
@@ -54,8 +53,6 @@ export const ROLE = {
  */
 export const fxSprites = {
   bolt: -1,
-  wave: -1,
-  waveDirs: 16,
   wisp: -1,
   rubble: -1,
   leafblade: -1,

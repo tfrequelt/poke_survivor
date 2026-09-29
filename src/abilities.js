@@ -99,6 +99,7 @@ export function abilityStats(a) {
   o.strikes = def.strikes || 0;
   o.range = def.range || 0;
   o.band = def.band || 0;
+  o.wallLen = def.wallLen || 0;
   o.spread = def.spread || 0;
   o.dps = def.dps || 0;
   o.burn = def.burn || 0;
@@ -125,6 +126,7 @@ export function abilityStats(a) {
     if (lv.strikes) o.strikes += lv.strikes;
     if (lv.range) o.range += lv.range;
     if (lv.band) o.band += lv.band;
+    if (lv.wallLen) o.wallLen += lv.wallLen;
     if (lv.spread) o.spread += lv.spread;
     if (lv.dps) o.dps += lv.dps;
     if (lv.burn) o.burn += lv.burn;
@@ -150,6 +152,7 @@ export function abilityStats(a) {
   o.width *= g.area;
   o.range *= g.area;
   o.band *= g.area;
+  o.wallLen *= g.area;
   o.cooldown = Math.max(1.5, def.cooldown * cdMul * g.cooldown);
   return o;
 }
@@ -295,16 +298,17 @@ const EFFECT = {
   },
 
   /**
-   * Hydro Pump: one wave front that sweeps outward through the cone it is aimed at.
+   * Hydro Pump: a wall of water that rolls out along the aim.
    *
-   * One hitId covers the whole sweep, so an enemy is hit once as the front passes rather than
-   * every tick it spends inside the cone.
+   * One hitId covers the whole sweep, so an enemy is caught once as the wall passes rather than
+   * every tick it spends inside it.
    */
   wave(a, st, p) {
     a.activeT = a.def.travel;
     a.tickT = 0;
     a.hitId = nextHitId();
     a.zx = p.x; a.zy = p.y;               // the wave rolls from where it was cast, not from you
+    a.gx = p.x; a.gy = p.y;               // the crest, published for the renderer
     if (fx.shake) fx.shake(0.3);
   },
 
@@ -613,27 +617,27 @@ export function updateAbilities(dt) {
       }
 
       case 'wave': {
-        // The front is wherever the cast is up to: radius is just elapsed fraction times range.
+        // The crest is wherever the cast is up to: elapsed fraction along the aim.
         const k = 1 - Math.max(0, a.activeT) / a.def.travel;
-        const r = k * st.range;
-        const hits = damageRing(a.zx, a.zy, r - st.band, r + st.band, st.damage, a.hitId, {
-          knockback: a.def.knockback,
-          angle: a.angle,
-          spread: st.spread,
-          slow: 0.3, slowT: 1.0,
-        });
+        const ax = Math.cos(a.angle), ay = Math.sin(a.angle);
+        a.gx = a.zx + ax * k * st.range;
+        a.gy = a.zy + ay * k * st.range;
+
+        // The wall is laid ACROSS the travel: a line at angle+90 degrees, centred on the crest.
+        // The perpendicular of (ax, ay) is (-ay, ax), so one end is the crest minus half of it.
+        const half = st.wallLen * 0.5;
+        const hits = damageLine(a.gx + ay * half, a.gy - ax * half, a.angle + Math.PI / 2,
+          st.wallLen, st.band, st.damage, a.hitId, {
+            knockback: a.def.knockback,
+            knockAngle: a.angle,       // swept ahead of the wall, not smeared along it
+            slow: 0.3, slowT: 1.0,
+          });
         if (hits > 0 && a.def.lifesteal && fx.heal) fx.heal(hits * a.def.lifesteal);
-        // One front every 60ms, not one per tick: at 60Hz the latter stacks a dozen translucent
-        // arcs on top of each other and the wave turns into a solid blue slab.
-        a.tickT -= dt;
-        if (fx.wave && a.tickT <= 0) {
-          a.tickT = 0.06;
-          fx.wave(a.zx, a.zy, r, a.angle, st.spread, 0.2);
-        }
-        // Spray thrown off the crest.
+
+        // Spray thrown off the crest, scattered along its length rather than around an arc.
         if (fx.burst && G.rngFx() < 0.7) {
-          const sa = a.angle + (G.rngFx() - 0.5) * st.spread * 2;
-          fx.burst(a.zx + Math.cos(sa) * r, a.zy + Math.sin(sa) * r * 0.62, 3, '#bfe9ff');
+          const u = (G.rngFx() - 0.5) * st.wallLen;
+          fx.burst(a.gx + ay * u, a.gy - ax * u, 3, '#bfe9ff');
         }
         break;
       }
