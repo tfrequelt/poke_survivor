@@ -25,37 +25,37 @@ const stat = (id, name, desc, stats, base, ranks, mods) => ({
 
 export const SHOP_ITEMS = [
   // --- offence ---
-  stat('s_power', 'MIGHT', '+8% attack power', 'OFFENCE', 120, 5,
+  stat('s_power', 'MIGHT', '+8% attack power', 'OFFENCE', 120, 7,
     [{ stat: 'power', op: 'inc', value: 0.08 }]),
-  stat('s_haste', 'HASTE', '+6% attack speed', 'OFFENCE', 120, 5,
+  stat('s_haste', 'HASTE', '+6% attack speed', 'OFFENCE', 120, 7,
     [{ stat: 'attackSpeed', op: 'inc', value: 0.06 }]),
-  stat('s_area', 'REACH', '+7% area of effect', 'OFFENCE', 100, 5,
+  stat('s_area', 'REACH', '+7% area of effect', 'OFFENCE', 100, 7,
     [{ stat: 'area', op: 'inc', value: 0.07 }]),
-  stat('s_amount', 'MULTISHOT', '+1 projectile', 'OFFENCE', 400, 3,
+  stat('s_amount', 'MULTISHOT', '+1 projectile', 'OFFENCE', 400, 5,
     [{ stat: 'amount', op: 'flat', value: 1 }]),
-  stat('s_crit', 'FOCUS', '+3% critical chance', 'OFFENCE', 110, 5,
+  stat('s_crit', 'FOCUS', '+3% critical chance', 'OFFENCE', 110, 7,
     [{ stat: 'crit', op: 'flat', value: 0.03 }]),
-  stat('s_cooldown', 'ATTUNEMENT', '-4% ability cooldown', 'OFFENCE', 150, 5,
+  stat('s_cooldown', 'ATTUNEMENT', '-4% ability cooldown', 'OFFENCE', 150, 7,
     [{ stat: 'cooldown', op: 'inc', value: -0.04 }]),
 
   // --- survival ---
-  stat('s_hp', 'VITALITY', '+10 max HP', 'SURVIVAL', 90, 5,
+  stat('s_hp', 'VITALITY', '+10 max HP', 'SURVIVAL', 90, 7,
     [{ stat: 'maxHp', op: 'flat', value: 10 }]),
-  stat('s_armor', 'HIDE', '+1 armour', 'SURVIVAL', 140, 5,
+  stat('s_armor', 'HIDE', '+1 armour', 'SURVIVAL', 140, 7,
     [{ stat: 'armor', op: 'flat', value: 1 }]),
-  stat('s_speed', 'SWIFTNESS', '+5% movement speed', 'SURVIVAL', 130, 4,
+  stat('s_speed', 'SWIFTNESS', '+5% movement speed', 'SURVIVAL', 130, 6,
     [{ stat: 'moveSpeed', op: 'inc', value: 0.05 }]),
-  stat('s_revive', 'REVIVE', 'Get up once at half health', 'SURVIVAL', 900, 2,
+  stat('s_revive', 'REVIVE', 'Get up once at half health', 'SURVIVAL', 900, 4,
     [{ stat: 'revives', op: 'flat', value: 1 }]),
 
   // --- fortune ---
-  stat('s_xp', 'SCHOLAR', '+7% experience gained', 'FORTUNE', 110, 5,
+  stat('s_xp', 'SCHOLAR', '+7% experience gained', 'FORTUNE', 110, 7,
     [{ stat: 'xpGain', op: 'inc', value: 0.07 }]),
-  stat('s_greed', 'GREED', '+10% gold gained', 'FORTUNE', 130, 5,
+  stat('s_greed', 'GREED', '+10% gold gained', 'FORTUNE', 130, 7,
     [{ stat: 'greed', op: 'inc', value: 0.10 }]),
-  stat('s_magnet', 'MAGNETISM', '+12% pickup range', 'FORTUNE', 80, 4,
+  stat('s_magnet', 'MAGNETISM', '+12% pickup range', 'FORTUNE', 80, 6,
     [{ stat: 'magnet', op: 'inc', value: 0.12 }]),
-  stat('s_luck', 'LUCK', '+5% luck', 'FORTUNE', 160, 4,
+  stat('s_luck', 'LUCK', '+5% luck', 'FORTUNE', 160, 6,
     [{ stat: 'luck', op: 'flat', value: 0.05 }]),
 
   // --- draft charges: not stats, read by startRun ---

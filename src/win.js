@@ -217,3 +217,70 @@ export function wrap(text, maxChars) {
   if (line) lines.push(line);
   return lines;
 }
+
+// Weapon types, for colouring breakdown bars by what dealt the damage. Kept in step with the
+// type badges in ui.js; a key that is not a weapon falls back to the neutral colour.
+const BAR_TYPE = {
+  water: '#4a90d9', ground: '#b8a038', normal: '#a8a878', grass: '#78c850', flying: '#a890f0',
+  electric: '#f8d030', dark: '#705848', ghost: '#705898', poison: '#a040a0', fire: '#f08030',
+  ice: '#98d8d8',
+};
+
+/**
+ * The damage breakdown: every source that dealt anything, ranked, each with a bar scaled to the
+ * top one and its share of the total.
+ *
+ * Scaled to the TOP source rather than to the total, so the leader's bar is always full and the
+ * rest read as "how far behind it" -- against the total, a six-weapon build is six short slivers.
+ *
+ * `typeOf(key)` gives a weapon's type for its bar colour; abilities and traps get their own
+ * colours so they are never mistaken for a weapon.
+ */
+export function drawDamagePanel(x, y, w, breakdown, typeOf, maxRows = 7) {
+  const rows = breakdown.rows.slice(0, maxRows);
+  const lh = 12;
+  const h = 26 + Math.max(1, rows.length) * lh;
+  panel(x, y, w, h, { accent: '#7ac8ff' });
+  drawText(ctx, 'DAMAGE DEALT', x + 10, y + 8, 'gold');
+  const totalTxt = shortNum(breakdown.total);
+  drawText(ctx, totalTxt, x + w - 10 - textWidth(totalTxt), y + 8, 'dim');
+
+  if (!rows.length) {
+    drawText(ctx, 'NOTHING YET', x + 10, y + 22, 'dim');
+    return h;
+  }
+  const top = rows[0].damage || 1;
+  const nameW = 92;
+  const numW = 64;
+  const barX = x + 10 + nameW;
+  const barW = Math.max(10, w - 20 - nameW - numW);
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const ry = y + 22 + i * lh;
+    let name = r.name.toUpperCase();
+    while (name.length > 3 && textWidth(name) > nameW - 4) name = name.slice(0, -1);
+    drawText(ctx, name, x + 10, ry, i === 0 ? 'white' : 'dim');
+
+    const t = typeOf ? typeOf(r.key) : null;
+    const color = r.key.startsWith('a:') ? '#e878d0'
+      : r.key === 'traps' ? '#c49a5e'
+      : (t && BAR_TYPE[t]) || '#7a8aa8';
+    ctx.fillStyle = '#1b2a55';
+    ctx.fillRect(barX, ry + 1, barW, 5);
+    ctx.fillStyle = color;
+    ctx.fillRect(barX, ry + 1, Math.max(1, Math.round(barW * (r.damage / top))), 5);
+
+    const num = `${shortNum(r.damage)} ${Math.round(r.share * 100)}%`;
+    drawText(ctx, num, x + w - 10 - textWidth(num), ry, i === 0 ? 'white' : 'dim');
+  }
+  return h;
+}
+
+/** 1234 -> 1.2K, 1234567 -> 1.2M. Breakdown numbers get big and the panel is narrow. */
+export function shortNum(n) {
+  n = Math.round(n);
+  if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + 'M';
+  if (n >= 1e4) return Math.round(n / 1e3) + 'K';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+  return String(n);
+}

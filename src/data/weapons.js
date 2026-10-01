@@ -39,6 +39,7 @@ export const WEAPONS = [
     levels: [
       {}, { amount: +1 }, { damage: +5 }, { cooldownMul: 0.9 },
       { amount: +1 }, { damage: +7 }, { cooldownMul: 0.88 }, { areaMul: 1.25, damage: +8 },
+      { damage: +11 }, { amount: +1, damage: +14 }
     ],
     evolution: { into: 'quagmire', needPassive: 'mystic_water' },
   },
@@ -53,6 +54,7 @@ export const WEAPONS = [
     levels: [
       {}, { amount: +1 }, { damage: +4 }, { cooldownMul: 0.9 },
       { amount: +1 }, { damage: +6 }, { pierce: +2 }, { amount: +2, damage: +7 },
+      { damage: +9 }, { amount: +2, damage: +12 }
     ],
   },
   {
@@ -66,6 +68,7 @@ export const WEAPONS = [
     levels: [
       {}, { damage: +3 }, { areaMul: 1.2 }, { cooldownMul: 0.88 },
       { damage: +4 }, { areaMul: 1.2 }, { cooldownMul: 0.86 }, { damage: +6, areaMul: 1.25 },
+      { damage: +8 }, { areaMul: 1.25, damage: +10 }
     ],
   },
   {
@@ -79,6 +82,7 @@ export const WEAPONS = [
     levels: [
       {}, { damage: +10 }, { areaMul: 1.15 }, { cooldownMul: 0.9 },
       { damage: +14 }, { areaMul: 1.15 }, { cooldownMul: 0.86 }, { damage: +22, areaMul: 1.2 },
+      { damage: +30 }, { areaMul: 1.25, damage: +37 }
     ],
   },
   {
@@ -93,6 +97,7 @@ export const WEAPONS = [
     levels: [
       {}, { damage: +6 }, { pierce: +1 }, { cooldownMul: 0.88 },
       { damage: +8 }, { pierce: +2 }, { cooldownMul: 0.85 }, { damage: +14 },
+      { damage: +19 }, { pierce: +2, damage: +24 }
     ],
   },
   {
@@ -106,6 +111,7 @@ export const WEAPONS = [
     levels: [
       {}, { amount: +2 }, { damage: +5 }, { cooldownMul: 0.9 },
       { amount: +2 }, { damage: +6 }, { areaMul: 1.2 }, { amount: +4, damage: +9 },
+      { damage: +12 }, { amount: +4, damage: +15 }
     ],
   },
   {
@@ -120,6 +126,7 @@ export const WEAPONS = [
     levels: [
       {}, { damage: +4 }, { cooldownMul: 0.9 }, { amount: +1 },
       { damage: +5 }, { cooldownMul: 0.86 }, { areaMul: 1.2 }, { amount: +1, damage: +8 },
+      { damage: +11 }, { amount: +1, damage: +14 }
     ],
   },
 
@@ -138,6 +145,7 @@ export const WEAPONS = [
     levels: [
       {}, { amount: +1 }, { damage: +7 }, { cooldownMul: 0.88 },
       { amount: +1 }, { damage: +9 }, { areaMul: 1.2 }, { amount: +2, damage: +12 },
+      { damage: +16 }, { amount: +2, damage: +20 }
     ],
   },
   {
@@ -151,6 +159,7 @@ export const WEAPONS = [
     levels: [
       {}, { amount: +1 }, { damage: +8 }, { cooldownMul: 0.9 },
       { pierce: +2 }, { damage: +10 }, { cooldownMul: 0.88 }, { amount: +1, damage: +14 },
+      { damage: +19 }, { amount: +1, damage: +24 }
     ],
   },
   {
@@ -164,6 +173,7 @@ export const WEAPONS = [
     levels: [
       {}, { amount: +1 }, { damage: +7 }, { cooldownMul: 0.9 },
       { amount: +1 }, { damage: +10 }, { areaMul: 1.25 }, { amount: +2, damage: +14 },
+      { damage: +19 }, { amount: +2, damage: +24 }
     ],
   },
   {
@@ -177,6 +187,7 @@ export const WEAPONS = [
     levels: [
       {}, { damage: +11 }, { areaMul: 1.15 }, { cooldownMul: 0.9 },
       { amount: +1 }, { damage: +15 }, { cooldownMul: 0.86 }, { damage: +24, areaMul: 1.25 },
+      { damage: +32 }, { amount: +1, damage: +41 }
     ],
   },
   {
@@ -190,6 +201,7 @@ export const WEAPONS = [
     levels: [
       {}, { amount: +1 }, { damage: +8 }, { cooldownMul: 0.9 },
       { amount: +1 }, { damage: +10 }, { areaMul: 1.2 }, { amount: +1, damage: +15 },
+      { damage: +20 }, { amount: +1, damage: +26 }
     ],
   },
 
@@ -207,6 +219,7 @@ export const WEAPONS = [
     levels: [
       {}, { amount: +1 }, { damage: +3 }, { cooldownMul: 0.9 },
       { amount: +1 }, { damage: +4 }, { cooldownMul: 0.88 }, { amount: +1, pierce: +1 },
+      { damage: +5 }, { amount: +1, damage: +7 }
     ],
     evolution: { into: 'star_barrage', needPassive: 'silk_scarf' },
   },
@@ -221,6 +234,7 @@ export const WEAPONS = [
     levels: [
       {}, { amount: +2 }, { damage: +4 }, { cooldownMul: 0.9 },
       { amount: +2 }, { damage: +6 }, { cooldownMul: 0.86 }, { amount: +3, damage: +9 },
+      { damage: +12 }, { amount: +3, damage: +15 }
     ],
   },
   {
@@ -235,6 +249,7 @@ export const WEAPONS = [
     levels: [
       {}, { shards: +1 }, { damage: +8 }, { cooldownMul: 0.9 },
       { shards: +1 }, { damage: +11 }, { cooldownMul: 0.86 }, { shards: +2, damage: +16 },
+      { damage: +22 }, { shards: +2, damage: +27 }
     ],
   },
   {
@@ -249,6 +264,7 @@ export const WEAPONS = [
     levels: [
       {}, { bounces: +1 }, { damage: +7 }, { cooldownMul: 0.9 },
       { bounces: +1 }, { damage: +9 }, { cooldownMul: 0.86 }, { bounces: +2, damage: +14 },
+      { damage: +19 }, { bounces: +2, damage: +24 }
     ],
   },
   {
@@ -262,6 +278,7 @@ export const WEAPONS = [
     levels: [
       {}, { amount: +1 }, { damage: +3 }, { cooldownMul: 0.9 },
       { amount: +1 }, { damage: +4 }, { cooldownMul: 0.86 }, { amount: +2, damage: +6 },
+      { damage: +8 }, { amount: +2, damage: +10 }
     ],
   },
   {
@@ -276,6 +293,7 @@ export const WEAPONS = [
     levels: [
       {}, { damage: +12 }, { pierce: +1 }, { cooldownMul: 0.9 },
       { damage: +16 }, { areaMul: 1.2 }, { cooldownMul: 0.86 }, { damage: +28, pierce: +2 },
+      { damage: +38 }, { pierce: +2, damage: +48 }
     ],
   },
 
@@ -293,6 +311,7 @@ export const WEAPONS = [
     levels: [
       {}, { jumps: +1 }, { damage: +8 }, { cooldownMul: 0.88 },
       { jumps: +1 }, { damage: +11 }, { cooldownMul: 0.86 }, { jumps: +2, damage: +15 },
+      { damage: +20 }, { jumps: +2, damage: +26 }
     ],
   },
   {
@@ -306,6 +325,7 @@ export const WEAPONS = [
     levels: [
       {}, { amount: +1 }, { damage: +6 }, { cooldownMul: 0.9 },
       { amount: +1 }, { damage: +8 }, { pierce: +2 }, { amount: +1, damage: +12 },
+      { damage: +16 }, { amount: +1, damage: +20 }
     ],
   },
   {
@@ -322,6 +342,7 @@ export const WEAPONS = [
     levels: [
       {}, { damage: +10 }, { cooldownMul: 0.9 }, { damage: +13 },
       { duration: +2 }, { damage: +16 }, { cooldownMul: 0.85 }, { amount: +1, damage: +22 },
+      { damage: +30 }, { amount: +1, damage: +37 }
     ],
   },
   {
@@ -336,6 +357,7 @@ export const WEAPONS = [
     levels: [
       {}, { bounces: +2 }, { damage: +6 }, { cooldownMul: 0.9 },
       { bounces: +2 }, { damage: +8 }, { cooldownMul: 0.86 }, { bounces: +3, damage: +13 },
+      { damage: +18 }, { bounces: +3, damage: +22 }
     ],
   },
   {
@@ -349,6 +371,7 @@ export const WEAPONS = [
     levels: [
       {}, { damage: +3 }, { areaMul: 1.2 }, { cooldownMul: 0.88 },
       { damage: +4 }, { areaMul: 1.2 }, { cooldownMul: 0.85 }, { damage: +7, areaMul: 1.25 },
+      { damage: +9 }, { areaMul: 1.25, damage: +12 }
     ],
   },
   {
@@ -362,6 +385,7 @@ export const WEAPONS = [
     levels: [
       {}, { damage: +3 }, { areaMul: 1.2 }, { cooldownMul: 0.9 },
       { damage: +4 }, { areaMul: 1.2 }, { cooldownMul: 0.85 }, { damage: +7, areaMul: 1.25 },
+      { damage: +9 }, { areaMul: 1.25, damage: +12 }
     ],
   },
 
@@ -379,6 +403,7 @@ export const WEAPONS = [
     levels: [
       {}, { damage: +6 }, { areaMul: 1.2 }, { cooldownMul: 0.9 },
       { damage: +8 }, { areaMul: 1.2 }, { cooldownMul: 0.86 }, { damage: +13, areaMul: 1.25 },
+      { damage: +18 }, { areaMul: 1.25, damage: +22 }
     ],
   },
   {
@@ -393,6 +418,7 @@ export const WEAPONS = [
     levels: [
       {}, { damage: +8 }, { pierce: +1 }, { cooldownMul: 0.9 },
       { damage: +10 }, { pierce: +1 }, { cooldownMul: 0.86 }, { damage: +17 },
+      { damage: +23 }, { pierce: +1, damage: +29 }
     ],
   },
   {
@@ -407,6 +433,7 @@ export const WEAPONS = [
     levels: [
       {}, { bounces: +1 }, { damage: +9 }, { cooldownMul: 0.9 },
       { bounces: +1 }, { damage: +12 }, { cooldownMul: 0.86 }, { bounces: +2, damage: +18 },
+      { damage: +24 }, { bounces: +2, damage: +31 }
     ],
   },
   {
@@ -420,6 +447,7 @@ export const WEAPONS = [
     levels: [
       {}, { damage: +8 }, { areaMul: 1.15 }, { cooldownMul: 0.9 },
       { damage: +10 }, { areaMul: 1.15 }, { cooldownMul: 0.86 }, { damage: +16, areaMul: 1.2 },
+      { damage: +22 }, { areaMul: 1.25, damage: +27 }
     ],
   },
   {
@@ -433,6 +461,7 @@ export const WEAPONS = [
     levels: [
       {}, { amount: +1 }, { damage: +5 }, { cooldownMul: 0.9 },
       { amount: +1 }, { damage: +7 }, { cooldownMul: 0.86 }, { amount: +2, damage: +11 },
+      { damage: +15 }, { amount: +2, damage: +19 }
     ],
   },
   {
@@ -447,6 +476,7 @@ export const WEAPONS = [
     levels: [
       {}, { amount: +1 }, { damage: +7 }, { cooldownMul: 0.9 },
       { amount: +1 }, { damage: +9 }, { areaMul: 1.2 }, { amount: +1, damage: +14 },
+      { damage: +19 }, { amount: +1, damage: +24 }
     ],
   },
 
@@ -464,6 +494,7 @@ export const WEAPONS = [
     levels: [
       {}, { amount: +1 }, { damage: +10 }, { cooldownMul: 0.9 },
       { pierce: +2 }, { damage: +12 }, { cooldownMul: 0.88 }, { amount: +1, damage: +14 },
+      { damage: +19 }, { amount: +1, damage: +24 }
     ],
     evolution: { into: 'spirit_shackle', needPassive: 'sharp_beak' },
   },
@@ -478,6 +509,7 @@ export const WEAPONS = [
     levels: [
       {}, { amount: +1 }, { damage: +8 }, { cooldownMul: 0.9 },
       { amount: +1 }, { damage: +11 }, { areaMul: 1.2 }, { amount: +2, damage: +15 },
+      { damage: +20 }, { amount: +2, damage: +26 }
     ],
   },
   {
@@ -491,6 +523,7 @@ export const WEAPONS = [
     levels: [
       {}, { amount: +1 }, { damage: +5 }, { cooldownMul: 0.9 },
       { amount: +1 }, { damage: +7 }, { areaMul: 1.2 }, { amount: +2, damage: +11 },
+      { damage: +15 }, { amount: +2, damage: +19 }
     ],
   },
   {
@@ -504,6 +537,7 @@ export const WEAPONS = [
     levels: [
       {}, { amount: +2 }, { damage: +3 }, { cooldownMul: 0.9 },
       { amount: +2 }, { damage: +4 }, { cooldownMul: 0.86 }, { amount: +3, damage: +7 },
+      { damage: +9 }, { amount: +3, damage: +12 }
     ],
   },
   {
@@ -521,6 +555,7 @@ export const WEAPONS = [
     levels: [
       {}, { damage: +8 }, { cooldownMul: 0.9 }, { damage: +10 },
       { duration: +2 }, { damage: +13 }, { cooldownMul: 0.85 }, { amount: +1, damage: +18 },
+      { damage: +24 }, { amount: +1, damage: +31 }
     ],
   },
   {
@@ -534,6 +569,7 @@ export const WEAPONS = [
     levels: [
       {}, { damage: +4 }, { cooldownMul: 0.88 }, { areaMul: 1.2 },
       { damage: +6 }, { cooldownMul: 0.86 }, { areaMul: 1.2 }, { damage: +10 },
+      { damage: +14 }, { areaMul: 1.25, damage: +17 }
     ],
   },
 
@@ -551,6 +587,7 @@ export const WEAPONS = [
     levels: [
       {}, { amount: +1 }, { damage: +5 }, { cooldownMul: 0.9 },
       { amount: +1 }, { damage: +7 }, { pierce: +2 }, { amount: +1, damage: +11 },
+      { damage: +15 }, { amount: +1, damage: +19 }
     ],
   },
   {
@@ -564,6 +601,7 @@ export const WEAPONS = [
     levels: [
       {}, { amount: +2 }, { damage: +3 }, { cooldownMul: 0.9 },
       { amount: +2 }, { damage: +4 }, { cooldownMul: 0.86 }, { amount: +3, damage: +7 },
+      { damage: +9 }, { amount: +3, damage: +12 }
     ],
   },
   {
@@ -577,6 +615,7 @@ export const WEAPONS = [
     levels: [
       {}, { amount: +1 }, { damage: +14 }, { cooldownMul: 0.9 },
       { pierce: +2 }, { damage: +18 }, { cooldownMul: 0.86 }, { amount: +1, damage: +26 },
+      { damage: +35 }, { amount: +1, damage: +44 }
     ],
   },
   {
@@ -590,6 +629,7 @@ export const WEAPONS = [
     levels: [
       {}, { amount: +1 }, { damage: +6 }, { cooldownMul: 0.9 },
       { amount: +1 }, { damage: +8 }, { pierce: +1 }, { amount: +1, damage: +13 },
+      { damage: +18 }, { amount: +1, damage: +22 }
     ],
   },
   {
@@ -603,6 +643,7 @@ export const WEAPONS = [
     levels: [
       {}, { damage: +4 }, { cooldownMul: 0.9 }, { amount: +1 },
       { damage: +6 }, { cooldownMul: 0.86 }, { areaMul: 1.2 }, { amount: +1, damage: +9 },
+      { damage: +12 }, { amount: +1, damage: +15 }
     ],
   },
   {
@@ -616,6 +657,7 @@ export const WEAPONS = [
     levels: [
       {}, { amount: +1 }, { damage: +5 }, { cooldownMul: 0.9 },
       { amount: +1 }, { damage: +6 }, { areaMul: 1.2 }, { amount: +2, damage: +10 },
+      { damage: +14 }, { amount: +2, damage: +17 }
     ],
   },
 
@@ -633,6 +675,7 @@ export const WEAPONS = [
     levels: [
       {}, { damage: +3 }, { areaMul: 1.15 }, { cooldownMul: 0.88 },
       { damage: +4 }, { areaMul: 1.15 }, { cooldownMul: 0.86 }, { damage: +7, areaMul: 1.2 },
+      { damage: +9 }, { areaMul: 1.25, damage: +12 }
     ],
   },
   {
@@ -646,6 +689,7 @@ export const WEAPONS = [
     levels: [
       {}, { shards: +1 }, { damage: +10 }, { cooldownMul: 0.9 },
       { shards: +1 }, { damage: +13 }, { cooldownMul: 0.86 }, { shards: +2, damage: +20 },
+      { damage: +27 }, { shards: +2, damage: +34 }
     ],
   },
   {
@@ -659,6 +703,7 @@ export const WEAPONS = [
     levels: [
       {}, { amount: +1 }, { damage: +6 }, { cooldownMul: 0.9 },
       { amount: +1 }, { damage: +8 }, { areaMul: 1.2 }, { amount: +2, damage: +12 },
+      { damage: +16 }, { amount: +2, damage: +20 }
     ],
   },
   {
@@ -672,6 +717,7 @@ export const WEAPONS = [
     levels: [
       {}, { amount: +1 }, { damage: +18 }, { cooldownMul: 0.9 },
       { amount: +1 }, { damage: +24 }, { areaMul: 1.2 }, { amount: +1, damage: +34 },
+      { damage: +46 }, { amount: +1, damage: +58 }
     ],
   },
   {
@@ -685,6 +731,7 @@ export const WEAPONS = [
     levels: [
       {}, { damage: +5 }, { areaMul: 1.2 }, { cooldownMul: 0.9 },
       { damage: +6 }, { areaMul: 1.2 }, { cooldownMul: 0.86 }, { damage: +11, areaMul: 1.25 },
+      { damage: +15 }, { areaMul: 1.25, damage: +19 }
     ],
   },
   {
@@ -698,6 +745,7 @@ export const WEAPONS = [
     levels: [
       {}, { amount: +1 }, { damage: +6 }, { cooldownMul: 0.9 },
       { amount: +1 }, { damage: +8 }, { areaMul: 1.25 }, { amount: +2, damage: +12 },
+      { damage: +16 }, { amount: +2, damage: +20 }
     ],
   },
 
@@ -715,6 +763,7 @@ export const WEAPONS = [
     levels: [
       {}, { damage: +5 }, { cooldownMul: 0.88 }, { areaMul: 1.2 },
       { damage: +7 }, { cooldownMul: 0.86 }, { areaMul: 1.2 }, { damage: +12 },
+      { damage: +16 }, { areaMul: 1.25, damage: +20 }
     ],
   },
   {
@@ -729,6 +778,7 @@ export const WEAPONS = [
     levels: [
       {}, { amount: +1 }, { damage: +5 }, { cooldownMul: 0.9 },
       { amount: +1 }, { damage: +7 }, { areaMul: 1.25 }, { amount: +2, damage: +10 },
+      { damage: +14 }, { amount: +2, damage: +17 }
     ],
   },
   {
@@ -742,6 +792,7 @@ export const WEAPONS = [
     levels: [
       {}, { amount: +1 }, { damage: +4 }, { cooldownMul: 0.9 },
       { amount: +1 }, { damage: +5 }, { areaMul: 1.2 }, { amount: +2, damage: +8 },
+      { damage: +11 }, { amount: +2, damage: +14 }
     ],
   },
   {
@@ -755,6 +806,7 @@ export const WEAPONS = [
     levels: [
       {}, { amount: +2 }, { damage: +7 }, { cooldownMul: 0.9 },
       { amount: +2 }, { damage: +9 }, { areaMul: 1.2 }, { amount: +3, damage: +14 },
+      { damage: +19 }, { amount: +3, damage: +24 }
     ],
   },
   {
@@ -769,6 +821,7 @@ export const WEAPONS = [
     levels: [
       {}, { bounces: +1 }, { damage: +7 }, { cooldownMul: 0.9 },
       { bounces: +1 }, { damage: +10 }, { cooldownMul: 0.86 }, { bounces: +2, damage: +15 },
+      { damage: +20 }, { bounces: +2, damage: +26 }
     ],
   },
   {
@@ -785,6 +838,7 @@ export const WEAPONS = [
     levels: [
       {}, { damage: +9 }, { cooldownMul: 0.9 }, { damage: +11 },
       { duration: +2 }, { damage: +14 }, { cooldownMul: 0.85 }, { amount: +1, damage: +20 },
+      { damage: +27 }, { amount: +1, damage: +34 }
     ],
   },
 ];
@@ -808,6 +862,7 @@ WEAPONS.push(
     levels: [
       {}, { amount: +1 }, { damage: +5 }, { cooldownMul: 0.9 },
       { amount: +1 }, { damage: +6 }, { cooldownMul: 0.88 }, { amount: +1, damage: +9 },
+      { damage: +12 }, { amount: +1, damage: +15 }
     ],
   },
   {
@@ -827,6 +882,7 @@ WEAPONS.push(
     levels: [
       {}, { amount: +1 }, { damage: +6 }, { cooldownMul: 0.9 },
       { amount: +1 }, { damage: +8 }, { cooldownMul: 0.86 }, { amount: +2, areaMul: 1.2 },
+      { damage: +11 }, { amount: +2, damage: +14 }
     ],
   },
   {
@@ -841,6 +897,7 @@ WEAPONS.push(
     levels: [
       {}, { damage: +9 }, { areaMul: 1.15 }, { cooldownMul: 0.9 },
       { damage: +12 }, { areaMul: 1.15 }, { cooldownMul: 0.86 }, { damage: +18, areaMul: 1.2 },
+      { damage: +24 }, { areaMul: 1.25, damage: +31 }
     ],
   },
   {
@@ -855,6 +912,7 @@ WEAPONS.push(
     levels: [
       {}, { amount: +1 }, { damage: +16 }, { cooldownMul: 0.9 },
       { amount: +1 }, { damage: +20 }, { cooldownMul: 0.86 }, { amount: +1, areaMul: 1.25 },
+      { damage: +27 }, { amount: +1, damage: +34 }
     ],
   },
   {
@@ -869,6 +927,7 @@ WEAPONS.push(
     levels: [
       {}, { damage: +26 }, { areaMul: 1.15 }, { cooldownMul: 0.9 },
       { amount: +1 }, { damage: +34 }, { cooldownMul: 0.86 }, { amount: +1, areaMul: 1.25 },
+      { damage: +46 }, { amount: +1, damage: +58 }
     ],
   },
   {
@@ -883,6 +942,7 @@ WEAPONS.push(
     levels: [
       {}, { damage: +6 }, { areaMul: 1.15 }, { cooldownMul: 0.88 },
       { damage: +8 }, { areaMul: 1.15 }, { cooldownMul: 0.85 }, { damage: +12, areaMul: 1.2 },
+      { damage: +16 }, { areaMul: 1.25, damage: +20 }
     ],
   },
 
@@ -901,6 +961,7 @@ WEAPONS.push(
     levels: [
       {}, { amount: +2 }, { damage: +4 }, { cooldownMul: 0.9 },
       { amount: +2 }, { damage: +5 }, { cooldownMul: 0.86 }, { amount: +3, damage: +7 },
+      { damage: +9 }, { amount: +3, damage: +12 }
     ],
   },
   {
@@ -918,6 +979,7 @@ WEAPONS.push(
     levels: [
       {}, { shards: +1 }, { damage: +10 }, { cooldownMul: 0.9 },
       { shards: +1 }, { damage: +13 }, { cooldownMul: 0.86 }, { shards: +2, damage: +18 },
+      { damage: +24 }, { shards: +2, damage: +31 }
     ],
   },
   {
@@ -933,6 +995,7 @@ WEAPONS.push(
     levels: [
       {}, { damage: +10 }, { cooldownMul: 0.9 }, { damage: +13 },
       { amount: +1 }, { damage: +16 }, { cooldownMul: 0.86 }, { amount: +1, areaMul: 1.2 },
+      { damage: +22 }, { amount: +1, damage: +27 }
     ],
   },
   {
@@ -948,6 +1011,7 @@ WEAPONS.push(
     levels: [
       {}, { bounces: +1 }, { damage: +8 }, { cooldownMul: 0.9 },
       { bounces: +1 }, { damage: +10 }, { cooldownMul: 0.86 }, { amount: +1, damage: +14 },
+      { damage: +19 }, { bounces: +1, damage: +24 }
     ],
   },
   {
@@ -962,6 +1026,7 @@ WEAPONS.push(
     levels: [
       {}, { damage: +4 }, { areaMul: 1.15 }, { cooldownMul: 0.9 },
       { damage: +5 }, { areaMul: 1.15 }, { cooldownMul: 0.86 }, { damage: +8, areaMul: 1.2 },
+      { damage: +11 }, { areaMul: 1.25, damage: +14 }
     ],
   },
   {
@@ -975,6 +1040,7 @@ WEAPONS.push(
     levels: [
       {}, { amount: +1 }, { damage: +11 }, { cooldownMul: 0.9 },
       { amount: +1 }, { damage: +14 }, { cooldownMul: 0.86 }, { amount: +2, damage: +18 },
+      { damage: +24 }, { amount: +2, damage: +31 }
     ],
   },
   {
@@ -1009,6 +1075,114 @@ WEAPONS.push(
     levels: [{}],
   },
 );
+
+// =============================================================================================
+// EIGHT MORE EVOLUTIONS -- one for every type that had none.
+//
+// Only three of 66 weapons could evolve, all of them Wooper's, Eevee's and Rowlet's starters.
+// Vulpix, Delibird and Gastly's own weapons could not, and eight of the eleven types had no
+// evolution at all. Each of these pairs one weapon of a type with a held item of that type.
+//
+// An evolved weapon restarts at level 1 on its OWN numbers, so if those numbers were written by
+// hand it would be easy to ship an evolution weaker than the level-10 weapon it replaces. Instead
+// each one starts from its base folded all the way to level 10, and the evolution is layered on
+// top of that -- so evolving can only ever be an upgrade.
+// =============================================================================================
+
+/** A weapon definition with every one of its level grants already applied. */
+function maxed(base) {
+  const o = { ...base };
+  for (let i = 1; i < base.levels.length; i++) {
+    const lv = base.levels[i];
+    if (!lv) continue;
+    for (const k of ['damage', 'amount', 'pierce', 'shards', 'bounces', 'jumps', 'duration']) {
+      if (lv[k]) o[k] = (o[k] || 0) + lv[k];
+    }
+    if (lv.cooldownMul) o.cooldown *= lv.cooldownMul;
+    if (lv.areaMul) o.area *= lv.areaMul;
+  }
+  return o;
+}
+
+/**
+ * [base weapon, held item that evolves it, what it becomes].
+ *
+ * `boost` is the damage multiplier over the maxed base; everything else in the entry replaces
+ * or adds to the base's fields. Each evolution changes the weapon's SIGNATURE rather than only
+ * its numbers -- more bounces for a bouncer, more jumps for a chain -- so it plays differently.
+ */
+const MORE_EVOLUTIONS = [
+  ['ember_spit', 'charcoal', {
+    id: 'fire_blast', name: 'Fire Blast', boost: 1.35,
+    desc: 'A storm of embers that pierce what they burn and set the whole line alight.',
+    add: { amount: 2, pierce: 2 }, mul: { burn: 2.2, r: 1.4 },
+    set: { trailColor: '#fff0a0', impactColor: '#ffffff', trail: 18 },
+  }],
+  ['powder_snow', 'never_melt_ice', {
+    id: 'sheer_cold', name: 'Sheer Cold', boost: 1.35,
+    desc: 'A freezing gale that reaches twice as far and leaves the crowd barely moving.',
+    // Reach and travel together: a longer aim with the same flight fires shots that die short.
+    add: { amount: 3 }, mul: { range: 1.4, duration: 1.45 },
+    set: { slow: 0.6, trailColor: '#ffffff', impactColor: '#ffffff' },
+  }],
+  ['sludge_bomb', 'poison_barb', {
+    id: 'gunk_shot', name: 'Gunk Shot', boost: 1.4,
+    desc: 'Heavy globs that burst wide and leave a pool of poison where they land.',
+    add: { amount: 2 }, mul: { blastRadius: 1.5 },
+    set: { zoneOnEnd: { r: 46, life: 3.6, dps: 24, slow: 0.45, color: '#d070f0' }, impactColor: '#ffd0ff' },
+  }],
+  ['bubble_beam', 'sea_incense', {
+    id: 'hydro_cannon', name: 'Hydro Cannon', boost: 1.35,
+    desc: 'A spiral of heavy water that punches through everything it winds past.',
+    add: { amount: 2, pierce: 4 }, mul: { r: 1.3 },
+    set: { trailColor: '#ffffff', impactColor: '#e0f6ff' },
+  }],
+  ['spark_chain', 'magnet_item', {
+    id: 'thunder_storm', name: 'Thunder', boost: 1.35,
+    desc: 'Lightning that jumps further, loses nothing as it goes, and never runs out of targets.',
+    add: { jumps: 3 }, mul: { jumpRange: 1.45 },
+    set: { falloff: 0.97, arcColor: '#ffffff' },
+  }],
+  ['foul_play', 'black_glasses', {
+    id: 'night_slash', name: 'Night Slash', boost: 1.3,
+    desc: 'Two skulls that ricochet through the crowd and grow crueller with every bounce.',
+    add: { amount: 1, bounces: 3 },
+    set: { bounceGain: 0.6, trailColor: '#8060c0', impactColor: '#f0e0ff' },
+  }],
+  ['aerial_ace', 'pretty_wing', {
+    id: 'sky_attack', name: 'Sky Attack', boost: 1.35,
+    desc: 'A flight of talons that turn on a feather and cut clean through what they catch.',
+    add: { amount: 2, pierce: 3 },
+    set: { homingTurn: 9, trailColor: '#ffffff', impactColor: '#ffffff' },
+  }],
+  ['shadow_ball', 'spell_tag', {
+    id: 'shadow_storm', name: 'Shadow Storm', boost: 1.35,
+    desc: 'A knot of shadow that bursts into a swarm the moment it touches anything.',
+    add: { shards: 4 }, mul: { area: 1.3, r: 1.3 },
+    set: { trailColor: '#b0a0f0', impactColor: '#ffffff' },
+  }],
+];
+
+for (const [fromId, item, ev] of MORE_EVOLUTIONS) {
+  const base = WEAPONS.find((w) => w.id === fromId);
+  if (!base) throw new Error(`weapons: evolution source "${fromId}" does not exist`);
+  const m = maxed(base);
+  const out = {
+    ...m,
+    id: ev.id, name: ev.name, desc: ev.desc,
+    evolvedFrom: fromId, hidden: true,
+    damage: Math.round(m.damage * ev.boost),
+    levels: [{}],
+  };
+  // An evolved weapon is no one's starter and cannot evolve again.
+  delete out.owner;
+  delete out.evolution;
+  for (const [k, v] of Object.entries(ev.add || {})) out[k] = (out[k] || 0) + v;
+  for (const [k, v] of Object.entries(ev.mul || {})) out[k] = (out[k] || 0) * v;
+  Object.assign(out, ev.set || {});
+  WEAPONS.push(out);
+  base.evolution = { into: ev.id, needPassive: item };
+}
 
 export const WEAPON_BY_ID = Object.fromEntries(WEAPONS.map((w) => [w.id, w]));
 

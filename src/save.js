@@ -12,11 +12,17 @@
 // their ability to play.
 
 import { G } from './state.js';
+import { SUCCESS_BY_ID } from './data/successes.js';
 
 const KEY = 'pokesurvivor.save.v1';
 
-/** `spent` is tracked only so RESET PROGRESS can refund exactly what went in. */
-const empty = () => ({ gold: 0, spent: 0, ranks: {} });
+/**
+ * `spent` is tracked only so RESET PROGRESS can refund exactly what went in. `ach` is the
+ * Successes: id -> 'unlocked' | 'claimed', absent while still locked.
+ */
+const empty = () => ({ gold: 0, spent: 0, ranks: {}, ach: {} });
+
+const ACH_STATES = new Set(['unlocked', 'claimed']);
 
 /**
  * Coerce whatever came out of storage into a save. Anything unrecognised is dropped rather than
@@ -31,6 +37,13 @@ function sanitize(data) {
     for (const k of Object.keys(data.ranks)) {
       const n = data.ranks[k];
       if (Number.isFinite(n) && n > 0) s.ranks[k] = Math.floor(n);
+    }
+  }
+  // Only successes that exist, in states that exist: a renamed or hand-edited entry is dropped
+  // rather than left to show a card for something that is not in the list.
+  if (data.ach && typeof data.ach === 'object') {
+    for (const k of Object.keys(data.ach)) {
+      if (SUCCESS_BY_ID[k] && ACH_STATES.has(data.ach[k])) s.ach[k] = data.ach[k];
     }
   }
   return s;
@@ -88,7 +101,12 @@ export function buyRank(id, cost, maxRank) {
   return true;
 }
 
-/** Refund everything ever spent and clear every rank. */
+/**
+ * Refund everything ever spent and clear every rank.
+ *
+ * Successes are deliberately left alone: they are things you did, not things you bought, and a
+ * claimed reward is already part of the gold this hands back.
+ */
 export function resetProgress() {
   const s = saveData();
   s.gold += s.spent;

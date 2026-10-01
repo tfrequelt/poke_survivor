@@ -29,6 +29,31 @@ const BASE = {
   contactMult: 1,
 };
 
+/**
+ * The luck at which a Pokemon stops being unlucky at all.
+ *
+ * Delibird reaches exactly this by its second evolution, whose note has always read "the wheel
+ * never lands on its worst prize again" -- so this is the number that sentence was describing,
+ * and the wheel below is where it finally becomes true.
+ */
+export const LUCK_CAP = 0.5;
+
+/**
+ * Luck, clamped to [0, LUCK_CAP].
+ *
+ * Read through here rather than off G.stats directly, so every consumer agrees on the ceiling.
+ * Luck was a declared-but-unread stat for four cycles -- sold in the shop, granted by Delibird's
+ * base stats and both its evolutions, and doing nothing -- which is exactly what happens when a
+ * stat has no single place that owns its meaning.
+ */
+export const luckOf = () => {
+  const l = (G.stats && G.stats.luck) || 0;
+  return l < 0 ? 0 : l > LUCK_CAP ? LUCK_CAP : l;
+};
+
+/** Luck as a 0..1 fraction of the cap, which is what most of the rolls actually want. */
+export const luckK = () => luckOf() / LUCK_CAP;
+
 // Pre-allocated scratch. Resolving must not allocate, because evolutions resolve mid-frame.
 const _flat = {};
 const _inc = {};

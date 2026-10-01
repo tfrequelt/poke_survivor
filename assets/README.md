@@ -345,15 +345,22 @@ file is silent rather than a warning every boot:
 
 ```json
 "images": {
-  "title": { "src": "assets/pmd/title.png", "optional": true },
+  "title": { "src": "assets/miscellaneous/logo.png", "optional": true },
   "wheel": { "src": "assets/pmd/wheel.png", "optional": true }
 }
 ```
 
-* **`title.png`** replaces the generated `POKEMON DRACULA EDITION` wordmark. Any size: it is
-  scaled by a whole number to fit roughly 590x58, and the subtitle below moves down to make room
-  for a tall one. Whole-number scaling only, because a pixel logo resampled to a fraction turns
-  to mush.
+Five more tiles come out of the same trap block as the stairs — spike (1,143), poison (76,143),
+slumber (1,168), explosion (101,168) and warp (151,168) — all 24x24, all flooded on `#808080`
+for the same reason. `items.png` now supplies the coin, the berry, the orb, the elixir, the
+Voltorb, the two staircases and those five, which is why its credit line lists so much.
+
+* **`miscellaneous/logo.png`** is the title logo, centred at the top of the main menu in place
+  of the drawn `POKEMON DRACULA EDITION` wordmark (which comes back if the file is missing). It
+  should have a transparent background. Any size: the transparent margin is trimmed, then it is
+  shrunk once at load to fit 380x100, in halving steps with smoothing — it is painted art, not
+  pixel art, so nearest-neighbour would turn its curves to stairs. The subtitle and the menu sit
+  below it.
 * **`wheel.png`** replaces the drawn red-and-white face of Delibird's prize wheel. It should be
   **square** and is drawn as a circle inscribed in that square, rotating about its centre. The
   arrow, the hub and the result window stay drawn on top. A supplied image is assumed to carry

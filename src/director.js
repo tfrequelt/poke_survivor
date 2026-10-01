@@ -10,6 +10,7 @@ import { ENEMIES } from './data/enemies.js';
 import { spawnAtRing, spawnEnemy, combatantCount, SPAWN_MIN, SPAWN_MAX } from './enemies.js';
 import { pickWeighted, TAU, clamp } from './util.js';
 import { floorPower, floorSwarm } from './floors.js';
+import { luckK } from './stats.js';
 
 export const RUN_LENGTH = 20 * 60;        // seconds; the boss spawns at 20:00
 const SPAWN_INTERVAL = 0.5;               // the director ticks twice a second
@@ -34,24 +35,38 @@ export const spdMult = (m) => Math.min(SPD_MAX, 1 + SPD_LIN * m);
 export const aliveCap = (m) => Math.min(CAP_MAX, CAP_BASE + CAP_SLOPE * m);
 
 // Set pieces, by run time in seconds.
+// Elites are paced by a timer rather than a per-spawn chance. At minute 15 the director is
+// placing roughly a thousand enemies a minute, so any chance high enough to be felt early
+// becomes a flood late -- a gap is the only thing that reads the same at both ends of a run.
+const ELITE_FIRST = 150;        // none before 2:30; the early game is busy enough
+const ELITE_GAP = 60;           // seconds between elites at zero luck
+const ELITE_GAP_MIN = 34;       // ...and at the luck cap
+
 const SPAWN_PAUSES = [[270, 300], [570, 600], [870, 900]];   // 4:30, 9:30, 14:30 -- the inhale
 const FINAL_SURGE = 19 * 60;
+// After the win, a boss every two minutes. The curve itself is already quadratic in elapsed
+// minutes, so endless needs no separate difficulty ramp -- only something to fight.
+const ENDLESS_BOSS_GAP = 120;
 const MINIBOSS_AT = [300, 600, 900];
 
 let spawnAcc = 0;
 let spawnDebt = 0;
+let eliteT = ELITE_FIRST;
 let nextFormation = 60;
 let nextPincer = 390;
 let minibossFired = [false, false, false];
 let bossFired = false;
+let nextEndlessBoss = 0;
 
 export function resetDirector() {
   spawnAcc = 0;
   spawnDebt = 0;
+  eliteT = ELITE_FIRST;
   nextFormation = 60;
   nextPincer = 390;
   minibossFired = [false, false, false];
   bossFired = false;
+  nextEndlessBoss = 0;
   G.curve = { hp: 1, dmg: 1, spd: 1, sps: 0, cap: 0, m: 0 };
 }
 
@@ -125,7 +140,12 @@ export function updateDirector(dt) {
     const n = Math.min(want, room);
     for (let i = 0; i < n; i++) {
       const def = rollEnemy(m, rng);
-      if (def) spawnAtRing(def, rng);
+      if (!def) continue;
+      // One enemy in this batch is promoted when the gap has elapsed. Bosses and scenery are
+      // never eligible -- a six-times-health boss is not a treat, it is a wall.
+      const elite = t >= eliteT && !def.boss && !def.prop;
+      if (elite) eliteT = t + ELITE_GAP - (ELITE_GAP - ELITE_GAP_MIN) * luckK();
+      spawnAtRing(def, rng, elite);
     }
   }
 
@@ -146,6 +166,16 @@ export function updateDirector(dt) {
       G.pendingMiniboss = i + 1;
     }
   }
+  // Endless: the schedule does not stop at 20:00, it just changes what it sends.
+  if (G.endless) {
+    if (nextEndlessBoss === 0) nextEndlessBoss = t + ENDLESS_BOSS_GAP;
+    if (t >= nextEndlessBoss) {
+      nextEndlessBoss = t + ENDLESS_BOSS_GAP;
+      // Tier 4 is the stage's own final boss, and it is the hardest thing the roster has.
+      G.pendingBoss = true;
+    }
+  }
+
   if (!bossFired && t >= RUN_LENGTH) {
     bossFired = true;
     G.pendingBoss = true;

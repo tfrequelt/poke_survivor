@@ -8,9 +8,13 @@ import { ctx, VW, VH } from './render.js';
 import { drawText, drawTextCentered, textWidth, drawSprite } from './sprites.js';
 import { formatTime, formatNum, clamp } from './util.js';
 import { enemies } from './world.js';
-import { panel, messageWindow, wrap } from './win.js';
+import { panel, messageWindow, wrap, drawDamagePanel } from './win.js';
+import { damageBreakdown } from './combat.js';
+import { toast } from './successes.js';
+import { newSuccessLine } from './ui.js';
+import { WEAPON_BY_ID } from './data/weapons.js';
 import { bankTotal } from './save.js';
-import { floorLabel } from './floors.js';
+import { floorLabel, floorBonus, endlessBonus } from './floors.js';
 
 const PAD = 6;
 
@@ -22,6 +26,7 @@ export function drawHud() {
   drawTallies();
   if (G.banner.t > 0) drawBanner();
   drawStairsPrompt();
+  drawSuccessToast();
   if (G.runOver) drawRunOver();
 }
 
@@ -188,14 +193,40 @@ function drawRunOver() {
   ctx.fillRect(0, 0, VW, VH);
   const w = 264, x = Math.round((VW - w) / 2), y = Math.round(VH / 2) - 42;
   messageWindow(x, y, w, [
-    G.won ? 'VICTORY!' : 'YOU FAINTED...',
+    G.endless ? `ENDLESS OVER -- ${G.endlessBosses} BOSS${G.endlessBosses === 1 ? '' : 'ES'}` : G.won ? 'VICTORY!' : 'YOU FAINTED...',
     '',
     `SURVIVED ${formatTime(G.runTime)}`,
     `LEVEL ${G.level}   ${formatNum(G.kills)} KO`,
-    `+${formatNum(G.coins)} GOLD   BANK ${formatNum(bankTotal())}`,
+    `+${formatNum(G.coins + (G.won ? floorBonus() + endlessBonus() : 0))} GOLD   BANK ${formatNum(bankTotal())}`,
     '',
     'R RESTART    Q CHANGE PARTNER',
   ], { center: true, accent: G.won ? '#ffd166' : '#ff9f9f', lineHeight: 11 });
+
+  // What did the work, under the result. Five rows: the death screen shares the view with the
+  // field behind it, and the full list is on the victory screen.
+  const typeOf = (k) => (k.startsWith('w:') && WEAPON_BY_ID[k.slice(2)] ? WEAPON_BY_ID[k.slice(2)].type : null);
+  const ph = drawDamagePanel(x, y + 96, w, damageBreakdown(), typeOf, 5);
+  const ns = newSuccessLine();
+  if (ns) drawTextCentered(ctx, ns, VW / 2, y + 102 + ph, 'gold');
+}
+
+/**
+ * "SUCCESS UNLOCKED" -- top right, under the gold tally, for a few seconds.
+ *
+ * Its own slot rather than G.banner: floors, traps, evolutions and bosses all write the banner,
+ * and an unlock is exactly the kind of thing that happens in the middle of all of those.
+ */
+function drawSuccessToast() {
+  if (!toast.queue.length) return;
+  const title = toast.queue[0].toUpperCase();
+  const w = Math.max(textWidth('SUCCESS UNLOCKED'), textWidth(title)) + 20;
+  const x = VW - PAD - w, y = 34;
+  // Slides in over its first quarter second.
+  const enter = Math.min(1, (3.2 - toast.t) / 0.25);
+  const sx = Math.round(x + (1 - enter) * (w + PAD));
+  panel(sx, y, w, 30, { accent: '#ffd166' });
+  drawText(ctx, 'SUCCESS UNLOCKED', sx + 10, y + 7, 'gold');
+  drawText(ctx, title, sx + 10, y + 17, 'white');
 }
 
 /** Dev overlay drawn in-canvas (the outer one in render.js is native-resolution text). */

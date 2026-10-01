@@ -101,7 +101,7 @@ export function updatePlayer(dt) {
     }
     p.hp = 0;
     G.runOver = true;
-    G.won = false;
+    if (!G.endless) G.won = false;
   }
 }
 

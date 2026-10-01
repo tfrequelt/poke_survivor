@@ -7,7 +7,8 @@ import { G } from './state.js';
 import { clamp, dist2, TAU, clampToBounds } from './util.js';
 import { floorReward } from './floors.js';
 import {
-  enemies, spawn, despawn, rebuildGrid, cellRange, cellStart, cellItems, CELL, GW,
+  enemies, spawn, despawn, rebuildGrid, cellRange, cellStart, cellItems, CELL, GW, nextHitId,
+  setDamageSource,
 } from './world.js';
 import { ENEMIES, ENEMY_BY_ID } from './data/enemies.js';
 import { damageOverTime } from './combat.js';
@@ -97,16 +98,160 @@ export const aiIndex = (name) => {
   return i;
 };
 
+// --- Attacks ----------------------------------------------------------------
+//
+// Until this existed every one of the 38 species did exactly one thing: walk into you. Six
+// movement patterns, and not a single ranged threat on the field, so the correct play was always
+// to walk away from the crowd and never to dodge anything.
+//
+// Every attack TELEGRAPHS. An enemy winding up stops dead and flashes for `windup` seconds
+// before the shot leaves, which is the same contract the `charge` AI already honours -- a shot
+// the player could not have seen coming is not difficulty, it is just damage.
+
+/** Enemy shots are slower and fatter than the player's, so they read as dodgeable. */
+const HOSTILE_R = 4;
+
+// A field-wide fire budget. Without it the volume of fire scaled with how many shooters were
+// alive, and the late roster is mostly evolved forms -- at minute 14 two thirds of the field could
+// shoot and roughly eleven shots a second were in the air. Now ordinary enemies share one clock:
+// at most one of them may begin an attack every VOLLEY_GAP seconds, however many there are. A
+// shooter that finds the budget spent simply keeps walking and tries again a little later, so a
+// throttled enemy never stands there winding up for nothing.
+//
+// Bosses are outside the budget and do not spend it: a boss's pattern is the fight.
+const VOLLEY_GAP = 1.1;
+let nextVolley = 0;
+
+/** Called when a run or a floor starts, so the budget clock follows the run clock. */
+export function resetAttacks() { nextVolley = 0; }
+
+/** Ordinary enemies fire a narrow fan at most; the full radial ring is a boss's signature. */
+const REGULAR_BURST_MAX = 3;
+const REGULAR_BURST_SPREAD = 0.5;
+
+const ATTACK = {
+  /** One shot, along the heading locked in when the windup started. */
+  shot(e, def) {
+    fireHostile(e, e.atkX, e.atkY, def);
+  },
+
+  /**
+   * A radial fan. What makes a boss a boss rather than a big chaser: it covers angles rather
+   * than a line, so backing straight off does not beat it.
+   */
+  burst(e, def) {
+    const n = e.boss ? (def.count || 8) : Math.min(def.count || 8, REGULAR_BURST_MAX);
+    const base = Math.atan2(e.atkY, e.atkX);
+    const spread = e.boss ? (def.spread || Math.PI * 2) : Math.min(def.spread || 9, REGULAR_BURST_SPREAD);
+    for (let i = 0; i < n; i++) {
+      const a = spread >= Math.PI * 2
+        ? base + (i / n) * Math.PI * 2
+        : base - spread / 2 + (i / (n - 1 || 1)) * spread;
+      fireHostile(e, Math.cos(a), Math.sin(a), def);
+    }
+  },
+};
+
+const ATTACK_KEYS = Object.keys(ATTACK);
+const ATTACK_FNS = ATTACK_KEYS.map((k) => ATTACK[k]);
+export const attackIndex = (name) => {
+  const i = ATTACK_KEYS.indexOf(name);
+  if (i < 0) throw new Error(`enemies: unknown attack "${name}"`);
+  return i;
+};
+
+function fireHostile(e, nx, ny, def) {
+  const pr = spawn('projectiles');
+  if (!pr) return;
+  const sp = def.speed || 130;
+  pr.x = e.x; pr.y = e.y;
+  pr.vx = nx * sp; pr.vy = ny * sp;
+  pr.r = def.r || HOSTILE_R;
+  pr.dmg = def.damage || 6;
+  pr.hostile = true;
+  pr.pierce = 0;
+  pr.life = 0;
+  pr.maxLife = def.life || 3.2;
+  pr.motion = 0;                       // straight line; hostile shots never home
+  pr.angle = Math.atan2(ny, nx);
+  pr.hitId = nextHitId();
+  pr.sprBase = -1;                     // drawn as a shape, not from the atlas
+  pr.knockback = 0;
+  pr.crit = false;
+  pr.targetIdx = -1;
+  pr.area = 1;
+  pr.z = 0; pr.r0 = pr.r; pr.bounces = 0; pr.fuse = 0; pr.gen = 0; pr.payload = 0;
+  pr.burn = 0; pr.burnT = 0; pr.slow = 0;
+  pr.trail = 0; pr.spin = 0; pr.pulse = 0; pr.impact = 0;
+  pr.returning = false; pr.orbitA = 0; pr.orbitR = 0; pr.amp = 0; pr.freq = 0;
+  pr.emitT = 0; pr.homingTurn = 0; pr.t = 0; pr.ox = 0; pr.oy = 0;
+  pr.weapon = -1;
+}
+
+/**
+ * One enemy's attack tick. Returns true while it is winding up, which freezes its movement.
+ *
+ * An off-screen enemy never fires: the spawn ring is 430px out and the view is 640x360, so
+ * without this the player would be shot from sources they cannot see.
+ */
+function updateAttack(e, dt, px, py) {
+  const def = e.def.attack;
+  if (!def) return false;
+
+  const dx = px - e.x, dy = py - e.y;
+  const d2 = dx * dx + dy * dy;
+
+  if (e.atkWind > 0) {
+    e.atkWind -= dt;
+    if (e.atkWind <= 0) {
+      ATTACK_FNS[e.def.attackIdx](e, def);
+      e.atkCd = def.cooldown;
+    }
+    return true;                                 // held still, telegraphing
+  }
+
+  e.atkCd -= dt;
+  if (e.atkCd > 0) return false;
+
+  const range = def.range || 220;
+  if (d2 > range * range) return false;
+  // On screen, with a little margin, or it is shooting from somewhere the player cannot look.
+  if (Math.abs(dx) > VIEW_HALF_W || Math.abs(dy) > VIEW_HALF_H) return false;
+
+  if (!e.boss) {
+    if (G.runTime < nextVolley) {
+      // Budget spent: try again soon, staggered so the waiting shooters do not all queue for
+      // the same instant.
+      e.atkCd = 0.4 + G.rngRun() * 1.2;
+      return false;
+    }
+    nextVolley = G.runTime + VOLLEY_GAP;
+  }
+
+  const d = Math.sqrt(d2) || 1;
+  e.atkX = dx / d; e.atkY = dy / d;               // heading LOCKED at the windup, not at the shot
+  e.atkWind = def.windup || 0.4;
+  e.flash = Math.max(e.flash, 0.06);
+  return true;
+}
+
+// The camera half-extents, padded in slightly so a shot always has a visible source.
+const VIEW_HALF_W = 300;
+const VIEW_HALF_H = 160;
+
 // --- Spawning ---------------------------------------------------------------
 
 /** Place an enemy on the ring just outside the camera, at a random angle. */
-export function spawnAtRing(def, rng) {
+export function spawnAtRing(def, rng, elite) {
   const a = rng() * TAU;
   const r = SPAWN_MIN + rng() * (SPAWN_MAX - SPAWN_MIN);
   const p = G.player;
   const pt = ringPoint(p.x, p.y, a, r, rng);
-  return spawnEnemy(def, pt.x, pt.y);
+  return spawnEnemy(def, pt.x, pt.y, elite ? ELITE_OPTS : undefined);
 }
+
+// Reused rather than allocated per spawn: this is on the hottest spawn path in the game.
+const ELITE_OPTS = { elite: true };
 
 const _pt = { x: 0, y: 0 };
 
@@ -157,6 +302,11 @@ export function spawnEnemy(def, x, y, opts) {
   e.prop = !!def.prop;
   e.harmless = !!def.harmless;
   e.stunT = 0; e.weakenT = 0;
+  e.burnSrc = 0;
+  // Staggered by a random slice of the cooldown so a wave that spawns together does not fire in
+  // one synchronised volley.
+  e.atkCd = def.attack ? def.attack.cooldown * (0.35 + G.rngRun() * 0.65) : 0;
+  e.atkWind = 0; e.atkX = 0; e.atkY = 0;
   e.burnT = 0; e.burnDps = 0; e.burnTick = 0;
   // Scenery must not scale with the difficulty curve, or a minute-18 bush needs a whole clip.
   if (def.noScale) {
@@ -251,7 +401,10 @@ export function updateEnemies(dt, separationOn) {
       e.burnTick -= dt;
       if (e.burnTick <= 0) {
         e.burnTick = BURN_TICK;
-        if (damageOverTime(e, e.burnDps * BURN_TICK)) continue;
+        setDamageSource(e.burnSrc);
+        const died = damageOverTime(e, e.burnDps * BURN_TICK);
+        setDamageSource(0);
+        if (died) continue;
       }
       if (e.burnT <= 0) e.burnDps = 0;
     }
@@ -260,6 +413,10 @@ export function updateEnemies(dt, separationOn) {
     // so Earthquake and Thunderbolt actually buy the player breathing room.
     if (e.stunT > 0) {
       e.stunT -= dt;
+      e.vx = 0; e.vy = 0;
+    } else if (updateAttack(e, dt, px, py)) {
+      // Winding up: planted, so the telegraph is a real tell and not something that walks at
+      // you while it charges.
       e.vx = 0; e.vy = 0;
     } else {
       AI_FNS[e.ai](e, dt, px, py);
@@ -307,6 +464,10 @@ export function updateEnemies(dt, separationOn) {
 export function initEnemyDefs() {
   for (const def of ENEMIES) {
     def.aiIdx = aiIndex(def.ai);
+    // Same string-key-to-index resolution the AI gets, and for the same reason: the hot loop
+    // must never look a behaviour up by name. Throws at boot on a typo rather than at the
+    // moment the enemy first tries to fire.
+    def.attackIdx = def.attack ? attackIndex(def.attack.kind) : -1;
     def.sprBase = spriteBase(def.shape, def.palette);
     // A PMD-sheet enemy has no separate elite recolour -- the sheet is its own colours -- so it
     // reuses its normal frames. Elites still read as elites: they are larger and carry a bar.

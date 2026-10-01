@@ -22,6 +22,7 @@ import { getImage, getAttack, getSequence } from './assets.js';
 import { thrownItem, activeAbility, activeVisual } from './abilities.js';
 import { sampleDuration } from './audio.js';
 import { hash2 } from './util.js';
+import { liveTraps } from './traps.js';
 
 const MARGIN = 28;                    // draw a little beyond the edge so nothing pops in visibly
 
@@ -32,6 +33,14 @@ const bandHead = new Int32Array(NBANDS);
 const bandNext = new Int32Array(1024);
 
 let stairsSpr = -1;
+let hostileSpr = -1;
+/** kind -> atlas frame, filled by main.js at boot. */
+let trapSpr = null;
+
+export function setTrapSprites(map) { trapSpr = map; }
+
+/** Told by main.js which frame an enemy shot draws with, once, at boot. */
+export function setHostileSprite(id) { hostileSpr = id; }
 
 /** Told by main.js which flight this stage uses, once, when the run starts. */
 export function setStairsSprite(id) { stairsSpr = id; }
@@ -42,6 +51,7 @@ export function drawEntities() {
   burnMarksDrawn = 0;
 
   drawZones(camOffX, camOffY);
+  drawTraps(camOffX, camOffY);
   drawStairs(camOffX, camOffY);
   drawPickups(camOffX, camOffY);
   drawItems(camOffX, camOffY);
@@ -652,6 +662,28 @@ function drawPickups(ox, oy) {
 
 /** Item pickups bob and glow, because the player has to choose to walk to them. */
 /**
+ * Floor traps, drawn with the zones and before every actor -- they are set into the ground and
+ * the player walks over them, exactly like the stairs.
+ *
+ * `reveal` is eased toward 0 or 1 by the trap system as the player comes and goes, so a trap
+ * fades up rather than popping into existence. Nothing is drawn at all below a threshold, which
+ * keeps a floor full of unrevealed traps free.
+ */
+function drawTraps(ox, oy) {
+  if (!trapSpr) return;
+  for (const t of liveTraps()) {
+    if (t.reveal < 0.02) continue;
+    const sx = t.x + ox, sy = t.y + oy;
+    if (sx < -32 || sy < -32 || sx > VW + 32 || sy > VH + 32) continue;
+    const id = trapSpr[t.kind];
+    if (id === undefined || id < 0) continue;
+    ctx.globalAlpha = t.reveal;
+    drawSprite(ctx, id, sx, sy);
+    ctx.globalAlpha = 1;
+  }
+}
+
+/**
  * The staircase, if one is on the field.
  *
  * Drawn with the zones and before every actor, because it is set INTO the floor: the player
@@ -751,18 +783,46 @@ function drawUnsorted(ox, oy) {
   if (G.player) drawPlayer(G.player, ox, oy);
 }
 
+// How much bigger an elite is DRAWN. Must match the 1.35 its hitbox is widened by in
+// spawnEnemy: an enemy that is struck from further away than it looks is the worst kind of
+// unfair, and one with six times the health that looks identical to its neighbour is just
+// confusing. Elites never actually spawned until this cycle, so nobody had seen either problem.
+const ELITE_SCALE = 1.35;
+
 function drawEnemy(e, ox, oy) {
   const sx = e.x + ox, sy = e.y + oy;
   if (sx < -MARGIN || sy < -MARGIN || sx > VW + MARGIN || sy > VH + MARGIN) return;
   // id = base + flash*(nf*nd) + frame*nd + dir. The flash variant is pre-baked white.
   const id = e.sprBase + (e.flash > 0 ? e.nf * e.nd : 0) + e.frame * e.nd + e.dir;
-  if (e.spawnT > 0) {
-    ctx.globalAlpha = 1 - e.spawnT / 0.18;
+
+  // The ordinary case is the whole point of this branch: six hundred of these run every frame,
+  // and touching ctx.globalAlpha even to set it back to 1 is a canvas state change per enemy.
+  // Doing that unconditionally cost several milliseconds a frame, so the common path touches
+  // no canvas state at all.
+  if (e.spawnT <= 0 && !e.elite) {
     drawSprite(ctx, id, sx, sy);
-    ctx.globalAlpha = 1;
   } else {
-    drawSprite(ctx, id, sx, sy);
+    const fade = e.spawnT > 0 ? 1 - e.spawnT / 0.18 : 1;
+    if (e.elite) {
+      // A slow gold pulse under the feet. Every enemy here is a PMD sheet, and a sheet carries
+      // its own colours, so there is no recoloured elite variant to fall back on -- the ring and
+      // the size are the whole of the tell. There are never more than a handful on the field, so
+      // this one stroked path is affordable where one per enemy would not be.
+      ctx.globalAlpha = fade * (0.5 + Math.sin(G.runTime * 4) * 0.2);
+      ctx.strokeStyle = '#ffd166';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.ellipse(sx, sy + 2, e.r + 5, (e.r + 5) * 0.55, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = fade;
+      drawSpriteScaled(ctx, id, sx, sy, ELITE_SCALE);
+    } else {
+      ctx.globalAlpha = fade;
+      drawSprite(ctx, id, sx, sy);
+    }
+    ctx.globalAlpha = 1;
   }
+
   if (e.burnT > 0) drawBurnMark(e, sx, sy);
   if (e.boss || e.elite) drawHealthBar(e, sx, sy);
 }
@@ -894,6 +954,15 @@ function drawProjectiles(ox, oy) {
     const pr = projectiles[i];
     const sx = pr.x + ox, sy = pr.y + oy;
     if (sx < -24 || sy < -24 - pr.z || sx > VW + 24 || sy > VH + 24) continue;
+
+    // An enemy shot is a normal atlas blit, in a red palette nothing the player owns uses.
+    // It was briefly two ctx.arc() fills instead, which cost 13ms a frame with a hundred shots
+    // in the air -- paths in this loop are exactly what the drawn-UI rule exists to prevent.
+    if (pr.hostile) {
+      if (hostileSpr >= 0) drawSprite(ctx, hostileSpr, sx, sy);
+      continue;
+    }
+
     // Rotated sprites index by baked angle; the rest just flip on heading.
     const d = pr.nd > 2 ? angleSlot(pr.angle, pr.nd) : (pr.vx >= 0 ? 1 : 0);
     if (pr.z > 1) {

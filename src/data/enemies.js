@@ -30,7 +30,7 @@ export const ENEMIES = [
     shape: 'roggenrola', fallback: 'round_big', palette: 'rock',
     // Barely moves, but it soaks. The cave's answer to a player who has bought no pierce.
     hp: 34, dmg: 7, speed: 13, r: 4.5, mass: 2.4, xp: 2,
-    ai: 'chase', coinChance: 0.08, armor: 2, knockResist: 0.55,
+    ai: 'chase',
     stages: ['cave'], from: 0, to: 11, weight: 9,
   },
   {
@@ -45,28 +45,28 @@ export const ENEMIES = [
     shape: 'aron', fallback: 'round_big', palette: 'rock',
     // Armoured from minute two, so the cave punishes a loadout with no way through armour.
     hp: 30, dmg: 8, speed: 26, r: 4, mass: 1.6, xp: 2,
-    ai: 'chase', coinChance: 0.08, armor: 2, knockResist: 0.5,
+    ai: 'chase',
     stages: ['cave'], from: 2, to: 12, weight: 8,
   },
   {
     id: 'geodude', name: 'Geodude', dex: 5,
     shape: 'geodude', fallback: 'round_big', palette: 'rock',
     hp: 46, dmg: 11, speed: 15, r: 5, mass: 2.8, xp: 3,
-    ai: 'charge', coinChance: 0.10, armor: 1, knockResist: 0.5,
+    ai: 'charge',
     stages: ['cave'], from: 3, to: 14, weight: 7,
   },
   {
     id: 'lairon', name: 'Lairon', dex: 6,
     shape: 'lairon', fallback: 'round_big', palette: 'rock',
     hp: 88, dmg: 13, speed: 24, r: 5, mass: 2.6, xp: 5,
-    ai: 'charge', coinChance: 0.12, armor: 4, knockResist: 0.7,
+    ai: 'charge',
     stages: ['cave'], from: 7, to: 18, weight: 6,
   },
   {
     id: 'boldore', name: 'Boldore', dex: 7,
     shape: 'boldore', fallback: 'round_big', palette: 'rock',
     hp: 105, dmg: 14, speed: 16, r: 5.5, mass: 3.6, xp: 5,
-    ai: 'charge', coinChance: 0.12, armor: 3, knockResist: 0.75,
+    ai: 'charge',
     stages: ['cave'], from: 7, to: 19, weight: 6,
   },
   {
@@ -87,7 +87,8 @@ export const ENEMIES = [
     id: 'graveler', name: 'Graveler', dex: 10,
     shape: 'graveler', fallback: 'round_big', palette: 'rock',
     hp: 160, dmg: 17, speed: 14, r: 6.5, mass: 4.5, xp: 7,
-    ai: 'charge', coinChance: 0.16, armor: 4, knockResist: 0.8,
+    ai: 'charge',
+    attack: { kind: 'shot', range: 215, cooldown: 3.0, windup: 0.5, damage: 9, speed: 125 }, coinChance: 0.16, armor: 4, knockResist: 0.8,
     stages: ['cave'], from: 10, to: 20, weight: 5,
   },
   {
@@ -95,7 +96,8 @@ export const ENEMIES = [
     shape: 'gigalith', fallback: 'round_big', palette: 'rock',
     // The heaviest thing on the board. It will not be pushed and it will not be rushed.
     hp: 230, dmg: 21, speed: 13, r: 7, mass: 5.5, xp: 9,
-    ai: 'charge', coinChance: 0.20, armor: 6, knockResist: 0.88,
+    ai: 'charge',
+    attack: { kind: 'burst', count: 8, range: 250, cooldown: 4.2, windup: 0.7, damage: 11, speed: 125 }, coinChance: 0.20, armor: 6, knockResist: 0.88,
     stages: ['cave'], from: 13, to: 20, weight: 3,
   },
   {
@@ -103,7 +105,8 @@ export const ENEMIES = [
     shape: 'aggron', fallback: 'round_big', palette: 'rock',
     // As heavy as Gigalith and far quicker. The cave's last word.
     hp: 250, dmg: 22, speed: 22, r: 7, mass: 5, xp: 9,
-    ai: 'charge', coinChance: 0.20, armor: 7, knockResist: 0.9,
+    ai: 'charge',
+    attack: { kind: 'burst', count: 6, spread: 1.5, range: 235, cooldown: 3.8, windup: 0.65, damage: 12, speed: 135 }, coinChance: 0.20, armor: 7, knockResist: 0.9,
     stages: ['cave'], from: 14, to: 20, weight: 3,
   },
   {
@@ -112,7 +115,8 @@ export const ENEMIES = [
     // Fast, armoured and airborne at once, which nothing else manages. You meet it as the
     // ten-minute mini-boss first; from minute sixteen they come in ones and twos.
     hp: 120, dmg: 15, speed: 50, r: 5.5, mass: 1.8, xp: 7,
-    ai: 'orbit', coinChance: 0.14, flying: true, armor: 4, knockResist: 0.6,
+    ai: 'orbit',
+    attack: { kind: 'shot', range: 240, cooldown: 2.6, windup: 0.35, damage: 10, speed: 175 }, coinChance: 0.14, flying: true, armor: 4, knockResist: 0.6,
     stages: ['cave'], from: 16, to: 20, weight: 4,
   },
 
@@ -150,7 +154,7 @@ export const ENEMIES = [
     id: 'spearow', name: 'Spearow', dex: 18,
     shape: 'spearow', fallback: 'bat', palette: 'vermin',
     hp: 13, dmg: 6, speed: 40, r: 4, mass: 0.8, xp: 2,
-    ai: 'sine', coinChance: 0.06, flying: true,
+    ai: 'sine',
     stages: ['grass'], from: 1, to: 10, weight: 9,
   },
   {
@@ -171,7 +175,7 @@ export const ENEMIES = [
     id: 'pidgeotto', name: 'Pidgeotto', dex: 21,
     shape: 'pidgeotto', fallback: 'bat', palette: 'vermin',
     hp: 44, dmg: 11, speed: 42, r: 4.5, mass: 1, xp: 4,
-    ai: 'rusher', coinChance: 0.08, flying: true,
+    ai: 'rusher',
     stages: ['grass'], from: 7, to: 20, weight: 7,
   },
   {
@@ -179,21 +183,23 @@ export const ENEMIES = [
     shape: 'appletun', fallback: 'round_big', palette: 'grass',
     // The slow half of Applin's split: a rolling pie that does not care what you shoot it with.
     hp: 150, dmg: 15, speed: 15, r: 6, mass: 4, xp: 6,
-    ai: 'chase', coinChance: 0.14, armor: 4, knockResist: 0.8,
+    ai: 'chase',
     stages: ['grass'], from: 9, to: 20, weight: 5,
   },
   {
     id: 'butterfree', name: 'Butterfree', dex: 23,
     shape: 'butterfree', fallback: 'bug', palette: 'poison',
     hp: 90, dmg: 13, speed: 30, r: 5.5, mass: 1.2, xp: 6,
-    ai: 'sine', coinChance: 0.12, flying: true,
+    ai: 'sine',
+    attack: { kind: 'burst', count: 7, range: 230, cooldown: 4.0, windup: 0.65, damage: 9, speed: 120 }, coinChance: 0.12, flying: true,
     stages: ['grass'], from: 11, to: 20, weight: 5,
   },
   {
     id: 'fearow', name: 'Fearow', dex: 24,
     shape: 'fearow', fallback: 'bat', palette: 'vermin',
     hp: 110, dmg: 16, speed: 56, r: 5.5, mass: 1.5, xp: 6,
-    ai: 'rusher', coinChance: 0.10, flying: true, knockResist: 0.5,
+    ai: 'rusher',
+    attack: { kind: 'shot', range: 225, cooldown: 2.6, windup: 0.35, damage: 9, speed: 175 }, coinChance: 0.10, flying: true, knockResist: 0.5,
     stages: ['grass'], from: 11, to: 20, weight: 6,
   },
   {
@@ -201,14 +207,15 @@ export const ENEMIES = [
     shape: 'flapple', fallback: 'bat', palette: 'grass',
     // The fast half of the split, and it circles rather than charges.
     hp: 95, dmg: 14, speed: 48, r: 5, mass: 1.1, xp: 6,
-    ai: 'orbit', coinChance: 0.12, flying: true,
+    ai: 'orbit',
     stages: ['grass'], from: 12, to: 20, weight: 5,
   },
   {
     id: 'pidgeot', name: 'Pidgeot', dex: 26,
     shape: 'pidgeot', fallback: 'bat', palette: 'vermin',
     hp: 130, dmg: 18, speed: 48, r: 6, mass: 1.6, xp: 8,
-    ai: 'charge', coinChance: 0.18, flying: true, knockResist: 0.55,
+    ai: 'charge',
+    attack: { kind: 'burst', count: 5, spread: 1.1, range: 240, cooldown: 3.6, windup: 0.55, damage: 10, speed: 170 }, coinChance: 0.18, flying: true, knockResist: 0.55,
     stages: ['grass'], from: 13, to: 20, weight: 4,
   },
   {
@@ -226,7 +233,7 @@ export const ENEMIES = [
     id: 'poliwag', name: 'Poliwag', dex: 28,
     shape: 'poliwag', fallback: 'round_big', palette: 'water',
     hp: 15, dmg: 5, speed: 32, r: 4, mass: 0.9, xp: 1,
-    ai: 'chase', coinChance: 0.06,
+    ai: 'chase',
     stages: ['beach'], from: 0, to: 9, weight: 10,
   },
   {
@@ -256,14 +263,14 @@ export const ENEMIES = [
     shape: 'sandygast', fallback: 'round_big', palette: 'ground',
     // A sandcastle that resents being stepped on. Slow, and it does not mind being shot.
     hp: 40, dmg: 9, speed: 14, r: 5, mass: 2.6, xp: 3,
-    ai: 'chase', coinChance: 0.10, armor: 2, knockResist: 0.6,
+    ai: 'chase',
     stages: ['beach'], from: 3, to: 14, weight: 7,
   },
   {
     id: 'poliwhirl', name: 'Poliwhirl', dex: 33,
     shape: 'poliwhirl', fallback: 'round_big', palette: 'water',
     hp: 58, dmg: 12, speed: 34, r: 5, mass: 1.6, xp: 4,
-    ai: 'chase', coinChance: 0.09,
+    ai: 'chase',
     stages: ['beach'], from: 6, to: 18, weight: 7,
   },
   {
@@ -293,7 +300,8 @@ export const ENEMIES = [
     id: 'poliwrath', name: 'Poliwrath', dex: 37,
     shape: 'poliwrath', fallback: 'round_big', palette: 'water',
     hp: 175, dmg: 19, speed: 28, r: 6.5, mass: 4, xp: 8,
-    ai: 'charge', coinChance: 0.16, armor: 3, knockResist: 0.75,
+    ai: 'charge',
+    attack: { kind: 'burst', count: 6, spread: 1.4, range: 230, cooldown: 3.6, windup: 0.6, damage: 11, speed: 140 }, coinChance: 0.16, armor: 3, knockResist: 0.75,
     stages: ['beach'], from: 12, to: 20, weight: 4,
   },
   {
@@ -301,7 +309,8 @@ export const ENEMIES = [
     shape: 'palossand', fallback: 'round_big', palette: 'ground',
     // A whirlpool of sand with a shovel on top. The beach's wall.
     hp: 200, dmg: 19, speed: 13, r: 6.5, mass: 4.8, xp: 8,
-    ai: 'charge', coinChance: 0.18, armor: 5, knockResist: 0.85,
+    ai: 'charge',
+    attack: { kind: 'burst', count: 8, range: 240, cooldown: 4.0, windup: 0.7, damage: 11, speed: 120 }, coinChance: 0.18, armor: 5, knockResist: 0.85,
     stages: ['beach'], from: 13, to: 20, weight: 4,
   },
 ];

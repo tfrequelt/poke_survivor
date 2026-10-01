@@ -15,13 +15,36 @@ import {
 import { clamp, hash2, formatTime, formatNum } from './util.js';
 import { getPortrait, getImage, getAnim } from './assets.js';
 import { CREDITS } from './data/credits.js';
-import { panel, wrap, WIN_SELECTED, messageWindow, slider } from './win.js';
+import { panel, wrap, WIN_SELECTED, messageWindow, slider , drawDamagePanel, shortNum} from './win.js';
 import { BINDABLE, bindings, keyLabel } from './input.js';
 import { settings as audioSettings } from './audio.js';
 import { bankTotal, rankOf } from './save.js';
 import { wheel, SEGMENTS } from './wheel.js';
 import { SHOP_ITEMS, rankCost } from './data/shop.js';
-import { floorLabel, floorBonus, floorOrdinal } from './floors.js';
+import { floorLabel, floorBonus, floorOrdinal, endlessBonus } from './floors.js';
+import { damageBreakdown, damageFor } from './combat.js';
+import { WEAPON_BY_ID } from './data/weapons.js';
+import { SUCCESSES, rewardLabel } from './data/successes.js';
+import { successState, unlockedCount, unlockedThisRun } from './successes.js';
+
+/**
+ * The main menu's entries. Shared with the key handler in main.js, so the two can never disagree
+ * about what is on the screen or how many entries there are.
+ */
+export const TITLE_MENU = [
+  { id: 'play', label: 'PLAY' },
+  { id: 'successes', label: 'SUCCESSES' },
+  { id: 'shop', label: 'KECLEON SHOP' },
+  { id: 'options', label: 'OPTIONS' },
+  { id: 'credits', label: 'CREDITS' },
+];
+
+/** Breakdown key -> weapon type, for bar colours. */
+export const weaponTypeOf = (key) => {
+  if (!key.startsWith('w:')) return null;
+  const w = WEAPON_BY_ID[key.slice(2)];
+  return w ? w.type : null;
+};
 
 /** Set by main.js once the atlas exists. */
 export let ballSpr = -1;
@@ -49,6 +72,8 @@ const KIND_COLOR = {
   passive: '#ffd166',
   stat: '#7fe08a',
   heal: '#ff9f9f',
+  // Gold, and the only card with no pip track: mastery has no cap to draw.
+  mastery: '#ffd166',
 };
 
 const KIND_LABEL = {
@@ -57,6 +82,7 @@ const KIND_LABEL = {
   passive: 'ITEM',
   stat: 'BOOST',
   heal: 'RECOVER',
+  mastery: 'MASTERY',
 };
 
 /** Colour-coded type badge, drawn from the character's typeLabel. */
@@ -195,9 +221,20 @@ export function drawLevelUp() {
   drawFooter();
 }
 
-/** Level pips: filled for levels taken, hollow for those remaining. Caps out at 8 to fit. */
+/**
+ * Level pips: filled for levels taken, hollow for those remaining.
+ *
+ * The cap is the longest track anything has -- ten, since weapons gained levels 9 and 10. Ten
+ * pips are 48px against the card's 176, so they still clear the kind label on the same row.
+ *
+ * `max: 0` means uncapped, which is what a Mastery card is: there is no track to draw, so it
+ * draws none rather than one lonely pip that never fills.
+ */
+const PIP_MAX = 10;
+
 function drawPips(o, rightX, y, color) {
-  const max = Math.min(o.max || 1, 8);
+  if (!o.max) return;
+  const max = Math.min(o.max, PIP_MAX);
   const filled = clamp(o.level, 0, max);
   const size = 3, gap = 2;
   const w = max * (size + gap) - gap;
@@ -265,18 +302,76 @@ function drawSeaBackdrop() {
  * The image is scaled by a whole number only. A pixel logo resampled to a fraction turns to mush,
  * and this game is integer-scaled everywhere else for the same reason.
  */
+// The box the title logo is fitted into, centred at the top. The height is what fits above the
+// menu window and the starters on the shore; the width only matters for a very wide logo.
+const LOGO_MAX_W = 380, LOGO_MAX_H = 100, LOGO_TOP = 8;
+
+/** The logo shrunk to its on-screen size, built once. `null` until the image has loaded. */
+let logoCache = null;
+let logoSource = null;
+
+/**
+ * Trim the logo to its visible pixels and shrink it to fit the box.
+ *
+ * Done once, not per frame, and in HALVING steps with smoothing on. The supplied logo is painted
+ * art at 1774x887 -- nearly three screens wide -- and everything else here is pixel art drawn
+ * without smoothing. Squeezing it to a fifth of its size in one nearest-neighbour step would turn
+ * every curve into stairs, and a single smoothed step that large skips most of the source pixels;
+ * halving repeatedly averages them all.
+ */
+function buildLogo(img) {
+  // Trim the transparent margin first, so the logo is centred on its art and not on its canvas.
+  const sg = img.canvas.getContext('2d', { willReadFrequently: true });
+  const px = sg.getImageData(0, 0, img.w, img.h).data;
+  let x0 = img.w, y0 = img.h, x1 = -1, y1 = -1;
+  for (let y = 0; y < img.h; y++) {
+    for (let x = 0; x < img.w; x++) {
+      if (px[(y * img.w + x) * 4 + 3] > 16) {
+        if (x < x0) x0 = x; if (x > x1) x1 = x;
+        if (y < y0) y0 = y; if (y > y1) y1 = y;
+      }
+    }
+  }
+  if (x1 < 0) return null;
+  let w = x1 - x0 + 1, h = y1 - y0 + 1;
+  let src = document.createElement('canvas');
+  src.width = w; src.height = h;
+  src.getContext('2d').drawImage(img.canvas, x0, y0, w, h, 0, 0, w, h);
+
+  const k = Math.min(LOGO_MAX_W / w, LOGO_MAX_H / h);
+  const tw = Math.max(1, Math.round(w * k)), th = Math.max(1, Math.round(h * k));
+  while (w / 2 > tw) {
+    const half = document.createElement('canvas');
+    half.width = Math.max(tw, Math.round(w / 2));
+    half.height = Math.max(th, Math.round(h / 2));
+    const hg = half.getContext('2d');
+    hg.imageSmoothingEnabled = true;
+    hg.imageSmoothingQuality = 'high';
+    hg.drawImage(src, 0, 0, half.width, half.height);
+    src = half; w = half.width; h = half.height;
+  }
+  const out = document.createElement('canvas');
+  out.width = tw; out.height = th;
+  const og = out.getContext('2d');
+  og.imageSmoothingEnabled = true;
+  og.imageSmoothingQuality = 'high';
+  og.drawImage(src, 0, 0, tw, th);
+  return out;
+}
+
+/** The title logo, centred at the top. Returns the y just below it, for the subtitle. */
 function drawTitleLogo() {
   const img = getImage('title');
   if (!img) {
+    // No logo file: the drawn wordmark, as before.
     drawLogo(ctx, 'POKEMON DRACULA EDITION', VW / 2, 34, 3, 'gold', 'dark');
     return 50;
   }
-  const maxW = VW - 48, maxH = 58;
-  const k = Math.max(1, Math.min(Math.floor(maxW / img.w), Math.floor(maxH / img.h)));
-  const w = img.w * k, h = img.h * k;
-  const y = Math.round(14 + (maxH - h) / 2);
-  ctx.drawImage(img.canvas, 0, 0, img.w, img.h, Math.round((VW - w) / 2), y, w, h);
-  return y + h;
+  if (logoSource !== img) { logoSource = img; logoCache = buildLogo(img); }
+  if (!logoCache) return 50;
+  // Already at its final size, so a plain 1:1 blit -- no smoothing question at draw time.
+  ctx.drawImage(logoCache, Math.round((VW - logoCache.width) / 2), LOGO_TOP);
+  return LOGO_TOP + logoCache.height;
 }
 
 /**
@@ -303,7 +398,7 @@ function drawIdleAnim(c, x, footY, t) {
   return true;
 }
 
-export function drawTitle(starters, t) {
+export function drawTitle(starters, t, cursor = 0, claimable = 0) {
   const sea = drawSeaBackdrop();
   let feet = SEA_FEET;
 
@@ -353,14 +448,7 @@ export function drawTitle(starters, t) {
     }
   }
 
-  // Visible most of the time rather than a hard 50/50 blink, which reads as broken. In a window,
-  // because white text on bright water is barely legible on its own.
-  if ((t * 1.4) % 1 < 0.72) {
-    const label = 'PRESS ANY KEY';
-    const w = textWidth(label) + 26;
-    panel(Math.round((VW - w) / 2), 292, w, 22, { accent: '#ffd166' });
-    drawTextCentered(ctx, label, VW / 2, 299, 'white');
-  }
+  drawTitleMenu(subY + 20, cursor, claimable, t);
 
   // The two footer lines get a band behind them for the same reason.
   ctx.fillStyle = 'rgba(6,10,26,0.62)';
@@ -368,8 +456,116 @@ export function drawTitle(starters, t) {
   // The artists ask to be credited wherever their sprites are used, so the attribution stays on
   // the front page and not only on the credits screen.
   drawTextCentered(ctx, 'SPRITES AND PORTRAITS BY THE PMD SPRITE COLLAB', VW / 2, VH - 28, 'blue');
-  drawTextCentered(ctx, 'S SHOP    C CREDITS    O SETTINGS    M MUTE    F FULLSCREEN',
-    VW / 2, VH - 16, 'dim');
+  drawTextCentered(ctx, 'ARROWS + ENTER    M MUTE    F FULLSCREEN', VW / 2, VH - 16, 'dim');
+}
+
+const MENU_ROW = 15;
+
+/**
+ * The main menu: one Mystery Dungeon window between the subtitle and the starters. In a window
+ * because white text straight on the sea backdrop is barely legible.
+ */
+function drawTitleMenu(y, cursor, claimable, t) {
+  const w = 168;
+  const h = TITLE_MENU.length * MENU_ROW + 14;
+  const x = Math.round((VW - w) / 2);
+  panel(x, y, w, h, { accent: '#ffd166' });
+
+  for (let i = 0; i < TITLE_MENU.length; i++) {
+    const item = TITLE_MENU[i];
+    const ry = y + 9 + i * MENU_ROW;
+    const on = i === cursor;
+    if (on) {
+      ctx.fillStyle = 'rgba(255,209,102,0.16)';
+      ctx.fillRect(x + 6, ry - 3, w - 12, MENU_ROW - 1);
+      // A small chevron, nudging on wall time so the cursor reads as alive.
+      const nx = x + 14 + Math.round(Math.abs(Math.sin(t * 5)) * 2);
+      ctx.fillStyle = '#ffd166';
+      for (let k = 0; k < 4; k++) ctx.fillRect(nx + k, ry + k, 1, 7 - k * 2);
+    }
+    drawText(ctx, item.label, x + 28, ry, on ? 'gold' : 'white');
+
+    // Something waiting to be claimed: say so from the menu, or nobody would think to look.
+    if (item.id === 'successes' && claimable > 0) {
+      const tag = `! ${claimable}`;
+      const tw = textWidth(tag) + 6;
+      const tx = x + w - 14 - tw;
+      ctx.fillStyle = '#ffd166';
+      ctx.fillRect(tx, ry - 1, tw, 9);
+      drawText(ctx, tag, tx + 3, ry, 'dark');
+    }
+  }
+}
+
+// --- Successes ----------------------------------------------------------------
+
+const SC_W = 284, SC_H = 62, SC_GAP = 14, SC_TOP = 36, SC_ROW = SC_H + 10;
+
+/** A 1px frame outside a card, in spans -- the golden outline of a reward waiting to be claimed. */
+function outline(x, y, w, h, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, w, 1);
+  ctx.fillRect(x, y + h - 1, w, 1);
+  ctx.fillRect(x, y, 1, h);
+  ctx.fillRect(x + w - 1, y, 1, h);
+}
+
+export function drawSuccesses(cursor) {
+  ctx.fillStyle = '#17142a';
+  ctx.fillRect(0, 0, VW, VH);
+  drawText(ctx, 'SUCCESSES', 30, 14, 'gold');
+  const head = `${unlockedCount()} / ${SUCCESSES.length} UNLOCKED     ${formatNum(bankTotal())} G`;
+  drawText(ctx, head, VW - 30 - textWidth(head), 14, 'dim');
+
+  // Scroll by whole rows so the selected card is always on screen.
+  const rowsVisible = Math.floor((VH - SC_TOP - 26) / SC_ROW);
+  const row = Math.floor(cursor / 2);
+  const first = Math.max(0, row - rowsVisible + 1) * 2;
+  const x0 = Math.round((VW - SC_W * 2 - SC_GAP) / 2);
+
+  for (let i = first; i < SUCCESSES.length && i < first + rowsVisible * 2; i++) {
+    const sc = SUCCESSES[i];
+    const state = successState(sc.id);
+    const x = x0 + (i % 2) * (SC_W + SC_GAP);
+    const y = SC_TOP + Math.floor((i - first) / 2) * SC_ROW;
+    const on = i === cursor;
+
+    const accent = state === 'unlocked' ? '#ffd166' : state === 'claimed' ? '#7ac8ff' : '#3a4466';
+    panel(x, y, SC_W, SC_H, on ? { accent: '#ffffff', ...WIN_SELECTED } : { accent });
+    // Unlocked and unclaimed: a second, outer gold frame -- the "come and collect this" card.
+    if (state === 'unlocked') {
+      outline(x - 2, y - 2, SC_W + 4, SC_H + 4, '#ffd166');
+      outline(x - 3, y - 3, SC_W + 6, SC_H + 6, 'rgba(255,209,102,0.35)');
+    }
+
+    const title = state === 'locked' ? '???' : sc.title.toUpperCase();
+    drawText(ctx, title, x + 10, y + 9, state === 'locked' ? 'dim' : state === 'unlocked' ? 'gold' : 'white');
+
+    const lines = wrap(sc.desc.toUpperCase(), 42);
+    for (let l = 0; l < lines.length && l < 2; l++) {
+      drawText(ctx, lines[l], x + 10, y + 23 + l * 10, state === 'locked' ? 'dim' : 'white');
+    }
+
+    // The prize, bottom right; what to do about it, bottom left.
+    const prize = rewardLabel(sc.reward);
+    drawText(ctx, prize, x + SC_W - 10 - textWidth(prize), y + SC_H - 15,
+      state === 'claimed' ? 'dim' : 'gold');
+    const status = state === 'locked' ? 'LOCKED'
+      : state === 'claimed' ? 'CLAIMED'
+      : 'ENTER TO CLAIM';
+    drawText(ctx, status, x + 10, y + SC_H - 15,
+      state === 'locked' ? 'dim' : state === 'claimed' ? 'green' : 'gold');
+  }
+
+  drawTextCentered(ctx, 'ARROWS MOVE    ENTER CLAIM    BACKSPACE BACK', VW / 2, VH - 16, 'dim');
+}
+
+/** One line for the end-of-run screens when anything unlocked during the run. */
+export function newSuccessLine() {
+  if (!unlockedThisRun.length) return '';
+  return unlockedThisRun.length === 1
+    ? 'NEW SUCCESS -- CLAIM IT FROM THE MENU'
+    : `${unlockedThisRun.length} NEW SUCCESSES -- CLAIM THEM FROM THE MENU`;
 }
 
 // --- Credits ----------------------------------------------------------------
@@ -406,7 +602,7 @@ export function drawCredits() {
     ctx.fillRect(VW - 27, Math.round(trackY + (trackH - knob) * (from / max)), 3, Math.round(knob));
   }
 
-  drawTextCentered(ctx, max > 0 ? 'UP / DOWN SCROLL      ESC BACK' : 'ESC BACK', VW / 2, VH - 24, 'dim');
+  drawTextCentered(ctx, max > 0 ? 'UP / DOWN SCROLL      BACKSPACE BACK' : 'BACKSPACE BACK', VW / 2, VH - 24, 'dim');
 }
 
 // --- Character select -------------------------------------------------------
@@ -507,7 +703,7 @@ export function drawSelect(starters, t) {
     if (selected) drawCursorArrow(px, SELECT_Y - 11);
   }
 
-  drawTextCentered(ctx, `1-${starters.length} / ARROWS + ENTER      ESC BACK`, VW / 2, VH - 18, 'dim');
+  drawTextCentered(ctx, `1-${starters.length} / ARROWS + ENTER      BACKSPACE BACK`, VW / 2, VH - 18, 'dim');
 }
 
 // --- Stage select -----------------------------------------------------------
@@ -580,7 +776,7 @@ export function drawStageSelect(stages, partner, t) {
     if (selected) drawCursorArrow(x + L.w / 2, STAGE_Y - 11);
   }
 
-  drawTextCentered(ctx, `1-${stages.length} / ARROWS + ENTER      ESC BACK`, VW / 2, VH - 18, 'dim');
+  drawTextCentered(ctx, `1-${stages.length} / ARROWS + ENTER      BACKSPACE BACK`, VW / 2, VH - 18, 'dim');
 }
 
 // --- Settings ---------------------------------------------------------------
@@ -663,7 +859,7 @@ export function drawSettings(inRun) {
 
   if (ui.note) drawTextCentered(ctx, ui.note, VW / 2, y + h - 12, 'gold');
   drawTextCentered(ctx,
-    ui.awaitKey ? 'PRESS THE NEW KEY      ESC CANCEL' : 'ARROWS + ENTER      ESC BACK',
+    ui.awaitKey ? 'PRESS THE NEW KEY      BACKSPACE CANCEL' : 'ARROWS + ENTER      BACKSPACE BACK',
     VW / 2, VH - 18, 'dim');
 }
 
@@ -700,14 +896,47 @@ export function drawSummary() {
     '',
   ];
   if (bonus > 0) lines.push(`${floorOrdinal()} FLOOR BONUS  +${formatNum(bonus)}`);
+  if (G.endlessBosses > 0) {
+    lines.push(`ENDLESS x${G.endlessBosses}    +${formatNum(endlessBonus())}`);
+  }
   lines.push(`GOLD EARNED   +${formatNum(G.coins)}`);
   lines.push(`BANK          ${formatNum(bankTotal())}`);
 
-  const w = 300, x = Math.round((VW - w) / 2);
-  messageWindow(x, 104, w, lines, { accent: '#ffd166', lineHeight: 11 });
+  // Two columns: how the run went on the left, what did the work on the right.
+  messageWindow(22, 96, 290, lines, { accent: '#ffd166', lineHeight: 11 });
+  drawDamagePanel(328, 96, 290, damageBreakdown(), weaponTypeOf);
 
-  drawTextCentered(ctx, 'SPEND IT AT THE KECLEON SHOP', VW / 2, VH - 42, 'blue');
+  const ns = newSuccessLine();
+  drawTextCentered(ctx, ns || 'SPEND IT AT THE KECLEON SHOP', VW / 2, VH - 42, ns ? 'gold' : 'blue');
   drawTextCentered(ctx, 'PRESS ANY KEY', VW / 2, VH - 26, 'dim');
+}
+
+/**
+ * The fork at the end of a won run: bank it, or keep going.
+ *
+ * Deliberately not a card screen. The win is already secured by the time this appears, so there
+ * is nothing to weigh up and nothing to lose -- it is a question, and it reads as one.
+ */
+export function drawVictoryChoice() {
+  ctx.fillStyle = 'rgba(8,8,18,0.82)';
+  ctx.fillRect(0, 0, VW, VH);
+
+  drawLogo(ctx, 'VICTORY', VW / 2, 52, 3, 'gold', 'dark');
+  drawTextCentered(ctx, `${formatTime(G.runTime)}   FLOOR ${floorLabel()}`, VW / 2, 84, 'dim');
+
+  const w = 300, x = Math.round((VW - w) / 2);
+  messageWindow(x, 108, w, [
+    'THE BOSS IS DOWN. THE WIN IS YOURS',
+    'WHATEVER YOU DO NEXT.',
+    '',
+    '1 / ENTER   TAKE THE WIN',
+    '2 / E       KEEP GOING',
+    '',
+    'ENDLESS SENDS A BOSS EVERY TWO',
+    'MINUTES AND PAYS FOR EACH ONE.',
+  ], { center: true, accent: '#ffd166', lineHeight: 11 });
+
+  drawTextCentered(ctx, 'YOUR GOLD IS SAFE EITHER WAY', VW / 2, VH - 30, 'blue');
 }
 
 // --- Kecleon Shop -----------------------------------------------------------
@@ -809,7 +1038,7 @@ export function drawShop() {
   }
 
   if (ui.note) drawTextCentered(ctx, ui.note, VW / 2, VH - 32, 'gold');
-  drawTextCentered(ctx, 'ARROWS + ENTER BUY      ESC BACK', VW / 2, VH - 18, 'dim');
+  drawTextCentered(ctx, 'ARROWS + ENTER BUY      BACKSPACE BACK', VW / 2, VH - 18, 'dim');
 }
 
 // --- Delibird's present wheel -----------------------------------------------
@@ -1078,7 +1307,11 @@ export function drawPause() {
   lines.push('');
   lines.push('- WEAPONS -');
   for (const w of G.weapons) {
-    lines.push(`${w.def.name.toUpperCase()}  ${w.level}/${w.def.levels.length}`);
+    // Damage so far beside each weapon, so a pause is also a check on which picks are pulling
+    // their weight.
+    const ev = w.def.evolution;
+    const ready = ev && !w.evolved && w.level >= w.def.levels.length && G.passives.includes(ev.needPassive);
+    lines.push(`${w.def.name.toUpperCase()}  ${w.level}/${w.def.levels.length}   ${shortNum(damageFor(`w:${w.def.id}`))}${ready ? '  EVOLVE: FIND AN ELIXIR' : ''}`);
   }
   if (G.passives.length) {
     lines.push('');
@@ -1102,5 +1335,5 @@ export function drawPause() {
     ty += 10;
   }
 
-  drawTextCentered(ctx, 'ESC RESUME    O SETTINGS    R RESTART    Q CHANGE PARTNER', VW / 2, VH - 20, 'dim');
+  drawTextCentered(ctx, 'BACKSPACE RESUME    O SETTINGS    R RESTART    Q CHANGE PARTNER', VW / 2, VH - 20, 'dim');
 }

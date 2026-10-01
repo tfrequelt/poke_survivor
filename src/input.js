@@ -5,8 +5,12 @@
 //
 // The indirection exists so keys can be rebound. Each action has exactly ONE bindable code plus
 // fixed aliases that cannot be changed: the arrow keys always move, Enter always confirms and
-// Escape always backs out, so a player who binds themselves into a corner can always reach the
-// settings screen and undo it.
+// Backspace and Escape always back out, so a player who binds themselves into a corner can always
+// reach the settings screen and undo it.
+//
+// Backspace is the PRIMARY back key, not Escape: in fullscreen the browser takes the first Escape
+// press to leave fullscreen and the page cannot stop it, so backing out of a menu with Escape
+// threw the player out of fullscreen every time. Escape still works when windowed.
 
 const down = new Set();        // currently held
 const pressed = new Set();     // went down since the last endFrame()
@@ -29,7 +33,7 @@ export const BINDABLE = [
   { id: 'right', label: 'MOVE RIGHT', def: 'KeyD', alias: ['ArrowRight'], group: 'play' },
   { id: 'ability1', label: 'ABILITY 1', def: 'KeyQ', alias: [], group: 'play' },
   { id: 'ability2', label: 'ABILITY 2', def: 'KeyE', alias: [], group: 'play' },
-  { id: 'pause', label: 'PAUSE', def: 'Escape', alias: ['KeyP'], group: 'play' },
+  { id: 'pause', label: 'PAUSE', def: 'Backspace', alias: ['KeyP', 'Escape'], group: 'play' },
   { id: 'restart', label: 'RESTART RUN', def: 'KeyR', alias: [], group: 'play' },
   { id: 'mute', label: 'MUTE', def: 'KeyM', alias: [], group: 'play' },
   { id: 'fullscreen', label: 'FULLSCREEN', def: 'KeyF', alias: [], group: 'play' },
@@ -82,6 +86,10 @@ export const bindingsSnapshot = () => ({ ...bindings });
 export function restoreBindings(saved) {
   if (!saved) return;
   for (const b of BINDABLE) if (typeof saved[b.id] === 'string') bindings[b.id] = saved[b.id];
+  // Settings saved before Backspace became the default still say Escape -- they save every
+  // binding, defaults included. Escape is an alias now, so that entry is the old default rather
+  // than a choice, and it is moved onto the new one.
+  if (saved.pause === 'Escape') bindings.pause = BY_ID.pause.def;
 }
 
 /** 'KeyW' -> 'W', 'ArrowUp' -> 'UP', 'BracketRight' -> 'BRACKETRIGHT'. For the settings screen. */
@@ -91,6 +99,7 @@ export function keyLabel(code) {
   if (code.startsWith('Digit')) return code.slice(5);
   if (code.startsWith('Arrow')) return code.slice(5).toUpperCase();
   if (code === 'Escape') return 'ESC';
+  if (code === 'Backspace') return 'BACKSPACE';
   if (code === 'Space') return 'SPACE';
   return code.toUpperCase();
 }

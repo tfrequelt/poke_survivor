@@ -10,6 +10,7 @@ import { WEAPONS, WEAPON_BY_ID } from './data/weapons.js';
 import { ABILITIES } from './data/abilities.js';
 import { addAbility } from './abilities.js';
 import { addWeapon, levelWeapon, MAX_WEAPONS } from './weapons.js';
+import { checkLevel } from './successes.js';
 
 /**
  * XP required to go from level L to L+1.
@@ -29,6 +30,9 @@ export function grantXp(amount) {
     G.xpNext = xpToNext(G.level);
     G.pendingLevelUps++;
   }
+  // Checked where the level is gained, not polled: the level-up screen freezes the sim, so a
+  // per-tick check would wait for the player to finish picking cards before noticing.
+  checkLevel();
 }
 
 export function grantCoins(amount) {
@@ -43,6 +47,40 @@ const MAX_PASSIVES = 6;
 const picks = new Map();
 export function resetPicks() { picks.clear(); offersSeen.clear(); }
 const pickCount = (id) => picks.get(id) || 0;
+
+/**
+ * The uncapped tail of the upgrade tree.
+ *
+ * Every other card runs out: weapons stop at level 10, passives at their maxPicks, abilities at
+ * five. When the pool empties, rollOffers falls back to a single Recover card -- which a long
+ * run, and endless in particular, reaches and then never leaves. These have no cap, so it
+ * cannot happen. They are deliberately smaller than a real upgrade: this is the consolation for
+ * having taken everything, not a reason to stop taking real cards.
+ */
+const MASTERY = [
+  { id: 'm_power', name: 'Mastery: Might', desc: '+6% attack power',
+    mods: [{ stat: 'power', op: 'inc', value: 0.06 }] },
+  { id: 'm_area', name: 'Mastery: Reach', desc: '+5% area of effect',
+    mods: [{ stat: 'area', op: 'inc', value: 0.05 }] },
+  { id: 'm_haste', name: 'Mastery: Haste', desc: '+4% attack speed',
+    mods: [{ stat: 'attackSpeed', op: 'inc', value: 0.04 }] },
+  { id: 'm_hp', name: 'Mastery: Vigour', desc: '+8 max health',
+    mods: [{ stat: 'maxHp', op: 'flat', value: 8 }] },
+  { id: 'm_speed', name: 'Mastery: Swiftness', desc: '+4% movement speed',
+    mods: [{ stat: 'moveSpeed', op: 'inc', value: 0.04 }] },
+  { id: 'm_cooldown', name: 'Mastery: Focus', desc: '-3% ability cooldown',
+    mods: [{ stat: 'cooldown', op: 'inc', value: -0.03 }] },
+];
+
+export const MASTERY_BY_ID = Object.fromEntries(MASTERY.map((m) => [m.id, m]));
+
+/**
+ * Below this many real cards, Mastery is allowed in to pad the draw.
+ *
+ * Not "only when the pool is empty": with two real cards left the player would be shown the
+ * same two every level until they took them. Three is one full hand.
+ */
+const MASTERY_FLOOR = 3;
 
 /** Every card that is currently legal to offer, as {kind, id, name, desc, level} entries. */
 function candidates() {
@@ -80,6 +118,17 @@ function candidates() {
     if (n >= u.maxPicks || G.banished.has(u.id)) continue;
     if (n === 0 && G.passives.length >= MAX_PASSIVES) continue;
     out.push({ kind: 'passive', id: u.id, name: u.name, desc: u.desc, level: n + 1, max: u.maxPicks, weight: 8 });
+  }
+
+  // Mastery last, and only once the real pool has thinned, so it can never crowd out an upgrade
+  // that still has somewhere to go.
+  if (out.length < MASTERY_FLOOR) {
+    for (const m of MASTERY) {
+      out.push({
+        kind: 'mastery', id: m.id, name: m.name, desc: m.desc,
+        level: pickCount(m.id) + 1, max: 0, weight: 10,
+      });
+    }
   }
 
   for (const a of availableAbilities()) {
@@ -147,15 +196,29 @@ function noteAbilityOffers() {
 }
 
 /** Human-readable summary of what the next weapon level grants. */
+// Every grant key a weapon's level table can carry, and how to say it out loud. The list used
+// to stop at five, so a splitter's "+1 shard" and a bouncer's "+2 bounces" both rendered as the
+// useless "Improves this weapon." -- tri_attack's level 2 said it before this.
+const LEVEL_WORDS = [
+  ['amount', (v) => `+${v} projectile`],
+  ['damage', (v) => `+${v} damage`],
+  ['pierce', (v) => `+${v} pierce`],
+  ['shards', (v) => `+${v} shard`],
+  ['bounces', (v) => `+${v} bounce`],
+  ['jumps', (v) => `+${v} jump`],
+  ['duration', (v) => `+${v}s duration`],
+  ['cooldownMul', (v) => `${Math.round((1 - v) * 100)}% faster`],
+  ['areaMul', (v) => `+${Math.round((v - 1) * 100)}% area`],
+];
+
+/** Exported for the harness: 66 weapons x 9 levels is not something to read by eye. */
+export const levelDescForTest = (def, lv) => levelDesc(def, lv);
+
 function levelDesc(def, currentLevel) {
   const lv = def.levels[currentLevel];
   if (!lv) return 'Improves this weapon.';
   const bits = [];
-  if (lv.amount) bits.push(`+${lv.amount} projectile`);
-  if (lv.damage) bits.push(`+${lv.damage} damage`);
-  if (lv.pierce) bits.push(`+${lv.pierce} pierce`);
-  if (lv.cooldownMul) bits.push(`${Math.round((1 - lv.cooldownMul) * 100)}% faster`);
-  if (lv.areaMul) bits.push(`+${Math.round((lv.areaMul - 1) * 100)}% area`);
+  for (const [key, say] of LEVEL_WORDS) if (lv[key]) bits.push(say(lv[key]));
   return bits.length ? bits.join(', ') : 'Improves this weapon.';
 }
 
@@ -217,6 +280,13 @@ export function takeOffer(offer) {
       const u = PASSIVE_BY_ID[offer.id];
       addMods(u.mods, `passive:${u.id}`);
       if (!G.passives.includes(u.id)) G.passives.push(u.id);
+      break;
+    }
+    case 'mastery': {
+      // A distinct source key per stack, or addMods would replace the previous one instead of
+      // adding to it -- which is what makes these uncapped rather than a one-off.
+      const m = MASTERY_BY_ID[offer.id];
+      addMods(m.mods, `mastery:${m.id}:${pickCount(m.id)}`);
       break;
     }
     case 'ability': {

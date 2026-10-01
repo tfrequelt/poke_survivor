@@ -43,6 +43,11 @@ export const FLOOR_BONUS = [0, 200, 500, 1000];
 
 export const floorBonus = (floor = G.floor) => FLOOR_BONUS[Math.min(FLOOR_BONUS.length - 1, Math.max(0, floor - 1))];
 
+/** Gold per boss felled after the 20:00 win. Flat, because endless bosses already escalate. */
+export const ENDLESS_BOSS_GOLD = 300;
+
+export const endlessBonus = () => (G.endlessBosses || 0) * ENDLESS_BOSS_GOLD;
+
 /**
  * The floor as the player sees it.
  *

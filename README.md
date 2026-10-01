@@ -34,21 +34,21 @@ python -m http.server 8000  # -> http://localhost:8000
 
 | Key | Action |
 |---|---|
-| `WASD` / arrow keys | Move |
+| `WASD` / arrow keys | Move; navigate every menu |
 | `Q` / `E` | First / second ability |
-| `Esc` / `P` | Pause |
+| `Backspace` / `P` | Pause; back out of any menu (`Esc` also works, but in fullscreen the browser uses it to leave fullscreen) |
 | `1`-`3` / arrows + `Enter` | Choose on any card screen |
 | `Enter` | Take the stairs (standing on them); dismiss the evolution cutscene |
+| `1` / `2` (after the boss) | Take the win / keep going into endless |
 | `R` | Reroll on level-up, restart otherwise |
 | `B` / `S` | Banish / skip a level-up (press `B` twice to confirm) |
 | `Q` (paused / after a run) | Back to partner select |
-| `O` | Settings — volume, key bindings, back to menu, restart |
+| `O` (paused) | Settings — volume, key bindings, back to menu, restart |
 | `M` | Mute |
-| `S` | Kecleon Shop (from the title screen) |
-| `C` | Credits (from the title screen) |
 | `F` | Fullscreen -- 640x360 is an exact 3x fit for 1080p |
 
-The game opens on a title screen; any key goes to partner select, where you pick one of six
+The game opens on a **main menu** — PLAY, SUCCESSES, KECLEON SHOP, OPTIONS, CREDITS — driven with
+the arrows (or W/S) and Enter. PLAY goes to partner select, where you pick one of six
 partners, and then to stage select.
 `?char=wooper|eevee|rowlet|vulpix|delibird|gastly` skips straight into a run with that partner,
 and `?stage=grass|cave|beach` picks where.
@@ -134,6 +134,10 @@ draws; it never takes away a weapon you already hold.
 | Vulpix / Ninetales | Fire |
 | Delibird | Ice + Flying |
 
+Weapons run to **level 10**, passives to five to seven picks, and once that pool finally thins
+out **Mastery** cards appear — uncapped +6% power, +5% area and the like — so a very long run, or
+an endless one, never runs out of things to take.
+
 No two weapons share a delivery mechanism. There are twenty firing behaviours -- among them mines
 you leave behind, turrets that fire on their own, shots that ricochet and gain damage, seeds that
 detonate seconds later, beams that burn everything on the line to their target, vortices that drag
@@ -187,6 +191,61 @@ the floor before you take the stairs, because whatever is lying on it is left be
 The 20:00 boss and the mini-bosses run off the global clock, so a floor change never reschedules
 them, and a staircase left standing is not replaced — dawdle past 10:00 and 15:00 with the first
 one untaken and those marks are spent, so taking it at 16:00 gets you one floor, not three.
+
+## Traps
+
+Five Mystery Dungeon trap tiles lie in the floor: **spike** (damage), **explosion** (damage in a
+radius), **slumber** (holds you still), **poison**, and **warp** (throws you somewhere else in
+the arena). They are placed off-camera so you never see one arrive, and each cell is remembered —
+a sprung trap never comes back.
+
+They are **invisible until you get within about 80px**, fading in as you close, which is roughly
+half a second of warning at walking pace. And **enemies set them off too**: a trap you have
+spotted stops being a tax and becomes ground you can fight over. Deeper floors are visibly worse
+ground — density rises 35% per floor.
+
+## Elites
+
+Roughly once a minute from 2:30, one spawning enemy is promoted to an **elite**: six times the
+health, a bigger hitbox, twelve times the XP, a guaranteed coin and an elixir when it dies. They
+are drawn larger with a gold ring under them and a health bar above.
+
+**Luck** shortens the gap between them — from one a minute at zero luck to one every 34 seconds
+at the cap — and also raises drop rates, adds a chance for any kill to leave a pickup, and thins
+the casino wheel's worst prize until, at 0.5 luck, it can never come up at all. Delibird reaches
+exactly that by its second evolution, which is what its "the wheel never lands on its worst prize
+again" has always been describing.
+
+## Endless
+
+Beating the 20:00 boss no longer ends the run on the spot: it opens a choice. **Take the win**
+banks everything and rolls the credits. **Keep going** continues the run with a boss every two
+minutes and **+300 gold for each one you fell**.
+
+The win is locked in the moment the boss dies, and the floor bonus with it, so endless can only
+ever add — dying in it still banks the victory, the floor bonus and every endless boss you took
+down.
+
+## Successes
+
+Achievements, in their own window from the main menu. A locked card shows `???` as its title and
+the requirement as its description; once unlocked it shows its real name. Unlocking happens the
+moment you do it — a toast slides in mid-run and it is saved at once — but the reward is **claimed
+from the window**: an unclaimed card has a golden outline, the menu shows a `!` with the count, and
+Enter on the card banks the prize.
+
+| Success | Requirement | Reward |
+|---|---|---|
+| Close Call | Get down to exactly 1 HP | 500 G |
+| Maxed Out | Reach level 100 | 900 G |
+| Kaboom | Kill 30+ enemies with a single ability use | 600 G |
+| Punching the Screen | Die between 19:30 and 20:00 | 10 G |
+
+"Exactly 1 HP" means what the HUD shows. Kaboom counts everything one cast is responsible for —
+including the pools, rings and burns it leaves behind — and starts over each time the ability is
+cast. Successes are kept in the save beside the gold bank, and **RESET PROGRESS leaves them
+alone**. The list is `src/data/successes.js`; a reward is an object (`{ gold: 500 }`) so other
+kinds of prize can be added there later.
 
 ## Winning, and the Kecleon Shop
 
@@ -274,6 +333,17 @@ three different places rather than one roster reskinned:
 Skarmory and Tauros spawn only in the last few minutes, so you meet each as a mini-boss first and
 as a regular enemy afterwards.
 
+**Nine of the thirty-eight shoot back**, all of them late forms — Graveler, Gigalith, Aggron,
+Skarmory, Fearow, Pidgeot, Butterfree, Poliwrath and Palossand — so nothing ranged turns up before
+minute ten. Ordinary enemies fire a single shot or a narrow three-shot fan; only **bosses** fire
+the full radial ring. Every attack **telegraphs** (the enemy stops dead and flashes first), and
+nothing off the edge of the screen ever fires.
+
+Volume is capped **field-wide**, not per enemy: ordinary shooters share one clock, and at most
+one of them may start an attack every 1.1 seconds however many are alive (`VOLLEY_GAP` in
+`src/enemies.js`). A shooter that finds the budget spent just keeps walking. Bosses are outside the
+budget — their pattern is the fight.
+
 **Mini-bosses are per stage**, drawn from that stage's own roster — a global list had the beach
 fighting a Graveler that never otherwise sets foot there:
 
@@ -287,9 +357,33 @@ fighting a Graveler that never otherwise sets foot there:
 health with a two and a half second mercy window, and everything nearby dies. Only when you have
 none left does the run end.
 
-**Weapon evolution:** take a weapon to max level, hold its paired passive item, then open a
-treasure chest. Mud Shot + Mystic Water becomes Quagmire; Swift Star + Silk Scarf becomes Star
-Barrage; Leaf Arrow + Sharp Beak becomes Spirit Shackle.
+**Weapon evolution:** take a weapon to level 10, hold its paired item, then pick up an
+**elixir** (elites always drop one). The item's card says which weapon it evolves, and the pause
+screen flags a weapon that is ready. Every type has one:
+
+| Weapon | + Item | Becomes |
+|---|---|---|
+| Mud Shot | Mystic Water | Quagmire |
+| Swift Star | Silk Scarf | Star Barrage |
+| Leaf Arrow | Sharp Beak | Spirit Shackle |
+| Ember Spit | Charcoal | Fire Blast |
+| Powder Snow | Never-Melt Ice | Sheer Cold |
+| Sludge Bomb | Poison Barb | Gunk Shot |
+| Bubble Beam | Sea Incense | Hydro Cannon |
+| Spark Chain | Magnet | Thunder |
+| Foul Play | Black Glasses | Night Slash |
+| Aerial Ace | Pretty Wing | Sky Attack |
+| Shadow Ball | Spell Tag | Shadow Storm |
+
+The eight newer evolutions are generated from their base weapon **folded all the way to level
+10**, with the evolution layered on top — an evolved weapon restarts at level 1 on its own numbers,
+and building it this way means evolving can never be a downgrade. Each also changes what the weapon
+*does* (more bounces, more jumps, more shards), not only how hard it hits. There are fourteen held
+items and six slots, so which pairings you chase is a real decision.
+
+**Damage breakdown:** every point of damage is credited to whatever dealt it — each weapon, each
+ability, the pools and burns they leave behind, and traps. The victory and death screens show a
+ranked list with bars coloured by weapon type, and the pause screen shows each weapon's total so far.
 
 ## Audio
 

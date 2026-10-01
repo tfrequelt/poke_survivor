@@ -138,6 +138,61 @@
       "key": "#808080",
       "tolerance": 10,
       "flood": true
+    },
+    "trap_spike": {
+      "src": "assets/pmd/items.png",
+      "x": 1,
+      "y": 143,
+      "w": 24,
+      "h": 24,
+      "anchor": "center",
+      "key": "#808080",
+      "tolerance": 10,
+      "flood": true
+    },
+    "trap_explosion": {
+      "src": "assets/pmd/items.png",
+      "x": 101,
+      "y": 168,
+      "w": 24,
+      "h": 24,
+      "anchor": "center",
+      "key": "#808080",
+      "tolerance": 10,
+      "flood": true
+    },
+    "trap_slumber": {
+      "src": "assets/pmd/items.png",
+      "x": 1,
+      "y": 168,
+      "w": 24,
+      "h": 24,
+      "anchor": "center",
+      "key": "#808080",
+      "tolerance": 10,
+      "flood": true
+    },
+    "trap_poison": {
+      "src": "assets/pmd/items.png",
+      "x": 76,
+      "y": 143,
+      "w": 24,
+      "h": 24,
+      "anchor": "center",
+      "key": "#808080",
+      "tolerance": 10,
+      "flood": true
+    },
+    "trap_warp": {
+      "src": "assets/pmd/items.png",
+      "x": 151,
+      "y": 168,
+      "w": 24,
+      "h": 24,
+      "anchor": "center",
+      "key": "#808080",
+      "tolerance": 10,
+      "flood": true
     }
   },
   "sfx": {
@@ -200,7 +255,7 @@
     },
     "mtthunder": "assets/pmd/mt_thunder.png",
     "title": {
-      "src": "assets/pmd/title.png",
+      "src": "assets/miscellaneous/logo.png",
       "optional": true
     },
     "wheel": {

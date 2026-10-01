@@ -2,7 +2,7 @@
 // Cross-system effects travel through world.js queues and combat.js hooks, drained here in a
 // fixed order, which is what keeps the module graph acyclic without a build step to enforce it.
 
-import { G, MODES, SIM_MODES, setMode, resetRunState } from './state.js';
+import { G, MODES, SIM_MODES, setMode, resetRunState, winFrozen } from './state.js';
 import { mulberry32, formatTime, clamp } from './util.js';
 import {
   initInput, endFrame, onKey, isAction, bindAction, resetBindings, BINDABLE, bindings,
@@ -20,12 +20,18 @@ import {
   enemies, projectiles, orbs, coins, items, damageNumbers, particles, zones,
   spawn, despawn, clearWorld, rebuildGrid, sweepDead, entityCounts, spawnRequests, fxShapes,
 } from './world.js';
-import { initStats, ensureStats, addGrant, addMods } from './stats.js';
+import { initStats, ensureStats, addGrant, addMods, luckOf, luckK } from './stats.js';
 import { loadSave, bankGold, bankTotal, rankOf, buyRank, resetProgress } from './save.js';
 import { SHOP_ITEMS, rankCost } from './data/shop.js';
-import { hooks, damageEnemy, killAll, applyBurn } from './combat.js';
+import { hooks, damageEnemy, killAll, applyBurn, resetDamageTally, damageBreakdown } from './combat.js';
+import { getDamageSource } from './world.js';
+import {
+  checkCloseCall, checkKaboom, checkDeath, claimSuccess, successState,
+  claimableCount, resetRunSuccesses, successHooks, updateToast,
+} from './successes.js';
+import { SUCCESSES } from './data/successes.js';
 import { createPlayer, updatePlayer, setReviveFx } from './player.js';
-import { initEnemyDefs, updateEnemies, spawnEnemy, ringPoint } from './enemies.js';
+import { initEnemyDefs, updateEnemies, spawnEnemy, ringPoint, resetAttacks } from './enemies.js';
 import { ENEMIES } from './data/enemies.js';
 import { ENEMY_BY_ID, BOSS_TIERS } from './data/enemies.js';
 import {
@@ -38,7 +44,14 @@ import {
 import { abilitySpritePairs } from './data/abilities.js';
 import { FX, fxSprites } from './fx.js';
 import {
-  STAIRS_AT, MAX_FLOOR, floorReward, floorBonus, floorLabel, stairsShape,
+  TRAP_KEYS, trapDef, updateTraps, resetTraps, fx as trapFx, trapCount,
+} from './traps.js';
+
+// Chance an ordinary kill drops a pickup at FULL luck, per kill. Small on purpose: a run kills
+// thousands of things, so a tenth of a percent is already a pickup every few seconds.
+const LUCKY_DROP = 0.004;
+import {
+  STAIRS_AT, MAX_FLOOR, floorReward, floorBonus, floorLabel, stairsShape, endlessBonus,
 } from './floors.js';
 import {
   initPickupSprites, initItemSprites, dropXp, dropCoin, updatePickups,
@@ -50,13 +63,13 @@ import {
 } from './progress.js';
 import { updateDirector, resetDirector, catchUpSchedule, stressSpawn } from './director.js';
 import { updateProps, resetProps, clearProp } from './props.js';
-import { drawEntities, setStairsSprite } from './entities.js';
+import { drawEntities, setStairsSprite, setHostileSprite, setTrapSprites } from './entities.js';
 import { drawHud, debugLines } from './hud.js';
 import {
   ui, drawLevelUp, drawPause, drawTitle, drawSelect, drawStageSelect, drawEvolution, drawEvolutionChoice,
   EVO_TOTAL, setBallSprite, drawCredits, creditsMax, drawSettings, settingsRows,
   drawSummary, drawShop, shopRows, drawWheel,
-} from './ui.js';
+ drawVictoryChoice, drawSuccesses, TITLE_MENU,} from './ui.js';
 import { wheel, startWheel, updateWheel, chooseSwap } from './wheel.js';
 import { CHARACTERS, CHARACTER_BY_ID, characterSpritePairs } from './data/characters.js';
 import { enemySpritePairs } from './data/enemies.js';
@@ -138,6 +151,10 @@ async function boot() {
   // drawn stairs, so a missing items.png must degrade to a blob rather than fail the boot.
   registerSprite('stairs_down', 'rock', 0, 'orb');
   registerSprite('stairs_up', 'rock', 0, 'orb');
+  // Enemy shots. A palette no weapon draws in, so an incoming shot is never mistaken for one of
+  // the player's in a crowded frame.
+  registerSprite('proj_bubble', 'fire');
+  for (const k of TRAP_KEYS) registerSprite('trap_' + k, 'rock', 0, 'orb');
   atlasStats = buildAtlas();
 
   initEnemyDefs();
@@ -151,6 +168,8 @@ async function boot() {
   fxSprites.leafbladeDirs = spriteDirs('fx_leafblade', 'leafblade');
   initPickupSprites();
   initItemSprites();
+  setHostileSprite(spriteBase('proj_bubble', 'fire'));
+  setTrapSprites(Object.fromEntries(TRAP_KEYS.map((k) => [k, spriteBase('trap_' + k, 'rock')])));
   installHooks();
 
   // Each starter needs a sprite id for the menus to draw it, plus the frame/direction counts --
@@ -229,6 +248,10 @@ async function boot() {
       placeStairs: () => placeStairs(),
       updateStairs: () => updateStairs(),
       resetStairSchedule: () => { stairsSpawned = {}; },
+      rebuild: () => rebuildGrid(),
+      breakdown: () => damageBreakdown(),
+      menuCursor: () => titleCursor,
+      startRunForTest: (charId, stageId) => startRun(CHARACTER_BY_ID[charId], bootParams, stageId),
       bankRunGold: () => bankRunGold(),
       takeStairs: () => { G.stairs.near = true; beginDescent(); },
       floor: () => ({ floor: G.floor, label: floorLabel(), stairs: { ...G.stairs } }),
@@ -274,24 +297,39 @@ function installHooks() {
       if (G.rngRun() < d.coinChance) {
         scatter(e.x, e.y, d.coins, 14, (x, y) => dropCoin(x, y, 1 + ((G.rngRun() * 3) | 0)));
       }
-      if (G.rngRun() < d.pickupChance) dropRandomPickup(e.x, e.y);
+      if (G.rngRun() < d.pickupChance * (1 + luckOf())) dropRandomPickup(e.x, e.y);
       burst(e.x, e.y, 8, '#c8c0ad');
       return;
     }
     G.kills++;
 
+    // Credit the kill to the ability cast that caused it, if one did. The damage source is set
+    // for everything an ability does and stamped onto what it leaves behind, so pools, rings and
+    // burns from the cast all count to it.
+    const src = getDamageSource();
+    if (src) {
+      for (const a of G.abilities) {
+        if (a && a.srcId === src) { a.castKills++; checkKaboom(a.castKills); break; }
+      }
+    }
+
     if (e.boss) { bossDrops(e); return; }
 
     dropXp(e.x, e.y, e.xp);
-    if (e.coinChance > 0 && G.rngRun() < e.coinChance) {
+    if (e.coinChance > 0 && G.rngRun() < e.coinChance * (1 + luckOf())) {
       dropCoin(e.x, e.y, Math.round((G.rngRun() < 0.15 ? 5 : 1) * floorReward()));
     }
+    // Luck's most visible effect: an ordinary kill can leave something worth walking to. Zero
+    // at zero luck, so this only ever exists for a build that went looking for it.
+    if (LUCKY_DROP > 0 && G.rngRun() < LUCKY_DROP * luckK()) dropRandomPickup(e.x, e.y);
     // Elites always leave something worth walking to.
     if (e.elite) dropPickup(e.x, e.y, 'elixir');
     burst(e.x, e.y, e.elite ? 10 : 5, e.elite ? '#ffd166' : '#ffffff');
     sfx('kill');
   };
+  successHooks.onUnlock = () => sfx('levelup');
   hooks.onPlayerHit = () => {
+    checkCloseCall(G.player);
     addShake(0.28);
     G.hitstop = 0.04;
     sfx('hurt');
@@ -308,6 +346,20 @@ function installHooks() {
   abilityFx.bolt = (x, y, height, life) =>
     pushFx(FX.BOLT, x, y, height, 0, '#fff05a', life, 0, (G.rngFx() * 65535) | 0);
   abilityFx.boom = (x, y, r, life) => pushFx(FX.BOOM, x, y, r, 0, '#ffffff', life);
+  // A sprung trap, whoever set it off. The shake only fires for the player's own mistakes --
+  // the screen lurching every time something in the crowd steps on a tile would be unreadable.
+  trapFx.sprung = (t, byPlayer) => {
+    const def = trapDef(t.kind);
+    sfx(t.kind === 'explosion' ? 'quake' : 'hit');
+    burst(t.x, t.y, t.kind === 'explosion' ? 16 : 8, t.kind === 'poison' ? '#b070d0' : '#ffd166');
+    if (def.radius) pushFx(FX.RING, t.x, t.y, def.radius, 0, '#ff9f6b', 0.3);
+    if (byPlayer) {
+      addShake(t.kind === 'explosion' ? 0.5 : 0.25);
+      G.banner.text = def.label;
+      G.banner.sub = '';
+      G.banner.t = 1.1;
+    }
+  };
   abilityFx.dart = (x, y, angle, len, life) => pushFx(FX.DART, x, y, len, angle, '#ffffff', life);
   abilityFx.fireburst = (x, y, r, life) => pushFx(FX.FIREBURST, x, y, r, 0, '#ffffff', life);
   abilityFx.motes = motes;
@@ -421,6 +473,10 @@ function startRun(character, q, stageId) {
   resetRunState();
   resetDirector();
   resetProps();
+  resetTraps();
+  resetAttacks();
+  resetDamageTally();
+  resetRunSuccesses();
   stairsSpawned = {};
   descent = null;
 
@@ -471,6 +527,22 @@ function startRun(character, q, stageId) {
   setMode(MODES.PLAYING);
   resetAccumulator();
   setIntensity(0);
+  startMusic(G.stage.id, ROUTE);
+}
+
+/**
+ * Keep playing past the 20:00 boss.
+ *
+ * The win is already secured -- G.won was set when the boss died, and the floor bonus is gated
+ * on it -- so this cannot lose anything that has been earned. Banking is simply deferred: the
+ * one line at the end of stepSim that banks on death now also carries the endless gold.
+ */
+function startEndless() {
+  G.endless = true;
+  G.victoryT = 0;
+  G.banner = { text: 'THE DUNGEON DOES NOT END', sub: 'BOSSES EVERY TWO MINUTES', t: 3 };
+  setMode(MODES.PLAYING);
+  resetAccumulator();
   startMusic(G.stage.id, ROUTE);
 }
 
@@ -569,6 +641,8 @@ function beginDescent() {
 function swapFloor() {
   clearWorld();
   resetProps();
+  // A new floor is new ground: the traps you already found do not come with you.
+  resetTraps();
   G.floor++;
 
   const p = G.player;
@@ -631,6 +705,10 @@ function shopCharges(field) {
 // --- Input ------------------------------------------------------------------
 
 function handleKey(code) {
+  // Backspace is the back key everywhere (see input.js for why it is not Escape). Translated
+  // once, here, so every screen's existing back handling accepts it -- including cancelling a
+  // rebind, which is why it is done before the settings screen sees the key.
+  if (code === 'Backspace') code = 'Escape';
   // The AudioContext cannot start without a user gesture. The title screen already waits for a
   // keypress, so that is the natural unlock point.
   if (!audioReady()) {
@@ -654,15 +732,8 @@ function handleKey(code) {
   }
   if (G.mode === MODES.SHOP) return shopKey(code);
 
-  if (G.mode === MODES.TITLE) {
-    if (code === 'KeyC') { ui.scroll = 0; setMode(MODES.CREDITS); return; }
-    if (code === 'KeyO') return openSettings();
-    if (code === 'KeyS') return openShop();
-    ui.cursor = 0;
-    setMode(MODES.SELECT);
-    sfx('confirm');
-    return;
-  }
+  if (G.mode === MODES.TITLE) return titleKey(code);
+  if (G.mode === MODES.SUCCESSES) return successesKey(code);
   if (G.mode === MODES.CREDITS) {
     // The attribution list is longer than a page, so the arrows have to scroll it rather than
     // dismiss it -- "any key returns" would make most of the credits unreadable.
@@ -686,6 +757,12 @@ function handleKey(code) {
   }
   if (G.mode === MODES.WHEEL) return wheelKey(code);
   if (G.mode === MODES.STAIRS) return;                    // the fade swallows everything
+  if (G.mode === MODES.VICTORY) {
+    // Taking the win is the default and the safe key; continuing is a deliberate second choice.
+    if (code === 'Digit2' || code === 'KeyE') return startEndless();
+    if (code === 'Enter' || code === 'Space' || code === 'Digit1') return openSummary();
+    return;
+  }
 
   if (isAction(code, 'restart')) return startRun(G.character, bootParams, currentStageId());
   // The ability keys are live during play, so "back to partner select" only applies once the run
@@ -712,6 +789,58 @@ function handleKey(code) {
     case 'KeyT': G.runTime += 60; catchUpSchedule(); break;
     case 'BracketRight': G.debug.timescale = Math.min(8, G.debug.timescale * 2); break;
     case 'BracketLeft': G.debug.timescale = Math.max(0.25, G.debug.timescale / 2); break;
+  }
+}
+
+// --- Main menu --------------------------------------------------------------
+//
+// The title screen used to be "press any key" with a footer of letter shortcuts, so the shop,
+// options and credits were reachable only by reading the footer. It is a menu now. The letter
+// shortcuts are gone because they collided with it: menuCode maps WASD onto the arrows, so S was
+// both "down" and "open the shop".
+
+/** Kept across visits, so backing out of a window lands on the entry that opened it. */
+let titleCursor = 0;
+let successCursor = 0;
+
+function titleKey(code) {
+  code = menuCode(code);
+  const n = TITLE_MENU.length;
+  if (code === 'ArrowUp') { titleCursor = (titleCursor + n - 1) % n; sfx('select'); return; }
+  if (code === 'ArrowDown') { titleCursor = (titleCursor + 1) % n; sfx('select'); return; }
+  if (code !== 'Enter' && code !== 'Space') return;
+  switch (TITLE_MENU[titleCursor].id) {
+    case 'play': ui.cursor = 0; setMode(MODES.SELECT); sfx('confirm'); break;
+    case 'successes': openSuccesses(); break;
+    case 'shop': openShop(); break;
+    case 'options': openSettings(); break;
+    case 'credits': ui.scroll = 0; setMode(MODES.CREDITS); sfx('select'); break;
+  }
+}
+
+function openSuccesses() {
+  // Land on the first reward waiting to be claimed, if there is one -- that is why you came.
+  const i = SUCCESSES.findIndex((s) => successState(s.id) === 'unlocked');
+  successCursor = i >= 0 ? i : 0;
+  setMode(MODES.SUCCESSES);
+  sfx('select');
+}
+
+/** Two columns: left/right step one card, up/down a whole row. */
+function successesKey(code) {
+  code = menuCode(code);
+  const n = SUCCESSES.length;
+  switch (code) {
+    case 'ArrowLeft': successCursor = Math.max(0, successCursor - 1); break;
+    case 'ArrowRight': successCursor = Math.min(n - 1, successCursor + 1); break;
+    case 'ArrowUp': successCursor = Math.max(0, successCursor - 2); break;
+    case 'ArrowDown': successCursor = Math.min(n - 1, successCursor + 2); break;
+    case 'Enter': case 'Space': {
+      const got = claimSuccess(SUCCESSES[successCursor].id);
+      sfx(got > 0 ? 'levelup' : 'select');
+      break;
+    }
+    case 'Escape': case 'Backspace': setMode(MODES.TITLE); sfx('select'); break;
   }
 }
 
@@ -1062,6 +1191,7 @@ function frame(now) {
   }
   if (G.mode === MODES.EVOLVING) updateEvolution(rawDt);
   if (G.mode === MODES.STAIRS) updateDescent(rawDt);
+  updateToast(rawDt);
   // The wheel animates while the simulation is frozen, so it runs on raw dt like the cutscene.
   if (G.mode === MODES.WHEEL) updateWheel(rawDt);
   updateCamera(rawDt);
@@ -1097,6 +1227,7 @@ function stepSim(dt) {
   updatePlayer(dt);
   updatePickups(dt, (v) => { grantXp(v); sfx('xp'); }, (v) => { grantCoins(v); sfx('coin'); });
   updateItems(dt);
+  updateTraps(dt);
   updateStairs();
   dropPresents(dt);
   updateFx(dt);
@@ -1119,11 +1250,13 @@ function stepSim(dt) {
   // Not once the run is won: the boss's payout is worth several levels at once, and a modal
   // here would freeze the victory beat before it could finish and strand the run on a card
   // screen forever. There is nothing left to spend an upgrade on anyway.
-  if (G.pendingLevelUps > 0 && G.mode === MODES.PLAYING && !G.won) openLevelUp();
+  // Not on the tick you die, either: an orb collected on that same frame would otherwise open a
+  // card screen over the death panel.
+  if (G.pendingLevelUps > 0 && G.mode === MODES.PLAYING && !winFrozen() && !G.runOver) openLevelUp();
 
   // Same reason and the same place: the tick that collected the present has to finish before
   // anything freezes the world.
-  if (G.pendingWheel && G.mode === MODES.PLAYING && !G.won) {
+  if (G.pendingWheel && G.mode === MODES.PLAYING && !winFrozen() && !G.runOver) {
     G.pendingWheel = false;
     openWheel();
   }
@@ -1132,10 +1265,12 @@ function stepSim(dt) {
   // then the summary takes over.
   if (G.victoryT > 0) {
     G.victoryT -= dt;
-    if (G.victoryT <= 0) openSummary();
+    // The run is won either way by the time this lands; the only question left is whether to
+    // stop. Endless runs are already endless -- their bosses do not re-open this.
+    if (G.victoryT <= 0) setMode(G.endless ? MODES.PLAYING : MODES.VICTORY);
   }
   // Death banks here rather than in player.js, so every way a run can end goes through one line.
-  if (G.runOver && !G.banked) bankRunGold();
+  if (G.runOver && !G.banked) { checkDeath(); bankRunGold(); }
 }
 
 /** Bank the run's gold, exactly once, however the run ended. */
@@ -1144,7 +1279,7 @@ function bankRunGold() {
   G.banked = true;
   // The depth bonus is paid for FINISHING down there, not for visiting: dying on the bottom
   // floor banks the gold that was actually collected and nothing more.
-  return bankGold(G.coins + (G.won ? floorBonus() : 0));
+  return bankGold(G.coins + (G.won ? floorBonus() + endlessBonus() : 0));
 }
 
 function openSummary() {
@@ -1493,6 +1628,11 @@ function bossDrops(e) {
   // The 20:00 boss is the win condition. Everything still on the field dies with it and all of
   // it -- the boss's own payout included -- is pulled in, so the run's last seconds are a
   // victory lap rather than a scramble over loot that then gets thrown away.
+  if (tier >= 4 && G.won && G.endless) {
+    // A boss felled after the win. Worth gold, and worth saying so.
+    G.endlessBosses++;
+    G.banner = { text: `BOSS ${G.endlessBosses} DOWN`, sub: `+${endlessBonus()} BONUS GOLD`, t: 2.4 };
+  }
   if (tier >= 4 && !G.won) {
     G.won = true;
     // Long enough for the far side of a wiped field to reach the player: the magnet tops out at
@@ -1583,11 +1723,13 @@ function draw() {
   }
 
   if (G.mode === MODES.TITLE || G.mode === MODES.SELECT || G.mode === MODES.SHOP ||
-      G.mode === MODES.STAGE_SELECT || G.mode === MODES.CREDITS || G.mode === MODES.SUMMARY) {
+      G.mode === MODES.STAGE_SELECT || G.mode === MODES.CREDITS || G.mode === MODES.SUMMARY ||
+      G.mode === MODES.SUCCESSES) {
     if (G.mode === MODES.CREDITS) drawCredits();
+    else if (G.mode === MODES.SUCCESSES) drawSuccesses(successCursor);
     else if (G.mode === MODES.SUMMARY) drawSummary();
     else if (G.mode === MODES.SHOP) drawShop();
-    else if (G.mode === MODES.TITLE) drawTitle(CHARACTERS, menuTime);
+    else if (G.mode === MODES.TITLE) drawTitle(CHARACTERS, menuTime, titleCursor, claimableCount());
     else if (G.mode === MODES.STAGE_SELECT) drawStageSelect(STAGES, pendingCharacter, menuTime);
     else drawSelect(CHARACTERS, menuTime);
     present();
@@ -1608,6 +1750,7 @@ function draw() {
   else if (G.mode === MODES.WHEEL) drawWheel();
   else if (G.mode === MODES.PAUSED) drawPause();
   else if (G.mode === MODES.SETTINGS) drawSettings(true);
+  else if (G.mode === MODES.VICTORY) drawVictoryChoice();
 
   drawDescent();
 

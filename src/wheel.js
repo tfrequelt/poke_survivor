@@ -8,7 +8,8 @@
 // for a given seed and cannot be influenced by when the player lets go of anything.
 
 import { G } from './state.js';
-import { addMod, ensureStats } from './stats.js';
+import { addMod, ensureStats, luckK } from './stats.js';
+import { checkLevel } from './successes.js';
 import { MAX_WEAPONS, addWeapon, levelWeapon } from './weapons.js';
 import { WEAPONS } from './data/weapons.js';
 import { weaponOffered } from './progress.js';
@@ -23,7 +24,9 @@ import { xpToNext } from './progress.js';
  * description and only has to fit the result window underneath.
  */
 export const SEGMENTS = [
-  { id: 'stat', label: '+STAT', sub: 'A small boost', weight: 26 },
+  // The consolation prize, and the one luck protects you from. Flagged rather than assumed to
+  // be index 0: reordering the wheel must not silently change which prize luck is about.
+  { id: 'stat', label: '+STAT', sub: 'A small boost', weight: 26, worst: true },
   { id: 'shot', label: '+SHOT', sub: 'One more projectile', weight: 20 },
   { id: 'level', label: '+1 LVL', sub: 'Gain a level', weight: 18 },
   { id: 'weapon', label: 'MOVE', sub: 'Trade a move in', weight: 18 },
@@ -68,16 +71,34 @@ export const wheel = {
 
 const pick = (list) => list[(G.rngRun() * list.length) | 0];
 
-/** Weighted choice over SEGMENTS, using the run RNG so a seed replays identically. */
-function rollSegment() {
+/**
+ * The weight a segment actually rolls at, after luck.
+ *
+ * Luck thins the worst prize CONTINUOUSLY and removes it entirely at the cap, rather than
+ * re-rolling it: a re-roll would make a lucky spin take two samples from G.rngRun and break
+ * seed replay against an unlucky one. Scaling the weight keeps it to exactly one sample.
+ */
+function segmentWeight(s) {
+  if (!s.worst) return s.weight;
+  return s.weight * (1 - luckK());
+}
+
+/**
+ * Weighted choice over SEGMENTS, using the run RNG so a seed replays identically.
+ *
+ * Exported because luck's effect on it is a distribution, and the only honest way to check a
+ * distribution is to sample it a few thousand times.
+ */
+export function rollSegment() {
   let total = 0;
-  for (const s of SEGMENTS) total += s.weight;
+  for (const s of SEGMENTS) total += segmentWeight(s);
   let r = G.rngRun() * total;
   for (let i = 0; i < SEGMENTS.length; i++) {
-    r -= SEGMENTS[i].weight;
+    r -= segmentWeight(SEGMENTS[i]);
     if (r <= 0) return i;
   }
-  return 0;
+  // Every weight was zeroed, which only happens if the worst prize were the only one left.
+  return SEGMENTS.findIndex((s) => !s.worst);
 }
 
 /** Weapons this form could legally be offered and does not already own. */
@@ -158,6 +179,7 @@ function applyPrize() {
       const n = seg.id === 'level' ? 1 : 3;
       for (let i = 0; i < n; i++) {
         G.level++;
+        checkLevel();
         G.xpNext = xpToNext(G.level);
         G.pendingLevelUps++;
       }

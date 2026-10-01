@@ -6,13 +6,13 @@
 // only exists once the player has evolved. Everything an effect needs -- area damage, projectiles,
 // zones -- already exists; this file wires them together and owns the timing.
 
-import { G } from './state.js';
+import { G, winFrozen } from './state.js';
 import { TAU, dist2 } from './util.js';
 import {
   enemies, zones, spawn, despawn, nextHitId,
   cellRange, cellStart, cellItems, GW,
-} from './world.js';
-import { damageCircle, damageLine, damageRing, damageEnemy } from './combat.js';
+ setDamageSource,} from './world.js';
+import { damageCircle, damageLine, damageRing, damageEnemy, damageSourceId } from './combat.js';
 import { ABILITIES, ABILITY_BY_ID } from './data/abilities.js';
 import { spriteBase, spriteDirs } from './sprites.js';
 import { ZONE, fxSprites } from './fx.js';
@@ -179,6 +179,11 @@ export function addAbility(id) {
     // recomputing the arc, so the maths exists in exactly one place.
     gx: 0, gy: 0,
     resolved: {},
+    // The damage-breakdown line this ability's hits, and anything it leaves on the ground, count to.
+    srcId: damageSourceId(`a:${def.id}`, def.name),
+    // Kills since this ability was last cast -- the "Kaboom" success counts one cast at a time,
+    // including whatever the cast left burning or lingering on the ground.
+    castKills: 0,
   };
   abilityStats(a);
   G.abilities[def.slot] = a;
@@ -195,14 +200,17 @@ export const abilityReady = (slot) => {
 
 export function fireAbility(slot) {
   const a = G.abilities[slot];
-  if (!a || a.cd > 0 || a.activeT > 0 || G.runOver || G.won) return false;
+  if (!a || a.cd > 0 || a.activeT > 0 || G.runOver || winFrozen()) return false;
 
   const st = abilityStats(a);
   const p = G.player;
   a.hitId = nextHitId();
   a.angle = aimAngle(p, st);
 
+  a.castKills = 0;
+  setDamageSource(a.srcId);
   EFFECT[a.def.effect](a, st, p);
+  setDamageSource(0);
 
   a.cdMax = st.cooldown;
   a.cd = st.cooldown;
@@ -563,7 +571,7 @@ function nearestUnhit(x, y, range, used) {
 
 // --- Per-tick update --------------------------------------------------------
 
-export function updateAbilities(dt) {
+function updateAbilitiesInner(dt) {
   const p = G.player;
   if (!p) return;
 
@@ -575,6 +583,7 @@ export function updateAbilities(dt) {
     if (!a) continue;
     if (a.cd > 0) a.cd -= dt;
     if (a.activeT <= 0) continue;
+    setDamageSource(a.srcId);
 
     const st = a.resolved;
     const prev = a.activeT;
@@ -868,9 +877,10 @@ function pushOut(x, y, r, force) {
 
 // --- Zones (the burn corridor, and anything else that lingers) --------------
 
-export function updateZones(dt) {
+function updateZonesInner(dt) {
   for (let i = zones.length - 1; i >= 0; i--) {
     const z = zones[i];
+    setDamageSource(z.src);
     z.life -= dt;
     if (z.life <= 0) {
       despawn('zones', zones, i);
@@ -986,3 +996,8 @@ export function initAbilityDefs(motionHomingIdx) {
 }
 
 export { ABILITIES, ABILITY_BY_ID };
+
+// The ability and zone updaters set the damage source per ability and per zone as they go; these
+// wrappers clear it afterwards so nothing that runs next in the tick is credited to the last one.
+export function updateAbilities(dt) { updateAbilitiesInner(dt); setDamageSource(0); }
+export function updateZones(dt) { updateZonesInner(dt); setDamageSource(0); }

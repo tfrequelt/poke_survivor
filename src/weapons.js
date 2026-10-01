@@ -10,9 +10,11 @@ import { G } from './state.js';
 import { TAU, dist2, angDiff } from './util.js';
 import {
   enemies, projectiles, zones, spawn, despawn,
-  cellRange, cellStart, cellItems, GW, nextHitId,
+  cellRange, cellStart, cellItems, GW, nextHitId, setDamageSource,
 } from './world.js';
-import { damageEnemy, damageCircle, damageLine, applyBurn, applyChill } from './combat.js';
+import {
+  damageEnemy, damageCircle, damageLine, applyBurn, applyChill, damagePlayer, damageSourceId,
+} from './combat.js';
 import { WEAPONS, WEAPON_BY_ID } from './data/weapons.js';
 import { spriteBase, spriteDirs, angleSlot } from './sprites.js';
 import { ZONE, ROLE } from './fx.js';
@@ -499,7 +501,7 @@ const BEHAVIOR = {
       const off = n === 1 ? 0 : (i - (n - 1) / 2) * def.spread;
       const pr = fireProjectile(w, st, p, base + off, idx, nextHitId());
       if (!pr) break;
-      pr.bounces = def.bounces || 3;
+      pr.bounces = st.bounces || 3;
       pr.payload = def.bounceGain || 0.3;
       pr.pierce = 0;                          // a bounce is not a pierce: it changes direction
     }
@@ -517,7 +519,7 @@ const BEHAVIOR = {
     const t = enemies[idx];
     const pr = fireProjectile(w, st, p, Math.atan2(t.y - p.y, t.x - p.x), idx, nextHitId());
     if (pr) {
-      pr.payload = def.shards || 3;
+      pr.payload = st.shards || 3;
       pr.gen = ROLE.SPLITTER;
       pr.pierce = 0;
     }
@@ -768,7 +770,7 @@ const BEHAVIOR = {
     const used = _chainUsed;
     used.length = 0;
 
-    for (let j = 0; j < st.amount + def.jumps; j++) {
+    for (let j = 0; j < st.amount + st.jumps; j++) {
       const idx = nearestNotIn(x, y, j === 0 ? def.range : def.jumpRange, used);
       if (idx < 0) break;
       const e = enemies[idx];
@@ -962,7 +964,13 @@ export function weaponStats(w) {
   const g = G.stats;
   const o = w.resolved;
 
+  // Every key a level table can grant is folded here. Shards, bounces, jumps and duration used
+  // not to be: the behaviours read them straight off the definition, so 38 level-up entries across
+  // the arsenal -- a splitter's "+1 shard", every bouncer's "+bounces" -- did nothing at all while
+  // the card said they did.
   let damage = def.damage, cooldownMul = 1, amount = def.amount, areaMul = 1, pierce = def.pierce;
+  let shards = def.shards || 0, bounces = def.bounces || 0, jumps = def.jumps || 0;
+  let duration = def.duration;
   for (let i = 1; i <= w.level - 1; i++) {
     const lv = def.levels[i];
     if (!lv) continue;
@@ -971,7 +979,14 @@ export function weaponStats(w) {
     if (lv.pierce) pierce += lv.pierce;
     if (lv.cooldownMul) cooldownMul *= lv.cooldownMul;
     if (lv.areaMul) areaMul *= lv.areaMul;
+    if (lv.shards) shards += lv.shards;
+    if (lv.bounces) bounces += lv.bounces;
+    if (lv.jumps) jumps += lv.jumps;
+    if (lv.duration) duration += lv.duration;
   }
+  o.shards = shards;
+  o.bounces = bounces;
+  o.jumps = jumps;
 
   o.damage = damage * g.power;
   o.cooldown = Math.max(0.05, (def.cooldown * cooldownMul) / g.attackSpeed);
@@ -980,7 +995,7 @@ export function weaponStats(w) {
   o.area = def.area * areaMul * g.area;
   o.speed = def.speed * g.projSpeed;
   o.pierce = pierce + g.pierce;
-  o.duration = def.duration * g.duration;
+  o.duration = duration * g.duration;
   return o;
 }
 
@@ -994,7 +1009,12 @@ export function addWeapon(defId) {
   const w = {
     defIdx, def: WEAPONS[defIdx], level: 1, cd: 0, evolved: false,
     charge: 0,                  // banked stacks, for the `charge` behaviour only
-    resolved: { damage: 0, cooldown: 1, amount: 1, area: 1, speed: 1, pierce: 0, duration: 1 },
+    resolved: {
+      damage: 0, cooldown: 1, amount: 1, area: 1, speed: 1, pierce: 0, duration: 1,
+      shards: 0, bounces: 0, jumps: 0,
+    },
+    // Which line of the damage breakdown this weapon's hits are counted on.
+    srcId: damageSourceId(`w:${WEAPONS[defIdx].id}`, WEAPONS[defIdx].name),
   };
   G.weapons.push(w);
   return w;
@@ -1014,6 +1034,7 @@ export function evolveWeapon(w) {
   w.level = 1;
   w.evolved = true;
   w.cd = 0;
+  w.srcId = damageSourceId(`w:${w.def.id}`, w.def.name);
   return true;
 }
 
@@ -1030,6 +1051,7 @@ export function updateWeapons(dt) {
   for (let i = 0; i < G.weapons.length; i++) {
     const w = G.weapons[i];
     const st = weaponStats(w);
+    setDamageSource(w.srcId);
     w.cd -= dt;
     if (w.cd <= 0) {
       const fired = BEHAVIOR[w.def.behavior](w, st, p);
@@ -1038,11 +1060,14 @@ export function updateWeapons(dt) {
       w.cd = fired ? st.cooldown : 0.12;
     }
   }
+  setDamageSource(0);
 }
 
 export function updateProjectiles(dt) {
   for (let i = projectiles.length - 1; i >= 0; i--) {
     const pr = projectiles[i];
+    // A shot counts to whatever fired it, and so does anything it spawns or leaves behind.
+    setDamageSource(pr.src);
     MOTION_FNS[pr.motion](pr, dt);
     pr.life += dt;
 
@@ -1057,12 +1082,38 @@ export function updateProjectiles(dt) {
       continue;
     }
     if (pr.trail > 0 && trailFx) trailFx(pr, dt);
+
+    // A hostile shot is tested against the PLAYER and never against the enemy grid -- an enemy
+    // shot that could kill its neighbours would turn every crowd into a friendly-fire mess, and
+    // collideProjectile only knows how to query enemies anyway.
+    if (pr.hostile) {
+      if (hitsPlayer(pr)) despawn('projectiles', projectiles, i);
+      continue;
+    }
+
     // A shot still in the air has no hitbox; see the `fall` and `dive` motions.
     if (pr.r > 0 && collideProjectile(pr)) {
       dropEndZone(pr);
       despawn('projectiles', projectiles, i);
     }
   }
+  setDamageSource(0);
+}
+
+/**
+ * An enemy shot against the player.
+ *
+ * Routed through damagePlayer, the same call contact damage uses, so armour, i-frames, Protect
+ * Bubble and godmode all apply exactly once and in one place. The shot is consumed either way:
+ * a bullet that passed through you during i-frames and carried on would hit again a tick later.
+ */
+function hitsPlayer(pr) {
+  const p = G.player;
+  if (!p || pr.r <= 0) return false;
+  const rr = pr.r + p.r;
+  if (dist2(pr.x, pr.y, p.x, p.y) > rr * rr) return false;
+  damagePlayer(pr.dmg);
+  return true;
 }
 
 /** An emplacement firing on its own clock. */
@@ -1247,12 +1298,21 @@ function ricochet(pr, from) {
   pr.vy = Math.sin(a) * sp;
   pr.angle = a;
   pr.bounces--;
-  pr.dmg *= 1 + (pr.payload || 0.3);        // every bounce hits harder than the last
+  // Every bounce hits harder than the last -- but ADDITIVELY from the launch damage, and never
+  // past BOUNCE_CAP times it. It used to compound (dmg *= 1 + gain), which was harmless while
+  // the level tables' bounce grants were silently ignored and a bouncer never got past three. Once
+  // those grants applied, nine compounding bounces put Foul Play at twenty-eight times its launch
+  // damage and six times the output of anything else in the arsenal.
+  if (pr.dmg0 === 0) pr.dmg0 = pr.dmg;
+  pr.dmg = Math.min(pr.dmg + pr.dmg0 * (pr.payload || 0.3), pr.dmg0 * BOUNCE_CAP);
   pr.life = 0;                              // a bounce buys it more time in the air
   pr.hitId = nextHitId();
   if (arcFx) arcFx(from.x, from.y, e.x, e.y, pr.impactColor || '#ffffff');
   return true;
 }
+
+/** The most a ricochet can multiply a shot's launch damage by, however many times it bounces. */
+const BOUNCE_CAP = 2.5;
 
 function nearestOther(x, y, range, skip) {
   const r = cellRange(x, y, range);

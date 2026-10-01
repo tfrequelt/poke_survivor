@@ -38,10 +38,16 @@ const newEnemy = () => ({
   sprBase: 0, nf: 2, nd: 2, frame: 0, dir: 1, animTime: 0,
   flash: 0, knockX: 0, knockY: 0, contactCd: 0,
   ai: 0, aiT: 0, aiState: 0, aiX: 0, aiY: 0,
+  // Attacking. `atkCd` counts down to the next attempt and `atkWind` is the telegraph: while it
+  // is positive the enemy is standing still, visibly about to fire. Zero on anything whose
+  // definition carries no `attack` block, which is most of the roster.
+  atkCd: 0, atkWind: 0, atkX: 0, atkY: 0,
   slow: 0, slowT: 0, stunT: 0, weakenT: 0, armor: 0, knockResist: 0,
   // Burn: the first status that damages over time and is attached to the enemy rather than to
   // a zone on the ground. `burnTick` is the countdown to the next damage instalment.
   burnT: 0, burnDps: 0, burnTick: 0,
+  // Who set it alight, so the burn's damage is credited to the weapon that caused it.
+  burnSrc: 0,
   coinChance: 0, boss: false, elite: false, flying: false, spawnT: 0,
   prop: false, harmless: false, propKey: 0, bossTier: 0,
   cell: -1, lastHitId: 0,
@@ -51,6 +57,10 @@ const newProjectile = () => ({
   alive: false, x: 0, y: 0, vx: 0, vy: 0,
   r: 3, dmg: 0, pierce: 0, life: 0, maxLife: 0,
   motion: 0, sprBase: 0, nd: 2, angle: 0,
+  // Whose shot this is. A hostile shot is skipped by the enemy-grid collision entirely and is
+  // tested against the player instead -- see updateProjectiles. Declared here rather than set at
+  // a call site, like every other field on this shape.
+  hostile: false,
   knockback: 0, weapon: -1, crit: false, targetIdx: -1,
   homingTurn: 0, t: 0, ox: 0, oy: 0, area: 1, hitId: 0,
   // Visual identity, so two weapons sharing a motion still look nothing alike.
@@ -63,6 +73,10 @@ const newProjectile = () => ({
   burn: 0, burnT: 0,
   // Chill magnitude, 0..1, applied on hit. Ice weapons set it; everything else leaves it zero.
   slow: 0,
+  // Damage-breakdown line this shot counts to. Stamped by spawn(), never set at a call site.
+  src: 0,
+  // Launch damage, recorded on the first ricochet so later bounces grow from it. Reset by spawn().
+  dmg0: 0,
 });
 
 const newOrb = () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, value: 1, tier: 0, sprId: 0, age: 0, pulling: false });
@@ -96,6 +110,8 @@ const newZone = () => ({
   slow: 0, kind: 0, color: '#fff', hitId: 0, pull: 0,
   // A zone that sets things alight rather than only grinding them down.
   burn: 0,
+  // Damage-breakdown line, stamped by spawn() from whatever created the zone.
+  src: 0,
 });
 
 // --- Pools and live arrays --------------------------------------------------
@@ -139,9 +155,30 @@ export function spawn(kind) {
   const e = pools[kind].get();
   if (!e) return null;
   e.alive = true;
+  // Ownership must never survive a trip through the pool. A pooled object keeps every field it
+  // had last time, and only the enemy-shot path ever sets `hostile` -- so without this, a spent
+  // enemy shot recycled into one of the PLAYER's weapons came out still hostile: spawned on top
+  // of the player, skipped by the enemy collision, and hitting the player with their own
+  // weapon's damage. Every projectile now starts friendly, and fireHostile opts in afterwards.
+  if (kind === 'projectiles') { e.hostile = false; e.src = damageSource; e.dmg0 = 0; }
+  // A zone is credited to whatever was running when it was laid, which is the only way a pool
+  // of fire left behind by a shot can still count towards the weapon that fired it.
+  else if (kind === 'zones') e.src = damageSource;
   LIVE[kind].push(e);
   return e;
 }
+
+// --- Damage attribution -------------------------------------------------------
+//
+// One "current source" rather than a parameter threaded through every damage call: there are
+// dozens of those, in weapons, abilities, zones, traps and burns, and a parameter would have to
+// reach all of them. Each updater sets this before it acts and clears it after, and spawn() copies
+// it onto projectiles and zones so their later hits are credited to whoever created them.
+// 0 is the "other" line -- evolution shockwaves, bombs, anything nobody owns.
+
+let damageSource = 0;
+export const setDamageSource = (id) => { damageSource = id; };
+export const getDamageSource = () => damageSource;
 
 /** Return entity at index `i` of `arr` to `kind`'s pool. Swap-and-pop: O(1), order not preserved. */
 export function despawn(kind, arr, i) {

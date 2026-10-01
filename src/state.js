@@ -22,6 +22,10 @@ export const MODES = {
   WHEEL: 'wheel',
   // The fade between floors. Deliberately NOT a sim mode -- see SIM_MODES below.
   STAIRS: 'stairs',
+  // Shown once the 20:00 boss is down: claim the win, or keep going.
+  VICTORY: 'victory',
+  // The Successes window, opened from the main menu.
+  SUCCESSES: 'successes',
 };
 
 /** Modes in which the simulation advances. Everything else freezes the world. */
@@ -65,6 +69,10 @@ export const G = {
   // deeper floor is a multiplier (see director.js) rather than different content: same stage,
   // same tiles, same music, harder enemies and richer drops.
   floor: 1,
+  // Endless: the run continues past the 20:00 boss. The win is already banked by then, so this
+  // can only ever add -- it is a score chase, not a gamble with the victory.
+  endless: false,
+  endlessBosses: 0,
   // At most ONE staircase is on the field at a time, so this is a plain record on G rather than
   // another entity pool. `near` is republished every tick by the proximity check.
   stairs: { x: 0, y: 0, active: false, near: false },
@@ -132,6 +140,17 @@ export const G = {
   },
 };
 
+/**
+ * True while a won run is standing still for its victory beat: nothing can hurt the player, no
+ * card screen can interrupt, and no ability fires into the payout being collected.
+ *
+ * Not the same as G.won. In endless G.won stays true for the rest of the run -- the win is kept --
+ * but the game is being played again, so every one of those gates has to reopen. Four of them
+ * checked G.won directly, which left endless with no damage, no abilities, no level-ups and no
+ * wheel for as long as it lasted.
+ */
+export const winFrozen = () => G.won && !G.endless;
+
 /** Per-run fields only. Does NOT touch G.save, G.debug, or the mode machine. */
 export function resetRunState() {
   G.tick = 0;
@@ -144,6 +163,8 @@ export function resetRunState() {
   G.pendingWheel = false;
   G.presentT = 0;
   G.floor = 1;
+  G.endless = false;
+  G.endlessBosses = 0;
   G.stairs.x = 0; G.stairs.y = 0; G.stairs.active = false; G.stairs.near = false;
   G.player = null;
   G.form = null;

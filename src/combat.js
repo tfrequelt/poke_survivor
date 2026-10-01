@@ -8,8 +8,8 @@
 // Reactions (spawning XP orbs, popping damage numbers, playing a sound) are HOOKS assigned by
 // main.js at boot, so this module stays free of upward dependencies.
 
-import { G } from './state.js';
-import { enemies, cellRange, cellStart, cellItems, GW } from './world.js';
+import { G, winFrozen } from './state.js';
+import { enemies, cellRange, cellStart, cellItems, GW , getDamageSource} from './world.js';
 import { dist2 } from './util.js';
 
 export const hooks = {
@@ -24,6 +24,58 @@ export const hooks = {
  * Flat armor subtracts AFTER the crit multiplier, with a floor of 1, so a multi-hit weapon is
  * blunted by armour but never fully negated.
  */
+// --- The damage breakdown ------------------------------------------------------
+//
+// Source ids are small integers so the hot path adds into an array rather than hashing a string.
+// Keys are stable across runs (a weapon keeps its id), and only the tallies are zeroed per run.
+
+const SRC_KEYS = ['other'];
+const SRC_NAMES = ['Other'];
+const srcIndex = new Map([['other', 0]]);
+let srcDamage = [0];
+
+/** The id a weapon, ability or hazard counts its damage under. Registers it on first use. */
+export function damageSourceId(key, name) {
+  let id = srcIndex.get(key);
+  if (id === undefined) {
+    id = SRC_KEYS.length;
+    SRC_KEYS.push(key);
+    SRC_NAMES.push(name || key);
+    srcIndex.set(key, id);
+    srcDamage.push(0);
+  }
+  return id;
+}
+
+export function resetDamageTally() { srcDamage = SRC_KEYS.map(() => 0); }
+
+/** Only the damage that actually came off an enemy counts -- overkill on a 1 HP enemy is not 400. */
+function credit(e, before) {
+  const real = before - Math.max(0, e.hp);
+  if (real > 0) srcDamage[getDamageSource()] += real;
+}
+
+/** Every source that dealt anything this run, biggest first, with its share of the total. */
+export function damageBreakdown() {
+  let total = 0;
+  const rows = [];
+  for (let i = 0; i < SRC_KEYS.length; i++) {
+    const d = srcDamage[i] || 0;
+    if (d <= 0) continue;
+    total += d;
+    rows.push({ key: SRC_KEYS[i], name: SRC_NAMES[i], damage: d, share: 0 });
+  }
+  rows.sort((a, b) => b.damage - a.damage);
+  for (const r of rows) r.share = total > 0 ? r.damage / total : 0;
+  return { rows, total };
+}
+
+/** Damage credited to one source key, for the pause screen. */
+export function damageFor(key) {
+  const id = srcIndex.get(key);
+  return id === undefined ? 0 : (srcDamage[id] || 0);
+}
+
 export function damageEnemy(e, amount, knockX = 0, knockY = 0, canCrit = true) {
   if (!e.alive) return false;
   const s = G.stats;
@@ -31,9 +83,11 @@ export function damageEnemy(e, amount, knockX = 0, knockY = 0, canCrit = true) {
   const raw = crit ? amount * (s.critMult || 1.5) : amount;
   const dealt = Math.max(1, Math.round(raw) - e.armor);
 
+  const before = e.hp;
   e.hp -= dealt;
   e.flash = 0.09;
   G.damageDealt += dealt;
+  credit(e, before);
 
   if (knockX !== 0 || knockY !== 0) {
     const resist = 1 - e.knockResist;
@@ -78,8 +132,10 @@ export function applyChill(e, slow, seconds) {
 export function damageOverTime(e, amount) {
   if (!e.alive) return false;
   const dealt = Math.max(1, Math.round(amount));
+  const before = e.hp;
   e.hp -= dealt;
   G.damageDealt += dealt;
+  credit(e, before);
   if (e.hp <= 0) {
     killEnemy(e);
     return true;
@@ -272,6 +328,8 @@ function applyStatus(e, opts) {
 export function applyBurn(e, dps, seconds) {
   if (!e.alive || e.harmless) return;
   if (e.burnT <= 0) e.burnTick = 0.0001;   // the first instalment lands almost immediately
+  // The strongest burn wins, so it is the strongest burn's owner that gets the credit for it.
+  if (dps >= e.burnDps) e.burnSrc = getDamageSource();
   e.burnDps = Math.max(e.burnDps, dps);
   e.burnT = Math.max(e.burnT, seconds);
 }
@@ -279,7 +337,7 @@ export function applyBurn(e, dps, seconds) {
 /** Damage the player, respecting armour, i-frames, shields and god mode. True if it landed. */
 export function damagePlayer(amount) {
   const p = G.player;
-  if (!p || p.iframes > 0 || G.debug.godmode || G.runOver || G.won) return false;
+  if (!p || p.iframes > 0 || G.debug.godmode || G.runOver || winFrozen()) return false;
   // Protect Bubble blocks contact damage outright rather than reducing it.
   if (p.shieldT > 0) return false;
   const s = G.stats;
