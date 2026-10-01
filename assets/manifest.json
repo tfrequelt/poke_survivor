@@ -71,56 +71,64 @@
   },
   "sprites": {
     "coin": {
-      "src": "assets/pmd/items.png",
-      "x": 1,
-      "y": 6,
+      "src": "assets/pmd/items_2.png",
+      "x": 184,
+      "y": 172,
       "w": 14,
       "h": 11,
       "anchor": "center",
-      "key": "#eaffea"
+      "key": "#008080",
+      "tolerance": 10,
+      "flood": true
     },
     "item_berry": {
-      "src": "assets/pmd/items.png",
-      "x": 81,
-      "y": 31,
+      "src": "assets/pmd/items_2.png",
+      "x": 254,
+      "y": 62,
       "w": 15,
       "h": 12,
       "anchor": "center",
-      "key": "#eaffea"
+      "key": "#008080",
+      "tolerance": 10,
+      "flood": true
     },
     "item_orb": {
-      "src": "assets/pmd/items.png",
-      "x": 87,
-      "y": 1,
-      "w": 15,
-      "h": 16,
+      "src": "assets/pmd/items_2.png",
+      "x": 163,
+      "y": 113,
+      "w": 14,
+      "h": 14,
       "anchor": "center",
-      "key": "#eaffea"
+      "key": "#008080",
+      "tolerance": 10,
+      "flood": true
     },
     "item_elixir": {
-      "src": "assets/pmd/items.png",
-      "x": 76,
-      "y": 1,
-      "w": 11,
+      "src": "assets/pmd/items_2.png",
+      "x": 194,
+      "y": 21,
+      "w": 10,
       "h": 16,
       "anchor": "center",
-      "key": "#eaffea"
+      "key": "#008080",
+      "tolerance": 10,
+      "flood": true
     },
     "item_voltorb": {
-      "src": "assets/pmd/items.png",
-      "x": 157,
-      "y": 148,
-      "w": 13,
-      "h": 15,
+      "src": "assets/pmd/items_2.png",
+      "x": 143,
+      "y": 391,
+      "w": 16,
+      "h": 16,
       "anchor": "center",
       "key": "#554d55",
       "tolerance": 42,
       "flood": true
     },
     "stairs_down": {
-      "src": "assets/pmd/items.png",
-      "x": 51,
-      "y": 193,
+      "src": "assets/pmd/items_2.png",
+      "x": 13,
+      "y": 412,
       "w": 24,
       "h": 24,
       "anchor": "center",
@@ -129,9 +137,9 @@
       "flood": true
     },
     "stairs_up": {
-      "src": "assets/pmd/items.png",
-      "x": 76,
-      "y": 193,
+      "src": "assets/pmd/items_2.png",
+      "x": 13,
+      "y": 387,
       "w": 24,
       "h": 24,
       "anchor": "center",
@@ -140,9 +148,9 @@
       "flood": true
     },
     "trap_spike": {
-      "src": "assets/pmd/items.png",
-      "x": 1,
-      "y": 143,
+      "src": "assets/pmd/items_2.png",
+      "x": 114,
+      "y": 387,
       "w": 24,
       "h": 24,
       "anchor": "center",
@@ -151,9 +159,9 @@
       "flood": true
     },
     "trap_explosion": {
-      "src": "assets/pmd/items.png",
-      "x": 101,
-      "y": 168,
+      "src": "assets/pmd/items_2.png",
+      "x": 39,
+      "y": 412,
       "w": 24,
       "h": 24,
       "anchor": "center",
@@ -162,9 +170,9 @@
       "flood": true
     },
     "trap_slumber": {
-      "src": "assets/pmd/items.png",
-      "x": 1,
-      "y": 168,
+      "src": "assets/pmd/items_2.png",
+      "x": 39,
+      "y": 387,
       "w": 24,
       "h": 24,
       "anchor": "center",
@@ -173,9 +181,9 @@
       "flood": true
     },
     "trap_poison": {
-      "src": "assets/pmd/items.png",
-      "x": 76,
-      "y": 143,
+      "src": "assets/pmd/items_2.png",
+      "x": 89,
+      "y": 412,
       "w": 24,
       "h": 24,
       "anchor": "center",
@@ -184,9 +192,20 @@
       "flood": true
     },
     "trap_warp": {
-      "src": "assets/pmd/items.png",
-      "x": 151,
-      "y": 168,
+      "src": "assets/pmd/items_2.png",
+      "x": 164,
+      "y": 412,
+      "w": 24,
+      "h": 24,
+      "anchor": "center",
+      "key": "#808080",
+      "tolerance": 10,
+      "flood": true
+    },
+    "trap_ppdown": {
+      "src": "assets/pmd/items_2.png",
+      "x": 114,
+      "y": 412,
       "w": 24,
       "h": 24,
       "anchor": "center",
@@ -222,7 +241,7 @@
   },
   "music": {
     "menu": [
-      "assets/musics/01. Pok\u00e9mon Exploration Team Theme.mp3"
+      "assets/musics/01. Pokémon Exploration Team Theme.mp3"
     ],
     "grass": [
       "assets/musics/109. Murky Forest.mp3",
@@ -699,6 +718,142 @@
           0
         ]
       ]
+    },
+    "substitute": {
+      "src": "assets/pmd/substitute_sprite.png",
+      "key": "#008098",
+      "tolerance": 10,
+      "cell": [
+        26,
+        28
+      ],
+      "cells": [
+        [
+          3,
+          3,
+          16,
+          20,
+          5,
+          8
+        ],
+        [
+          20,
+          1,
+          21,
+          22,
+          2,
+          6
+        ],
+        [
+          42,
+          1,
+          21,
+          22,
+          2,
+          6
+        ],
+        [
+          64,
+          2,
+          19,
+          21,
+          3,
+          7
+        ],
+        [
+          84,
+          0,
+          20,
+          23,
+          3,
+          5
+        ],
+        [
+          1,
+          27,
+          20,
+          18,
+          3,
+          10
+        ],
+        [
+          22,
+          24,
+          23,
+          21,
+          1,
+          7
+        ],
+        [
+          46,
+          24,
+          23,
+          21,
+          1,
+          7
+        ],
+        [
+          70,
+          26,
+          21,
+          19,
+          2,
+          9
+        ],
+        [
+          92,
+          24,
+          22,
+          21,
+          2,
+          7
+        ],
+        [
+          0,
+          70,
+          24,
+          26,
+          1,
+          2
+        ],
+        [
+          25,
+          69,
+          25,
+          27,
+          0,
+          1
+        ],
+        [
+          51,
+          70,
+          25,
+          26,
+          0,
+          2
+        ],
+        [
+          77,
+          68,
+          25,
+          28,
+          0,
+          0
+        ],
+        [
+          103,
+          69,
+          25,
+          27,
+          0,
+          1
+        ]
+      ]
+    }
+  },
+  "fonts": {
+    "dungeon": {
+      "src": "assets/pmd/dungeon_font.png"
     }
   }
 }

@@ -37,6 +37,9 @@ const newEnemy = () => ({
   def: null, defIdx: -1,
   sprBase: 0, nf: 2, nd: 2, frame: 0, dir: 1, animTime: 0,
   flash: 0, knockX: 0, knockY: 0, contactCd: 0,
+  // Its own clock for hitting a Substitute doll. contactCd only counts down while the enemy is
+  // next to the PLAYER, so sharing it would let a doll be hit every frame. Reset in spawnEnemy.
+  decoyCd: 0,
   ai: 0, aiT: 0, aiState: 0, aiX: 0, aiY: 0,
   // Attacking. `atkCd` counts down to the next attempt and `atkWind` is the telegraph: while it
   // is positive the enemy is standing still, visibly about to fire. Zero on anything whose
@@ -209,6 +212,39 @@ export function sweepDead() {
   if (removed) rebuildGrid();
 }
 
+// --- Substitute dolls -----------------------------------------------------------
+//
+// At most three, so they are fixed slots rather than a pool: nothing to grow, nothing to sort.
+// A doll is TARGETABLE while `alive` and not dying; `dyingT` > 0 means it is playing its death
+// animation, during which nothing chases it, hits it or shoots it.
+
+export const DECOY_MAX = 3;
+/** The doll's hitbox, for contact and enemy shots. */
+export const DECOY_R = 7;
+/** Seconds the death animation plays: two frames, half each. */
+export const DECOY_DIE = 0.36;
+
+const newDecoy = () => ({
+  alive: false, x: 0, y: 0, hp: 0, maxHp: 0, dir: 0, t: 0, dyingT: 0, flash: 0,
+});
+export const decoys = Array.from({ length: DECOY_MAX }, newDecoy);
+/** Run time at which a doll was last destroyed; the next one waits a full cooldown after it. */
+export const decoyState = { lastDeath: -1e9 };
+
+export const decoyTargetable = (d) => d.alive && d.dyingT <= 0;
+
+/** Damage a doll. Starts its death when it runs out, and remembers when for the cooldown. */
+export function damageDecoy(d, dmg) {
+  if (!decoyTargetable(d)) return;
+  d.hp -= dmg;
+  d.flash = 0.1;
+  if (d.hp <= 0) {
+    d.hp = 0;
+    d.dyingT = DECOY_DIE;
+    decoyState.lastDeath = G.runTime;
+  }
+}
+
 export function clearWorld() {
   for (const [kind, arr] of ALL) {
     for (let i = 0; i < arr.length; i++) {
@@ -217,6 +253,8 @@ export function clearWorld() {
     }
     arr.length = 0;
   }
+  for (const d of decoys) d.alive = false;
+  decoyState.lastDeath = -1e9;
   spawnRequests.length = 0;
   hitIdCounter = 1;
 }

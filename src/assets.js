@@ -131,6 +131,7 @@ export async function loadAssets() {
   await loadImages(manifest);
   await loadSequences(manifest);
   await loadAttacks(manifest);
+  await loadDungeonFont(manifest);
 
   const sprites = (manifest && manifest.sprites) || {};
   const names = Object.keys(sprites);
@@ -710,3 +711,55 @@ export const musicCount = (key) => (musicTracks.get(key) || []).length;
 
 export const getSheet = (shape) => sheetOverrides.get(shape);
 export const getPortrait = (name) => portraits.get(name);
+
+// --- The dungeon font --------------------------------------------------------
+//
+// dungeon_font.png is anti-aliased white on solid black. Keying black out would leave every glyph
+// with a dark fringe, so brightness becomes alpha instead: a fully white pixel is opaque white,
+// a mid-grey edge pixel is half-transparent white. That keeps the smoothing the font was drawn with.
+
+/** { canvas, h, glyphs: Map(char -> { sx, sy, w }) }, or null if the sheet did not load. */
+export let dungeonFont = null;
+
+async function loadDungeonFont(manifest) {
+  const e = manifest && manifest.fonts && manifest.fonts.dungeon;
+  if (!e) return;
+  const { DUNGEON_FONT: F } = await import('./data/dungeonfont.js');
+  let img;
+  try {
+    img = await decodeDrawable(e.src);
+  } catch (err) {
+    console.warn('[assets] dungeon font failed:', err && err.message);
+    return;
+  }
+  const cx = img.canvas.getContext('2d', { willReadFrequently: true });
+  const rowsH = F.rows.length * F.cell;
+  const data = cx.getImageData(0, 0, img.w, rowsH);
+  const px = data.data;
+  for (let i = 0; i < px.length; i += 4) {
+    const a = Math.max(px[i], px[i + 1], px[i + 2]);
+    px[i] = 255; px[i + 1] = 255; px[i + 2] = 255; px[i + 3] = a;
+  }
+  const out = document.createElement('canvas');
+  out.width = img.w; out.height = rowsH;
+  out.getContext('2d').putImageData(data, 0, 0);
+
+  // Each glyph keeps its full cell height, so every letter shares one baseline, but only its
+  // inked width -- which is what makes the text proportional rather than monospaced.
+  const glyphs = new Map();
+  F.rows.forEach((row, r) => {
+    for (let c = 0; c < row.length; c++) {
+      const ch = row[c];
+      if (ch === ' ') continue;
+      const cx0 = c * F.cell, cy0 = r * F.cell;
+      let x0 = F.cell, x1 = -1;
+      for (let y = 0; y < F.cell; y++) {
+        for (let x = 0; x < F.cell; x++) {
+          if (px[((cy0 + y) * img.w + cx0 + x) * 4 + 3] > 24) { if (x < x0) x0 = x; if (x > x1) x1 = x; }
+        }
+      }
+      if (x1 >= 0) glyphs.set(ch, { sx: cx0 + x0, sy: cy0, w: x1 - x0 + 1 });
+    }
+  });
+  dungeonFont = { canvas: out, h: F.cell, glyphs, tracking: F.tracking, space: F.space };
+}

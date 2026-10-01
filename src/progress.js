@@ -82,6 +82,9 @@ export const MASTERY_BY_ID = Object.fromEntries(MASTERY.map((m) => [m.id, m]));
  */
 const MASTERY_FLOOR = 3;
 
+/** The badge a weapon card wears: its type, or ANY for the one weapon every Pokemon may take. */
+const cardType = (w) => w.type || (w.universal ? 'any' : undefined);
+
 /** Every card that is currently legal to offer, as {kind, id, name, desc, level} entries. */
 function candidates() {
   const out = [];
@@ -98,7 +101,7 @@ function candidates() {
     if (owned) {
       if (owned.level >= w.levels.length) continue;
       out.push({
-        kind: 'weapon', id: w.id, name: w.name, desc: levelDesc(w, owned.level), type: w.type,
+        kind: 'weapon', id: w.id, name: w.name, desc: levelDesc(w, owned.level), type: cardType(w),
         level: owned.level + 1, max: w.levels.length, weight: 12,
       });
     } else {
@@ -107,7 +110,7 @@ function candidates() {
       // Eevee's Adaptability nudges new weapons to show up more often.
       const bonus = G.character && G.character.id === 'eevee' ? 1.1 : 1;
       out.push({
-        kind: 'weapon', id: w.id, name: w.name, desc: w.desc, isNew: true, type: w.type,
+        kind: 'weapon', id: w.id, name: w.name, desc: w.desc, isNew: true, type: cardType(w),
         level: 1, max: w.levels.length, weight: 9 * bonus,
       });
     }
@@ -166,7 +169,8 @@ function availableAbilities() {
  * narrowing. Signature weapons are likewise always legal for their owner.
  */
 export function weaponOffered(def) {
-  if (!def.type) return true;                       // untyped data is a bug, not a lockout
+  // Untyped is deliberate on a `universal` weapon; anywhere else it is a bug, not a lockout.
+  if (!def.type) return true;
   if (def.owner && G.character && def.owner === G.character.id) return true;
   const types = (G.form && G.form.types) || [];
   return types.includes(def.type);
@@ -200,7 +204,7 @@ function noteAbilityOffers() {
 // to stop at five, so a splitter's "+1 shard" and a bouncer's "+2 bounces" both rendered as the
 // useless "Improves this weapon." -- tri_attack's level 2 said it before this.
 const LEVEL_WORDS = [
-  ['amount', (v) => `+${v} projectile`],
+  ['amount', (v, def) => `+${v} ${def.amountWord || 'projectile'}`],
   ['damage', (v) => `+${v} damage`],
   ['pierce', (v) => `+${v} pierce`],
   ['shards', (v) => `+${v} shard`],
@@ -218,7 +222,7 @@ function levelDesc(def, currentLevel) {
   const lv = def.levels[currentLevel];
   if (!lv) return 'Improves this weapon.';
   const bits = [];
-  for (const [key, say] of LEVEL_WORDS) if (lv[key]) bits.push(say(lv[key]));
+  for (const [key, say] of LEVEL_WORDS) if (lv[key]) bits.push(say(lv[key], def));
   return bits.length ? bits.join(', ') : 'Improves this weapon.';
 }
 

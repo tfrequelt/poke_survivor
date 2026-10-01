@@ -1184,10 +1184,36 @@ for (const [fromId, item, ev] of MORE_EVOLUTIONS) {
   base.evolution = { into: ev.id, needPassive: item };
 }
 
+// =============================================================================================
+// SUBSTITUTE -- the one weapon every Pokemon can draft.
+//
+// It has no type on purpose (`universal` says so, and silences the untyped-weapon warning), and it
+// deals no damage at all: it puts a doll on the field that the crowd goes for instead of you. The
+// doll's health is a third of yours when it appears; `amount` is how many may stand at once, and
+// a destroyed doll is replaced a full cooldown later, never instantly. See BEHAVIOR.decoy.
+// =============================================================================================
+
+WEAPONS.push({
+  id: 'substitute', name: 'Substitute', universal: true,
+  desc: 'Leaves a doll of yourself behind. Anything nearer to it than to you goes for the doll.',
+  behavior: 'decoy', aim: 'facing', motion: 'anchor',
+  sprite: 'proj_ring', palette: 'normal',
+  damage: 0, cooldown: 8.0, amount: 1, speed: 0, area: 1, pierce: 0, duration: 1,
+  r: 9, range: 0, spread: 0, knockback: 0, usesAmount: false,
+  amountWord: 'substitute',
+  // How far from you a doll is set down.
+  placeDist: 34,
+  levels: [
+    {}, { cooldownMul: 0.92 }, { cooldownMul: 0.92 }, { cooldownMul: 0.9 },
+    { amount: +1 }, { cooldownMul: 0.9 }, { cooldownMul: 0.9 }, { cooldownMul: 0.88 },
+    { amount: +1 }, { cooldownMul: 0.85 }
+  ],
+});
+
 export const WEAPON_BY_ID = Object.fromEntries(WEAPONS.map((w) => [w.id, w]));
 
 /** Every type that has weapons, in the order they appear. Used by the pokedex and the tests. */
-export const WEAPON_TYPES = [...new Set(WEAPONS.filter((w) => !w.hidden).map((w) => w.type))];
+export const WEAPON_TYPES = [...new Set(WEAPONS.filter((w) => !w.hidden && w.type).map((w) => w.type))];
 
 /** The draftable weapons of one type. */
 export const weaponsOfType = (type) => WEAPONS.filter((w) => !w.hidden && w.type === type);

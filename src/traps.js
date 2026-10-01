@@ -45,31 +45,48 @@ const BASE_DENSITY = 0.055;
 
 const TRAPS = {
   spike: {
-    label: 'SPIKE TRAP', damage: 12, cell: [1, 143],
+    label: 'SPIKE TRAP', damage: 12,
     onPlayer: () => damagePlayer(12),
     onEnemy: (e) => damageEnemy(e, 40, 0, 0, false),
   },
   explosion: {
-    label: 'EXPLOSION TRAP', damage: 18, cell: [101, 168], radius: 54,
+    label: 'EXPLOSION TRAP', damage: 18, radius: 54,
     onPlayer: (t) => { damagePlayer(18); blast(t); },
     onEnemy: (e, t) => { blast(t); },
   },
   slumber: {
-    label: 'SLUMBER TRAP', cell: [1, 168],
+    label: 'SLUMBER TRAP',
     // The player is rooted, not damaged. Standing still for most of a second with a crowd on
     // you is already the punishment, and stacking damage on top would just be a spike trap.
     onPlayer: () => { const p = G.player; if (p) p.rootT = Math.max(p.rootT, 0.9); },
     onEnemy: (e) => { e.stunT = Math.max(e.stunT, 2.4); },
   },
   poison: {
-    label: 'POISON TRAP', cell: [76, 143],
+    label: 'POISON TRAP',
     onPlayer: () => damagePlayer(9),
     onEnemy: (e) => damageOverTime(e, 30),
   },
   warp: {
-    label: 'WARP TRAP', cell: [151, 168], range: 260,
+    label: 'WARP TRAP', range: 260,
     onPlayer: () => warp(G.player),
     onEnemy: (e) => warp(e),
+  },
+  ppdown: {
+    label: 'PP DOWN TRAP',
+    // Both abilities go onto their full cooldown -- but only the ones that are ready. One that is
+    // already cooling down keeps its remaining time: the trap takes away what you had, and an
+    // ability you could not use anyway is not something it can take.
+    onPlayer: () => {
+      for (const a of G.abilities) {
+        if (!a || a.cd > 0 || a.activeT > 0) continue;
+        // The cooldown a cast right now would set, so upgrades taken since the last cast count.
+        const full = (fx.abilityCooldown && fx.abilityCooldown(a)) || a.cdMax || a.def.cooldown;
+        a.cdMax = full;
+        a.cd = full;
+      }
+    },
+    // No onEnemy: there is nothing for it to do to an enemy, so enemies walk over it and it stays
+    // armed for the player. Letting the crowd spend it would quietly remove the hazard.
   },
 };
 
@@ -142,7 +159,8 @@ export function updateTraps(dt) {
     t.reveal += (target - t.reveal) * Math.min(1, dt * 7);
 
     if (d2 < TRIGGER_R * TRIGGER_R) { fire(t, key, true); continue; }
-    if (triggerByEnemy(t)) fire(t, key, false);
+    // Only a trap that does something to an enemy can be set off by one.
+    if (TRAPS[t.kind].onEnemy && triggerByEnemy(t)) fire(t, key, false);
   }
 }
 
@@ -184,8 +202,11 @@ function fire(t, key, byPlayer) {
   if (fx.sprung) fx.sprung(t, byPlayer);
 }
 
-/** Set by main.js so a sprung trap can make a noise and throw sparks without importing render. */
-export const fx = { sprung: null };
+/**
+ * Set by main.js so a sprung trap can make a noise and throw sparks without importing render, and
+ * so PP Down can read an ability's resolved cooldown without importing abilities.js (same layer).
+ */
+export const fx = { sprung: null, abilityCooldown: null };
 
 function place(p) {
   if (active.size >= MAX_LIVE) return;

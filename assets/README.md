@@ -83,7 +83,10 @@ Berry are taken from the ripped PMD item sheet without splitting it into files f
 ```json
 {
   "sprites": {
-    "coin": { "src": "assets/pmd/items.png", "x": 1, "y": 6, "w": 14, "h": 11, "anchor": "center" }
+    "coin": {
+      "src": "assets/pmd/items_2.png", "x": 184, "y": 172, "w": 14, "h": 11,
+      "anchor": "center", "key": "#008080", "flood": true
+    }
   }
 }
 ```
@@ -272,8 +275,8 @@ edge of the crop is removed:
 
 ```json
 "item_voltorb": {
-  "src": "assets/pmd/items.png",
-  "x": 157, "y": 148, "w": 13, "h": 15,
+  "src": "assets/pmd/items_2.png",
+  "x": 143, "y": 391, "w": 16, "h": 16,
   "anchor": "center", "key": "#554d55", "tolerance": 42, "flood": true
 }
 ```
@@ -321,8 +324,14 @@ drawing a frame is a single `drawImage` with a source offset rather than jugglin
 images. A sequence that fails to load is warned about and skipped, like every other asset.
 
 The sequences today are `hail`, `fx_arrow`, `fx_flamethrower`, `fx_blastburn`, `fx_shadoworb`,
-`fx_nightshade` and `fx_tsunami`. `hail` is the only one in the per-file form; the rest are cut
-out of sheets.
+`fx_nightshade`, `fx_tsunami` and `substitute`. `hail` is the only one in the per-file form; the
+rest are cut out of sheets.
+
+`substitute` is not an effect but a creature: the Substitute weapon's doll, fifteen 26x28 cells
+out of `substitute_sprite.png`, bottom-aligned so the doll's feet stay put. Cells 0-4 are the
+idle poses from the sheet's first row (down, down-left, left, up-left, up), 5-9 its second row
+and 10-14 its fourth -- the death plays one frame from each at the facing's column. The three
+right-hand facings are those poses **mirrored at draw time**, so they are not in the strip.
 
 Two of them are worth copying when you add the next one:
 
@@ -350,10 +359,12 @@ file is silent rather than a warning every boot:
 }
 ```
 
-Five more tiles come out of the same trap block as the stairs — spike (1,143), poison (76,143),
-slumber (1,168), explosion (101,168) and warp (151,168) — all 24x24, all flooded on `#808080`
-for the same reason. `items.png` now supplies the coin, the berry, the orb, the elixir, the
-Voltorb, the two staircases and those five, which is why its credit line lists so much.
+Every item and tile now comes from **`items_2.png`** (the Explorers of Time/Darkness sheet),
+which has all twelve that `items.png` used to supply: the coin, the berry, the orb, the elixir
+and the Voltorb from its item block on `#008080`, and from its trap block the two staircases and
+the six traps -- spike, explosion, slumber, poison, warp, and PP Down (114,412, row 2 column 5),
+all 24x24 and all flooded on `#808080`. `items.png` stays in the folder and on the credits
+screen, but nothing loads it any more.
 
 * **`miscellaneous/logo.png`** is the title logo, centred at the top of the main menu in place
   of the drawn `POKEMON DRACULA EDITION` wordmark (which comes back if the file is missing). It
@@ -392,3 +403,11 @@ The Spriters Resource. They are Nintendo / Chunsoft's artwork, not this project'
 the rips ask to be credited by name. Every one of them is listed on the in-game credits screen
 (`C` from the title) with its asset id and what it is used for — **if you add another sheet, add
 it to `src/data/credits.js` at the same time.**
+
+The DS sheets — from **Explorers of Sky** and **Explorers of Time/Darkness** — have their own
+block on that screen. Three are in use: `substitute_sprite.png` (the Substitute weapon),
+`dungeon_font.png` (the stage name and floor on the stairs title card; sliced by
+`src/data/dungeonfont.js`, white on black, each glyph cut to its inked width) and `items_2.png`.
+
+**Credited, not yet used:** `maps.png`, `ice_stage_tileset.png`, `miracle_sea_tileset.png`,
+`dragon_moves.png`, `dimensional_hole.png` and `rain.png` (Red Rescue Team, in the main list).

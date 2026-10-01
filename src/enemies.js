@@ -8,7 +8,7 @@ import { clamp, dist2, TAU, clampToBounds } from './util.js';
 import { floorReward } from './floors.js';
 import {
   enemies, spawn, despawn, rebuildGrid, cellRange, cellStart, cellItems, CELL, GW, nextHitId,
-  setDamageSource,
+  setDamageSource, decoys, decoyTargetable, damageDecoy, DECOY_MAX, DECOY_R,
 } from './world.js';
 import { ENEMIES, ENEMY_BY_ID } from './data/enemies.js';
 import { damageOverTime } from './combat.js';
@@ -316,7 +316,7 @@ export function spawnEnemy(def, x, y, opts) {
   }
   e.ai = def.aiIdx;
   e.aiT = 0; e.aiState = 0; e.aiX = 0; e.aiY = 0;
-  e.flash = 0; e.knockX = 0; e.knockY = 0; e.contactCd = 0;
+  e.flash = 0; e.knockX = 0; e.knockY = 0; e.contactCd = 0; e.decoyCd = 0;
   e.slow = 0; e.slowT = 0;
   e.animTime = 0; e.frame = 0; e.dir = 1;
   e.spawnT = 0.18;                                 // brief fade-in so pop-in is less jarring
@@ -378,14 +378,38 @@ export function combatantCount() {
 /** Burn damage is paid every quarter second, matching updateZones' cadence. */
 export const BURN_TICK = 0.25;
 
+/** Seconds between one enemy's hits on a Substitute doll -- the player's contact rate. */
+const DECOY_CONTACT_CD = 0.5;
+
+// The dolls that can be chased this tick, gathered once so the per-enemy loop touches no objects
+// it does not need. Fixed-size: there are never more than DECOY_MAX.
+const _decoyLive = new Array(DECOY_MAX).fill(null);
+
 export function updateEnemies(dt, separationOn) {
   const p = G.player;
   if (!p) return;
   const px = p.x, py = p.y;
 
+  let nDecoys = 0;
+  for (let k = 0; k < decoys.length; k++) if (decoyTargetable(decoys[k])) _decoyLive[nDecoys++] = decoys[k];
+
   for (let i = enemies.length - 1; i >= 0; i--) {
     const e = enemies[i];
     if (!e.alive) continue;                        // killed this tick, awaiting the sweep
+
+    // Who this enemy goes for: you, or a Substitute doll if one is nearer. Both the steering and
+    // the aim of a ranged attack follow it, so a shooter near a doll shoots the doll.
+    let tx = px, ty = py, doll = null;
+    if (nDecoys > 0) {
+      let best = dist2(e.x, e.y, px, py);
+      for (let k = 0; k < nDecoys; k++) {
+        const d = _decoyLive[k];
+        const dd = dist2(e.x, e.y, d.x, d.y);
+        if (dd < best) { best = dd; doll = d; }
+      }
+      if (doll) { tx = doll.x; ty = doll.y; }
+    }
+    if (e.decoyCd > 0) e.decoyCd -= dt;
 
     if (e.spawnT > 0) e.spawnT -= dt;
     if (e.flash > 0) e.flash -= dt;
@@ -414,12 +438,22 @@ export function updateEnemies(dt, separationOn) {
     if (e.stunT > 0) {
       e.stunT -= dt;
       e.vx = 0; e.vy = 0;
-    } else if (updateAttack(e, dt, px, py)) {
+    } else if (updateAttack(e, dt, tx, ty)) {
       // Winding up: planted, so the telegraph is a real tell and not something that walks at
       // you while it charges.
       e.vx = 0; e.vy = 0;
     } else {
-      AI_FNS[e.ai](e, dt, px, py);
+      AI_FNS[e.ai](e, dt, tx, ty);
+    }
+
+    // Touching the doll it is going for. Only that one: a doll is not a wall, and an enemy
+    // brushing past one on its way to you should not stop to chew on it.
+    if (doll && !e.harmless && e.decoyCd <= 0) {
+      const rr = e.r + DECOY_R;
+      if (dist2(e.x, e.y, doll.x, doll.y) <= rr * rr) {
+        damageDecoy(doll, e.weakenT > 0 ? e.dmg * 0.7 : e.dmg);
+        e.decoyCd = DECOY_CONTACT_CD;
+      }
     }
 
     const slowK = 1 - e.slow;

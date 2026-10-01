@@ -13,7 +13,7 @@ import {
   drawText, drawTextCentered, textWidth, drawSprite, drawSpriteScaled, drawShadow, drawLogo,
 } from './sprites.js';
 import { clamp, hash2, formatTime, formatNum } from './util.js';
-import { getPortrait, getImage, getAnim } from './assets.js';
+import { getPortrait, getImage, getAnim, dungeonFont } from './assets.js';
 import { CREDITS } from './data/credits.js';
 import { panel, wrap, WIN_SELECTED, messageWindow, slider , drawDamagePanel, shortNum} from './win.js';
 import { BINDABLE, bindings, keyLabel } from './input.js';
@@ -93,6 +93,8 @@ const TYPE_COLORS = {
   // No starter is either of these, so the table only needed nine until the weapons started
   // wearing the same badges -- and the weapon roster covers all eleven types.
   FIRE: '#f08030', ICE: '#98d8d8',
+  // Not a type: the badge on Substitute, which every Pokemon may draft.
+  ANY: '#d8d8e8',
 };
 
 // The badge is a 9px pill: a flat colour with a darker band along the bottom so it reads as a
@@ -1158,7 +1160,7 @@ export function drawWheel() {
     const inc = wheel.incoming;
     if (inc) {
       messageWindow(Math.round((VW - 300) / 2), 196, 300,
-        [`OFFERED: ${inc.name.toUpperCase()} -- ${inc.type.toUpperCase()}`],
+        [`OFFERED: ${inc.name.toUpperCase()} -- ${(inc.type || 'any').toUpperCase()}`],
         { center: true, accent: '#ffd166' });
     }
     drawTextCentered(ctx, 'ARROWS + ENTER', VW / 2, VH - 16, 'dim');
@@ -1336,4 +1338,40 @@ export function drawPause() {
   }
 
   drawTextCentered(ctx, 'BACKSPACE RESUME    O SETTINGS    R RESTART    Q CHANGE PARTNER', VW / 2, VH - 20, 'dim');
+}
+
+// --- Dungeon font -----------------------------------------------------------
+
+/** Width of a string in the dungeon font, in pixels. */
+export function dungeonTextWidth(str) {
+  const f = dungeonFont;
+  if (!f) return 0;
+  let w = 0;
+  for (const ch of str) {
+    const g = f.glyphs.get(ch);
+    w += (g ? g.w : f.space) + f.tracking;
+  }
+  return Math.max(0, w - f.tracking);
+}
+
+/**
+ * Draw a line in the dungeon font, centred on cx, its cell top at y. Returns false when the font
+ * did not load, so the caller can fall back to the built-in one.
+ *
+ * Drawn 1:1. The glyphs are anti-aliased, so scaling them by a fraction would blur them, and at
+ * their native ~16px they are already twice the height of the pixel font.
+ */
+export function drawDungeonText(str, cx, y, alpha = 1) {
+  const f = dungeonFont;
+  if (!f) return false;
+  let x = Math.round(cx - dungeonTextWidth(str) / 2);
+  ctx.globalAlpha = alpha;
+  for (const ch of str) {
+    const g = f.glyphs.get(ch);
+    if (!g) { x += f.space + f.tracking; continue; }
+    ctx.drawImage(f.canvas, g.sx, g.sy, g.w, f.h, x, Math.round(y), g.w, f.h);
+    x += g.w + f.tracking;
+  }
+  ctx.globalAlpha = 1;
+  return true;
 }

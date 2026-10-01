@@ -12,6 +12,7 @@ import { G } from './state.js';
 import { ctx, toScreenX, toScreenY, VW, VH } from './render.js';
 import {
   enemies, projectiles, orbs, coins, damageNumbers, particles, zones, fxShapes, items,
+  decoys, DECOY_DIE,
 } from './world.js';
 import {
   drawSprite, drawSpriteScaled, drawShadow, drawText, FRAMES, angleSlot,
@@ -739,6 +740,10 @@ function drawShadows(ox, oy) {
     if (sx < -MARGIN || sy < -MARGIN || sx > VW + MARGIN || sy > VH + MARGIN) continue;
     drawShadow(ctx, sx, sy);
   }
+  for (let i = 0; i < decoys.length; i++) {
+    const d = decoys[i];
+    if (d.alive) drawShadow(ctx, d.x + ox, d.y + oy);
+  }
   const p = G.player;
   if (p) drawShadow(ctx, p.x + ox, p.y + oy);
 }
@@ -765,21 +770,87 @@ function drawSortedActors(ox, oy) {
   }
 
   const p = G.player;
-  const playerBand = p ? Math.min(NBANDS - 1, Math.max(0, (((p.y + oy) + MARGIN) / BAND) | 0)) : -1;
+  const playerBand = p ? bandOf(p.y + oy) : -1;
   let playerDrawn = false;
+
+  // The dolls go in the same bands, so one stands in front of or behind an enemy correctly.
+  // Never more than three, so their bands are just recomputed here rather than linked in.
+  let anyDoll = false;
+  for (let k = 0; k < decoys.length; k++) {
+    _dollBand[k] = decoys[k].alive ? bandOf(decoys[k].y + oy) : -1;
+    if (_dollBand[k] >= 0) anyDoll = true;
+  }
 
   for (let b = 0; b < NBANDS; b++) {
     for (let i = bandHead[b]; i !== -1; i = bandNext[i]) {
       drawEnemy(enemies[i], ox, oy);
     }
+    if (anyDoll) for (let k = 0; k < decoys.length; k++) if (_dollBand[k] === b) drawDecoy(decoys[k], ox, oy);
     if (b === playerBand && !playerDrawn) { drawPlayer(p, ox, oy); playerDrawn = true; }
   }
   if (p && !playerDrawn) drawPlayer(p, ox, oy);
 }
 
+const bandOf = (sy) => Math.min(NBANDS - 1, Math.max(0, ((sy + MARGIN) / BAND) | 0));
+const _dollBand = new Int32Array(decoys.length);
+
+// substitute_sprite.png's five poses face down, down-left, left, up-left and up; the right-hand
+// three are those mirrored. Indexed by PMD direction (0 = down, then clockwise).
+const DOLL_COL = [0, 1, 2, 3, 4, 3, 2, 1];
+const DOLL_FLIP = [false, true, true, true, false, false, false, false];
+// Frame offsets into the sequence strip: idles, then the two death rows.
+const DOLL_IDLE = 0, DOLL_DIE_A = 5, DOLL_DIE_B = 10;
+
+/**
+ * A Substitute doll: its idle pose for the way it faces, with a gentle bob, a bar while it is
+ * hurt, and on death the two frames of its own facing from rows 2 and 4 of the sheet.
+ */
+function drawDecoy(d, ox, oy) {
+  const seq = getSequence('substitute');
+  const sx = Math.round(d.x + ox), sy = Math.round(d.y + oy);
+  if (sx < -MARGIN || sy < -MARGIN || sx > VW + MARGIN || sy > VH + MARGIN) return;
+  const col = DOLL_COL[d.dir], flip = DOLL_FLIP[d.dir];
+
+  if (!seq) {
+    // No sheet: a plain marker, so the doll is still visible and still makes sense.
+    ctx.fillStyle = '#7fe08a';
+    ctx.fillRect(sx - 5, sy - 12, 10, 12);
+    return;
+  }
+
+  const dying = d.dyingT > 0;
+  const frame = dying
+    ? (d.dyingT > DECOY_DIE / 2 ? DOLL_DIE_A : DOLL_DIE_B) + col
+    : DOLL_IDLE + col;
+  // The cell's bottom row is the doll's feet, so it stands where its shadow is.
+  const bob = dying ? 0 : Math.round(Math.sin(d.t * 3) * 1);
+  const dx = sx - (seq.w >> 1), dy = sy - seq.h + 3 + bob;
+
+  if (d.flash > 0) ctx.globalAlpha = 0.55;
+  if (flip) {
+    ctx.save();
+    ctx.translate(sx * 2, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(seq.canvas, frame * seq.w, 0, seq.w, seq.h, dx, dy, seq.w, seq.h);
+    ctx.restore();
+  } else {
+    ctx.drawImage(seq.canvas, frame * seq.w, 0, seq.w, seq.h, dx, dy, seq.w, seq.h);
+  }
+  ctx.globalAlpha = 1;
+
+  if (!dying && d.hp < d.maxHp) {
+    const w = 16, y = dy - 3;
+    ctx.fillStyle = '#101018';
+    ctx.fillRect(sx - w / 2 - 1, y - 1, w + 2, 4);
+    ctx.fillStyle = '#7fe08a';
+    ctx.fillRect(sx - w / 2, y, w * Math.max(0, d.hp / d.maxHp), 2);
+  }
+}
+
 /** Fallback if the enemy count ever exceeds the bucket arrays. Correct, just unsorted. */
 function drawUnsorted(ox, oy) {
   for (let i = 0; i < enemies.length; i++) drawEnemy(enemies[i], ox, oy);
+  for (let k = 0; k < decoys.length; k++) if (decoys[k].alive) drawDecoy(decoys[k], ox, oy);
   if (G.player) drawPlayer(G.player, ox, oy);
 }
 

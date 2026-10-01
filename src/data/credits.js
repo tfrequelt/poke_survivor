@@ -19,7 +19,7 @@ const RIPS = [
   ['19788', 'MT THUNDER TILES', 'cave stage tiles'],
   ['75220', 'BEACH CAVE MAP', 'bundled'],
   ['5413', 'INTRO BACKGROUNDS', 'title screen'],
-  ['5426', 'ITEMS', 'coin, berry, orb, elixir, traps, stairs'],
+  ['5426', 'ITEMS', 'bundled (replaced by items_2)'],
   ['69118', 'STATUS ICONS', 'low health, burn'],
   ['5422', 'FONT AND WINDOW', 'window styling'],
   ['163902', 'POISON MOVES', 'bundled'],
@@ -27,7 +27,30 @@ const RIPS = [
   ['41323', 'DARK MOVES', 'bundled'],
   ['40562', 'FIRE MOVES', 'flamethrower, fire spin'],
   ['41326', 'ROCK MOVES', 'bundled'],
+  ['534323', 'RAIN', 'bundled'],
 ];
+
+/**
+ * Rips from the two DS games, Explorers of Sky and Explorers of Time/Darkness. Mystery Dungeon, but
+ * not Red Rescue Team and not under RIP_BASE, so they get their own block and their own URLs.
+ *
+ * [game folder, asset id, what it is, where it is used].
+ */
+const EXPLORERS_RIPS = [
+  ['pokemonmysterydungeonexplorersofsky', '131094', 'SUBSTITUTE', 'substitute weapon'],
+  ['pokemonmysterydungeonexplorersofsky', '59283', 'DUNGEON MAPS', 'bundled'],
+  ['pokemonmysterydungeonexplorersofsky', '84937', 'DUNGEON FONT', 'floor title card'],
+  ['pokemonmysterydungeonexplorersofsky', '86310', 'ICE TILESET', 'bundled'],
+  ['pokemonmysterydungeonexplorersoftimedarkness', '85996', 'MIRACLE SEA TILES', 'bundled'],
+  ['pokemonmysterydungeonexplorersoftimedarkness', '14966', 'DRAGON MOVES', 'bundled'],
+  ['pokemonmysterydungeonexplorersoftimedarkness', '158011', 'DIMENSIONAL HOLE', 'bundled'],
+  ['pokemonmysterydungeonexplorersoftimedarkness', '15903', 'ITEMS 2', 'items, traps, stairs'],
+];
+
+const EXPLORERS_GAME = {
+  pokemonmysterydungeonexplorersofsky: 'EXPLORERS OF SKY',
+  pokemonmysterydungeonexplorersoftimedarkness: 'EXPLORERS OF TIME/DARKNESS',
+};
 
 /**
  * Rips from OTHER games, which are not Mystery Dungeon and do not share its URL. Kept separate
@@ -72,6 +95,21 @@ export const CREDITS = [
   { line: 'who asks to be credited if used.', color: 'dim' },
   { line: 'Mt Thunder tiles ripped and formatted', color: 'dim' },
   { line: 'by SILVERDEOXUS563.', color: 'dim' },
+  { line: '' },
+
+  { heading: 'MYSTERY DUNGEON: EXPLORERS' },
+  { line: 'Ripped from the DS games, via The Spriters', color: 'gold' },
+  { line: 'Resource:', color: 'gold' },
+  { line: '' },
+  ...EXPLORERS_RIPS.map(([game, id, what, used]) => ({
+    line: `${EXPLORERS_GAME[game]}  ${what}  (${used})`,
+    color: 'dim',
+  })),
+  { line: '' },
+  ...EXPLORERS_RIPS.flatMap(([game, id]) => [
+    { line: `spriters-resource.com/ds_dsi/`, color: 'blue' },
+    { line: `  ${game}/asset/${id}`, color: 'blue' },
+  ]),
   { line: '' },
 
   { heading: 'EFFECT SHEETS FROM OTHER GAMES' },

@@ -36,10 +36,11 @@ import { ENEMIES } from './data/enemies.js';
 import { ENEMY_BY_ID, BOSS_TIERS } from './data/enemies.js';
 import {
   initWeaponDefs, addWeapon, updateWeapons, updateProjectiles, motionIndex, setWeaponFx,
-  evolveWeapon, setWeaponSfx,
+  evolveWeapon, setWeaponSfx, updateDecoys,
 } from './weapons.js';
 import {
   initAbilityDefs, addAbility, fireAbility, updateAbilities, updateZones, fx as abilityFx,
+  abilityStats,
 } from './abilities.js';
 import { abilitySpritePairs } from './data/abilities.js';
 import { FX, fxSprites } from './fx.js';
@@ -69,7 +70,7 @@ import {
   ui, drawLevelUp, drawPause, drawTitle, drawSelect, drawStageSelect, drawEvolution, drawEvolutionChoice,
   EVO_TOTAL, setBallSprite, drawCredits, creditsMax, drawSettings, settingsRows,
   drawSummary, drawShop, shopRows, drawWheel,
- drawVictoryChoice, drawSuccesses, TITLE_MENU,} from './ui.js';
+ drawVictoryChoice, drawSuccesses, TITLE_MENU, drawDungeonText,} from './ui.js';
 import { wheel, startWheel, updateWheel, chooseSwap } from './wheel.js';
 import { CHARACTERS, CHARACTER_BY_ID, characterSpritePairs } from './data/characters.js';
 import { enemySpritePairs } from './data/enemies.js';
@@ -348,6 +349,7 @@ function installHooks() {
   abilityFx.boom = (x, y, r, life) => pushFx(FX.BOOM, x, y, r, 0, '#ffffff', life);
   // A sprung trap, whoever set it off. The shake only fires for the player's own mistakes --
   // the screen lurching every time something in the crowd steps on a tile would be unreadable.
+  trapFx.abilityCooldown = (a) => abilityStats(a).cooldown;
   trapFx.sprung = (t, byPlayer) => {
     const def = trapDef(t.kind);
     sfx(t.kind === 'explosion' ? 'quake' : 'hit');
@@ -551,8 +553,13 @@ function startEndless() {
 // How close the player has to be to read the prompt and take the stairs. Generous relative to
 // the 24px tile: hunting for the exact pixel is not the interesting part.
 const STAIRS_REACH = 18;
-const FADE_OUT = 0.45, FADE_HOLD = 0.12, FADE_IN = 0.45;
+// The stairs transition: fade to black, hold black for two seconds while the stage name and the
+// new floor fade in and back out, then fade back in on the new floor.
+const FADE_OUT = 0.45, FADE_HOLD = 2.0, FADE_IN = 0.45;
 const FADE_TOTAL = FADE_OUT + FADE_HOLD + FADE_IN;
+// The title card's own fades, measured from the start of the black hold. Inset from both ends so
+// the text is never on screen while the field is still showing through.
+const CARD_IN_START = 0.05, CARD_IN = 0.4, CARD_OUT_END = FADE_HOLD - 0.05, CARD_OUT = 0.4;
 
 /** Non-null only during the fade between floors. */
 let descent = null;
@@ -683,6 +690,16 @@ export function descentFade() {
 
 /** The label to show on the black, or '' -- only once the floor has actually changed. */
 export const descentLabel = () => (descent && descent.swapped ? floorLabel() : '');
+
+/** How visible the title card is, 0..1. Zero outside the black hold. */
+function cardAlpha() {
+  if (!descent || !descent.swapped) return 0;
+  const h = descent.t - FADE_OUT;                      // time into the black hold
+  if (h < CARD_IN_START || h > CARD_OUT_END) return 0;
+  const fin = Math.min(1, (h - CARD_IN_START) / CARD_IN);
+  const fout = Math.min(1, (CARD_OUT_END - h) / CARD_OUT);
+  return Math.max(0, Math.min(fin, fout));
+}
 
 /** Re-add every purchased rank as an ordinary stat modifier. */
 function applyShopMods() {
@@ -1221,6 +1238,7 @@ function stepSim(dt) {
   rebuildGrid();
 
   updateWeapons(dt);
+  updateDecoys(dt);
   updateAbilities(dt);
   updateZones(dt);
   updateProjectiles(dt);
@@ -1701,12 +1719,18 @@ function drawDescent() {
   ctx.fillStyle = `rgba(0,0,0,${k.toFixed(3)})`;
   ctx.fillRect(0, 0, VW, VH);
 
-  const label = descentLabel();
-  // Only at full black, and faded with it, so the text never sits over a half-visible field.
-  if (label && k > 0.55) {
-    ctx.globalAlpha = Math.min(1, (k - 0.55) / 0.35);
-    drawLogo(ctx, label, VW / 2, VH / 2 - 16, 3, 'gold', 'dark');
-    ctx.globalAlpha = 1;
+  // The title card: the stage's name, and under it the floor being entered -- in the Mystery
+  // Dungeon font, the way the DS games announce a new floor.
+  const a = cardAlpha();
+  if (a > 0 && G.stage) {
+    const name = G.stage.name, floor = descentLabel();
+    if (!drawDungeonText(name, VW / 2, VH / 2 - 26, a) || !drawDungeonText(floor, VW / 2, VH / 2 + 2, a)) {
+      // No font sheet: the same card in the built-in font.
+      ctx.globalAlpha = a;
+      drawTextCentered(ctx, name.toUpperCase(), VW / 2, VH / 2 - 14, 'white');
+      drawTextCentered(ctx, floor, VW / 2, VH / 2 + 2, 'white');
+      ctx.globalAlpha = 1;
+    }
   }
 }
 

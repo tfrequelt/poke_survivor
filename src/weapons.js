@@ -7,11 +7,13 @@
 // entry in data/weapons.js referencing those string keys -- this file should rarely change.
 
 import { G } from './state.js';
-import { TAU, dist2, angDiff } from './util.js';
+import { TAU, dist2, angDiff, clampToBounds } from './util.js';
 import {
   enemies, projectiles, zones, spawn, despawn,
   cellRange, cellStart, cellItems, GW, nextHitId, setDamageSource,
+  decoys, decoyState, decoyTargetable, damageDecoy, DECOY_MAX, DECOY_R,
 } from './world.js';
+import { dirFromAngle } from './assets.js';
 import {
   damageEnemy, damageCircle, damageLine, applyBurn, applyChill, damagePlayer, damageSourceId,
 } from './combat.js';
@@ -782,7 +784,59 @@ const BEHAVIOR = {
     }
     return used.length > 0;
   },
+
+  /**
+   * Substitute: sets a doll down beside you that the crowd chases instead, if it is nearer.
+   *
+   * Deals nothing itself. `amount` is how many dolls may stand at once, and a destroyed doll is
+   * replaced a full cooldown after it fell, not the moment the slot frees -- otherwise a doll in a
+   * crowd would simply respawn every retry tick and the player would never be chased at all.
+   */
+  decoy(w, st, p) {
+    let live = 0, free = null;
+    for (let i = 0; i < decoys.length; i++) {
+      const d = decoys[i];
+      if (d.alive) live++;
+      else if (!free) free = d;
+    }
+    if (!free || live >= Math.min(DECOY_MAX, st.amount)) return false;
+    if (G.runTime - decoyState.lastDeath < st.cooldown) return false;
+
+    const a = G.rngRun() * TAU;
+    const dist = w.def.placeDist || 30;
+    free.x = p.x + Math.cos(a) * dist;
+    free.y = p.y + Math.sin(a) * dist;
+    clampToBounds(free, G.bounds, DECOY_R + 4);
+    free.maxHp = free.hp = Math.max(1, Math.round(((G.stats && G.stats.maxHp) || p.maxHp) / 3));
+    free.dir = 0; free.t = 0; free.dyingT = 0; free.flash = 0;
+    free.alive = true;
+    return true;
+  },
 };
+
+/**
+ * Advance the dolls: facing, hit flash, and the death animation, after which the slot frees.
+ * Enemies do the damaging, in enemies.js; enemy shots, in updateProjectiles below.
+ */
+export function updateDecoys(dt) {
+  for (let i = 0; i < decoys.length; i++) {
+    const d = decoys[i];
+    if (!d.alive) continue;
+    d.t += dt;
+    if (d.flash > 0) d.flash -= dt;
+    if (d.dyingT > 0) {
+      d.dyingT -= dt;
+      if (d.dyingT <= 0) d.alive = false;
+      continue;
+    }
+    // Faces whatever is coming for it, which is what makes it read as standing its ground.
+    const idx = nearestEnemy(d.x, d.y, 200);
+    if (idx >= 0) {
+      const e = enemies[idx];
+      d.dir = dirFromAngle(Math.atan2(e.y - d.y, e.x - d.x));
+    }
+  }
+}
 
 /** How long a chill from a single projectile hit lasts. Area effects pass their own. */
 const CHILL_TIME = 1.2;
@@ -1086,8 +1140,9 @@ export function updateProjectiles(dt) {
     // A hostile shot is tested against the PLAYER and never against the enemy grid -- an enemy
     // shot that could kill its neighbours would turn every crowd into a friendly-fire mess, and
     // collideProjectile only knows how to query enemies anyway.
+    // A Substitute doll is tested first, so a shot aimed at a doll stops there.
     if (pr.hostile) {
-      if (hitsPlayer(pr)) despawn('projectiles', projectiles, i);
+      if (hitsDecoy(pr) || hitsPlayer(pr)) despawn('projectiles', projectiles, i);
       continue;
     }
 
@@ -1114,6 +1169,19 @@ function hitsPlayer(pr) {
   if (dist2(pr.x, pr.y, p.x, p.y) > rr * rr) return false;
   damagePlayer(pr.dmg);
   return true;
+}
+
+/** An enemy shot against the Substitute dolls. A doll has no i-frames: every shot counts. */
+function hitsDecoy(pr) {
+  if (pr.r <= 0) return false;
+  const rr = pr.r + DECOY_R;
+  for (let i = 0; i < decoys.length; i++) {
+    const d = decoys[i];
+    if (!decoyTargetable(d) || dist2(pr.x, pr.y, d.x, d.y) > rr * rr) continue;
+    damageDecoy(d, pr.dmg);
+    return true;
+  }
+  return false;
 }
 
 /** An emplacement firing on its own clock. */
@@ -1362,7 +1430,7 @@ export function initWeaponDefs() {
       } else {
         seenPair.set(pair, def.id);
       }
-      if (!def.type) console.warn(`weapons: "${def.id}" has no type and will be offered to everyone`);
+      if (!def.type && !def.universal) console.warn(`weapons: "${def.id}" has no type and will be offered to everyone`);
     }
 
     // A weapon that acquires targets further away than its projectile can travel fires shots
