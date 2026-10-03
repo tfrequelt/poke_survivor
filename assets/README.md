@@ -332,8 +332,11 @@ The sequences today are `hail`, `fx_arrow`, `fx_flamethrower`, `fx_blastburn`, `
 `fx_nightshade`, `fx_tsunami` and `substitute`, plus the secret floors' set: `legend_portal`,
 `weather_rain`, and the legendaries' attack effects (`fx_icepillar`, `fx_iceshard`, `fx_icerock`,
 `fx_iceblock`, `fx_firedome`, `fx_bolt`, `fx_spark`, `fx_bubble`, `fx_shard`, `fx_boulder`,
-`fx_diamond`, `fx_flame`, `fx_geyser`, `fx_spire`, `fx_tornado`, `fx_rock`). `hail` is the only
-one in the per-file form; the rest are cut out of sheets.
+`fx_diamond`, `fx_flame`, `fx_geyser`, `fx_spire`, `fx_tornado`, `fx_rock`, and from the second
+pass `fx_crescent`, `fx_firestar`, `fx_outrage`, `fx_meteor`, `fx_dust`, `fx_aura_warm`,
+`fx_aura_cold`, `fx_roar` and `fx_bigbubble` out of `dragon_moves.png`, `fx_ring` out of
+`dark_moves.png`, `fx_zigzag` out of `thunderbolt.png`, and `status_freeze` / `status_shield` out
+of `status.png`). `hail` is the only one in the per-file form; the rest are cut out of sheets.
 
 The legendaries' effects come mostly from `thunderbolt.png` (its labelled Ice, Fire 3, Bolt 3 and
 Break rows) and `wave.png` (the Flame and blue-flame columns, the Earthquake spire, the Tornado),
@@ -436,5 +439,9 @@ block on that screen. Four are in use: `substitute_sprite.png` (the Substitute w
 `src/data/dungeonfont.js`, white on black, each glyph cut to its inked width), `items_2.png`, and
 `dimensional_hole.png` (the secret floor's portal: its top-left four frames).
 
-**Credited, not yet used:** `maps.png`, `ice_stage_tileset.png`, `miracle_sea_tileset.png` and
-`dragon_moves.png`.
+Each legendary also drops a **relic**, cut from `items_2.png`'s species items like the other
+pickups: `relic_articuno` (a pale feather), `relic_moltres` (a flame feather), `relic_zapdos` (a
+golden feather), and gems or stones for the rest -- see the `sprites` section of the manifest and
+`RELICS` in `src/data/legends.js`.
+
+**Credited, not yet used:** `maps.png`, `ice_stage_tileset.png` and `miracle_sea_tileset.png`.

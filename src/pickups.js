@@ -181,6 +181,10 @@ export const PICKUP_KINDS = {
   // now looks like what it does.
   elixir:  { shape: 'item_elixir', fallback: 'orb', palette: 'gold', label: 'ELIXIR' },
   present: { shape: 'icon_gift', fallback: 'orb', palette: 'gift', label: 'PRESENT' },
+  // A legendary's relic. Which one is carried by the item's sprite, set when it is dropped --
+  // the pool's item shape has no other field to put it in, and nine kinds for nine relics would
+  // be nine copies of the same behaviour.
+  relic:   { shape: 'relic_articuno', fallback: 'orb', palette: 'gold', label: 'RELIC' },
 };
 
 const KIND_KEYS = Object.keys(PICKUP_KINDS);
@@ -207,7 +211,7 @@ export function initItemSprites() {
 
 /** Hooks assigned by main.js so collecting an item can reach the systems that apply it. */
 export const itemEffects = {
-  magnet: null, berry: null, bomb: null, elixir: null, present: null, onCollect: null,
+  magnet: null, berry: null, bomb: null, elixir: null, present: null, relic: null, onCollect: null,
 };
 
 export function dropPickup(x, y, kind) {
@@ -247,7 +251,7 @@ export function updateItems(dt) {
     if (dist2(it.x, it.y, p.x, p.y) <= grab2) {
       const kind = KIND_KEYS[it.kind];
       const fn = itemEffects[kind];
-      if (fn) fn();
+      if (fn) fn(it);
       if (itemEffects.onCollect) itemEffects.onCollect(kind, PICKUP_KINDS[kind].label);
       despawn('items', items, i);
     }

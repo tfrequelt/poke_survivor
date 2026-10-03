@@ -17,6 +17,7 @@ export const hooks = {
   onDamage: null,   // (enemy, dealt, crit) -- damage numbers, hit sparks
   onKill: null,     // (enemy) -- XP orbs, coins, death puff, kill tally
   onPlayerHit: null,
+  onBarrier: null,  // () -- the Metal Coat's barrier just took a hit
 };
 
 /**
@@ -341,6 +342,14 @@ export function damagePlayer(amount) {
   if (!p || p.iframes > 0 || G.debug.godmode || G.runOver || winFrozen()) return false;
   // Protect Bubble blocks contact damage outright rather than reducing it.
   if (p.shieldT > 0) return false;
+  // Metal Coat: one hit blocked entirely, with the usual i-frames so the next one cannot follow
+  // straight through the gap. Reported as not landing, so the hit's status does not land either.
+  if (p.barrier) {
+    p.barrier = false;
+    p.iframes = IFRAMES;
+    if (hooks.onBarrier) hooks.onBarrier();
+    return false;
+  }
   const s = G.stats;
   const dealt = Math.max(1, Math.round(amount - (s.armor || 0)));
   p.hp -= dealt;

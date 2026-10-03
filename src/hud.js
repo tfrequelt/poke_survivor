@@ -16,6 +16,8 @@ import { WEAPON_BY_ID } from './data/weapons.js';
 import { bankTotal } from './save.js';
 import { floorLabel, floorBonus, endlessBonus } from './floors.js';
 import { legend } from './legends.js';
+import { RELICS } from './data/legends.js';
+import { spriteBase } from './sprites.js';
 import { toScreenX, toScreenY } from './render.js';
 
 const PAD = 6;
@@ -26,6 +28,7 @@ export function drawHud() {
   drawAbilities();
   drawTimer();
   drawTallies();
+  drawRelics();
   drawLegendBar();
   drawPortalMarker();
   if (G.banner.t > 0) drawBanner();
@@ -185,6 +188,29 @@ function drawStairsPrompt() {
 }
 
 /**
+ * The relics carried this run, in a row of their own under the ability slots -- they are not
+ * items and take no item slot, so they do not sit with the items.
+ */
+function drawRelics() {
+  const list = G.relics;
+  if (!list.length) return;
+  const y0 = 40 + 20 + 12;
+  for (let i = 0; i < list.length; i++) {
+    const r = RELICS[list[i]];
+    if (!r) continue;
+    const x = PAD + i * 18 + 8;
+    ctx.fillStyle = 'rgba(16,16,24,0.6)';
+    ctx.fillRect(x - 8, y0 - 8, 16, 16);
+    drawSprite(ctx, spriteBase(r.shape, 'gold'), x, y0);
+    // Metal Coat greys out while its barrier is down.
+    if (list[i] === 'registeel' && G.player && !G.player.barrier) {
+      ctx.fillStyle = 'rgba(8,8,18,0.6)';
+      ctx.fillRect(x - 8, y0 - 8, 16, 16);
+    }
+  }
+}
+
+/**
  * The legendary's health, across the bottom of the screen with its name -- the one enemy in the
  * game that gets a bar of its own, because it is the one enemy the whole floor is about.
  */
@@ -193,16 +219,17 @@ function drawLegendBar() {
   if (!L.active || !L.def || !e || L.state === 'dead' || L.state === 'intro') return;
   const w = 260, h = 6, x = Math.round((VW - w) / 2), y = VH - 14;
   const pct = clamp(e.hp / e.maxHp, 0, 1);
-  drawTextCentered(ctx, L.def.name.toUpperCase(), VW / 2, y - 11, L.phase === 2 ? 'gold' : 'white');
+  drawTextCentered(ctx, L.def.name.toUpperCase(), VW / 2, y - 11, L.phase === 3 ? 'red' : L.phase === 2 ? 'gold' : 'white');
   ctx.fillStyle = '#101018';
   ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
   ctx.fillStyle = '#3a1418';
   ctx.fillRect(x, y, w, h);
   ctx.fillStyle = L.def.color;
   ctx.fillRect(x, y, Math.round(w * pct), h);
-  // The rage line: where the fight turns.
+  // Where the fight turns: rage at half, the last stand at a fifth.
   ctx.fillStyle = '#101018';
   ctx.fillRect(x + w / 2, y, 1, h);
+  ctx.fillRect(x + Math.round(w * 0.2), y, 1, h);
   // Iron Defense: the bar turns to steel while the guard holds.
   if (L.guardT > 0) {
     ctx.fillStyle = 'rgba(232,238,248,0.55)';

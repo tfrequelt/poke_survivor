@@ -42,6 +42,12 @@ export function createPlayer(x = 0, y = 0) {
     freezeT: 0,
     burnT: 0,
     burnTick: 0,
+    // Silver Wing: `graceT` is the protected second running; it re-arms after `noContactT` seconds
+    // clear of every enemy. Metal Coat: `barrier` blocks the next hit outright.
+    graceT: 0,
+    graceReady: true,
+    noContactT: 0,
+    barrier: false,
   };
 }
 
@@ -85,6 +91,7 @@ export function updatePlayer(dt) {
   }
 
   if (p.iframes > 0) p.iframes -= dt;
+  if (p.graceT > 0) p.graceT -= dt;
   tickStatuses(p, dt);
 
   // Regen is applied in whole points so the HUD never shows a fractional bar creeping.
@@ -162,10 +169,17 @@ export function setReviveFx(fn) { onRevive = fn; }
  * Each enemy carries its own cooldown so standing in a crowd deals steady damage rather than
  * one massive spike, and the player's i-frames then gate the overall rate.
  */
+/** How long you must be clear of every enemy before the Silver Wing protects you again. */
+const GRACE_REARM = 1.5;
+/** How long the Silver Wing protects you, once contact begins. */
+const GRACE_TIME = 1;
+
 function contactDamage(p, dt) {
   const reach = p.r + 16;
   const range = cellRange(p.x, p.y, reach);
-  if (!range) return;
+  const wing = G.relics.includes('articuno');
+  let touching = false;
+  if (!range) { graceTick(p, dt, wing, false); return; }
 
   for (let gy = range.y0; gy <= range.y1; gy++) {
     const rowBase = gy * GW;
@@ -175,9 +189,16 @@ function contactDamage(p, dt) {
       for (let k = cellStart[c]; k < end; k++) {
         const e = enemies[cellItems[k]];
         if (!e.alive || e.harmless) continue;
-        if (e.contactCd > 0) { e.contactCd -= dt; continue; }
         const rr = p.r + e.r;
-        if (dist2(p.x, p.y, e.x, e.y) > rr * rr) continue;
+        const near = dist2(p.x, p.y, e.x, e.y) <= rr * rr;
+        if (near) touching = true;
+        if (e.contactCd > 0) { e.contactCd -= dt; continue; }
+        if (!near) continue;
+        // Silver Wing: the first second of contact does no harm.
+        if (wing && (p.graceT > 0 || p.graceReady)) {
+          if (p.graceReady) { p.graceReady = false; p.graceT = GRACE_TIME; }
+          continue;
+        }
         const dmg = (e.weakenT > 0 ? e.dmg * 0.7 : e.dmg) * (G.stats.contactMult || 1);
         if (damagePlayer(dmg)) {
           e.contactCd = CONTACT_CD;
@@ -186,6 +207,15 @@ function contactDamage(p, dt) {
       }
     }
   }
+  graceTick(p, dt, wing, touching);
+}
+
+/** Re-arm the Silver Wing once you have been clear of every enemy for a moment. */
+function graceTick(p, dt, wing, touching) {
+  if (!wing) return;
+  if (touching) { p.noContactT = 0; return; }
+  p.noContactT += dt;
+  if (p.noContactT >= GRACE_REARM && p.graceT <= 0) p.graceReady = true;
 }
 
 export function healPlayer(amount) {

@@ -208,8 +208,10 @@ export function drawLegendGround(ox, oy) {
     const h = hazards[i];
     if (!h.alive) continue;
     const x = h.x + ox, y = h.y + oy;
+    // Off-screen things are skipped -- except the ones whose warning spans the room: the Surf wall,
+    // and an avalanche's lane, which starts at the far edge.
     if (x < -80 || y < -80 || x > VW + 80 || y > VH + 80) {
-      if (h.kind !== HZ.WAVE) continue;
+      if (h.kind !== HZ.WAVE && !(h.kind === HZ.PILLAR && h.dir === 2)) continue;
     }
     if (h.kind === HZ.STRIKE && h.delay > 0) {
       telegraph(x, y, h.r, 1 - h.delay / Math.max(0.01, h.dur), color);
@@ -236,8 +238,34 @@ export function drawLegendGround(ox, oy) {
         ctx.fill();
         ctx.globalAlpha = 1;
       }
+    } else if (h.kind === HZ.PILLAR && h.delay > 0 && h.dir === 2) {
+      // Avalanche: the whole lane lights up, so you can see where to stand.
+      const b = G.bounds;
+      if (b) {
+        const on = ((G.clock * 6) | 0) & 1;
+        ctx.globalAlpha = on ? 0.32 : 0.18;
+        ctx.fillStyle = '#9ad8f4';
+        ctx.fillRect(Math.round(b.minX + ox), Math.round(y - h.r * 0.7), Math.round(b.maxX - b.minX), Math.round(h.r * 1.4));
+        ctx.globalAlpha = 1;
+      }
     } else if (h.kind === HZ.PILLAR && h.delay > 0) {
       telegraph(x, y, h.r, 0.4, color);
+    } else if (h.kind === HZ.RING && h.delay > 0) {
+      // Where the ring will reach, before it starts to spread.
+      ctx.globalAlpha = 0.6;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.ellipse(x, y, h.r1, h.r1 * 0.62, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 0.14;
+      ctx.fillStyle = '#ff3a3a';
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    } else if (h.kind === HZ.TERRAIN && h.delay > 0) {
+      drawTerrain(h, x, y, false);
+    } else if (h.kind === HZ.TOMB && h.delay > 0) {
+      telegraph(x, y, h.r, 1 - h.delay / 0.6, color);
     } else if (h.kind === HZ.ORB) {
       ctx.globalAlpha = 0.18;
       ctx.strokeStyle = color;
@@ -252,6 +280,8 @@ export function drawLegendGround(ox, oy) {
       drawShadow(ctx, h.x0 + (h.x - h.x0) * k + ox, h.y0 + (h.y - h.y0) * k + oy, 1.6);
     }
   }
+
+  drawAuras(ox, oy);
 
   const r = legend.reticle;
   if (r.on) {
@@ -270,6 +300,99 @@ export function drawLegendGround(ox, oy) {
   }
 }
 
+/**
+ * The tells a boss carries around with it: Moltres's heat and Regice's cold as rings on the ground,
+ * Registeel's pull, Suicune's veil, and the last stand's aura.
+ */
+function drawAuras(ox, oy) {
+  const L = legend, e = L.e, p = G.player;
+  if (!L.active || !e || !e.alive || L.state === 'dead' || L.state === 'intro') return;
+  const x = e.x + ox, y = e.y + oy;
+
+  if (L.heatR > 0) {
+    ctx.globalAlpha = 0.16 + Math.sin(G.clock * 6) * 0.05;
+    ctx.fillStyle = '#ff7a20';
+    ctx.beginPath();
+    ctx.ellipse(x, y, L.heatR, L.heatR * 0.62, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  if (L.frostR > 0) {
+    ctx.globalAlpha = 0.14 + Math.sin(G.clock * 3) * 0.04;
+    ctx.fillStyle = '#d8f4ff';
+    ctx.beginPath();
+    ctx.ellipse(x, y, L.frostR, L.frostR * 0.62, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 0.5;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  if (L.magPhase && p) {
+    const px = p.x + ox, py = p.y + oy;
+    if (L.magPhase === 'warn') {
+      // Rings closing in on you: the pull is coming.
+      const k = 1 - L.magTime / Math.max(0.01, L.def.trait2.warn);
+      ctx.strokeStyle = '#c8d0e0';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 3; i++) {
+        const rr = (40 - i * 10) * (1 - k) + 8;
+        ctx.globalAlpha = 0.7;
+        ctx.beginPath();
+        ctx.ellipse(px, py, rr, rr * 0.62, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    } else {
+      // The pull itself: a line of force from it to you.
+      ctx.globalAlpha = 0.55 + Math.sin(G.clock * 30) * 0.2;
+      ctx.strokeStyle = '#e8eef8';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+      ctx.lineDashOffset = -G.clock * 60;
+      ctx.beginPath();
+      ctx.moveTo(x, y - 12);
+      ctx.lineTo(px, py - 6);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+    }
+  }
+  if (L.veilOn > 0) {
+    // Two shells of shifting aurora colour, so the veil reads from across the room.
+    const s = 1 + Math.sin(G.clock * 9) * 0.06;
+    const flip = (G.tick >> 3) & 1;
+    ctx.lineWidth = 2;
+    for (let k = 0; k < 2; k++) {
+      ctx.globalAlpha = 0.75 - k * 0.3;
+      ctx.strokeStyle = (flip ^ k) ? '#60f0d0' : '#d0a8ff';
+      ctx.beginPath();
+      ctx.ellipse(x, y - 14, (e.r + 16 + k * 6) * s, (e.r + 26 + k * 6) * s, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 0.22;
+    ctx.fillStyle = '#a0fff0';
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  if (L.phase === 3) {
+    // The last stand: Dragon Dance's rings rolling outward from its feet, in its own temperature.
+    const warm = L.def.type === 'fire' || L.def.type === 'electric' || L.def.type === 'rock';
+    const seq = getSequence(warm ? 'fx_aura_warm' : 'fx_aura_cold');
+    if (seq) {
+      for (let i = 0; i < 2; i++) {
+        const t = (G.clock * 1.4 + i * 0.5) % 1;
+        const f = Math.min(seq.frames - 1, (t * seq.frames) | 0);
+        const w = seq.w * 3.4, h = seq.h * 3.4;
+        ctx.globalAlpha = 1 - t * 0.6;
+        ctx.drawImage(seq.canvas, f * seq.w, 0, seq.w, seq.h, Math.round(x - w / 2), Math.round(y - h / 2 + 2), w, h);
+      }
+      ctx.globalAlpha = 1;
+    }
+  }
+}
+
 /** Over the actors: what lands, what burns, what falls, the beams and the wave. */
 export function drawLegendAir(ox, oy) {
   if (!legend.def) return;
@@ -285,12 +408,15 @@ export function drawLegendAir(ox, oy) {
         // Something on its way down: it falls the whole length of the warning.
         if (h.fall) {
           const k = 1 - h.delay / Math.max(0.01, h.dur);
-          drawFrame(look, frameLoop(look, G.clock), x, y - 220 * (1 - k) * (1 - k) - 6, 1, 0);
+          const rot = look.spin ? G.clock * look.spin + i : 0;
+          drawFrame(look, frameLoop(look, G.clock), x, y - 220 * (1 - k) * (1 - k) - 6, 1, rot);
         }
         continue;
       }
       if (h.fall) {
-        drawFrame(look, 0, x, y - 6, Math.max(0, 1 - h.t / h.life), 0);
+        const impact = LOOK_DEFS[h.look2];
+        if (impact) drawFrame(impact, frameAt(impact, h.t / h.life), x, y + (impact.anchor === 'bottom' ? h.r * 0.4 : 0), 1, 0);
+        else drawFrame(look, 0, x, y - 6, Math.max(0, 1 - h.t / h.life), 0);
         continue;
       }
       drawFrame(look, frameAt(look, h.t / h.life), x, y + (look.anchor === 'bottom' ? h.r * 0.4 : 0), 1, 0);
@@ -320,8 +446,67 @@ export function drawLegendAir(ox, oy) {
       continue;
     }
     if (h.kind === HZ.WAVE) drawWave(h, ox, oy);
+    if (h.kind === HZ.RING && h.delay <= 0) drawRing(h, x, y, look);
+    if (h.kind === HZ.TOMB && h.delay <= 0) drawTomb(h, x, y, look);
+    if (h.kind === HZ.TERRAIN && h.delay <= 0) drawTerrain(h, x, y, true);
   }
   drawBeams(ox, oy);
+}
+
+/**
+ * Thunder Wave's ring and Regirock's stomp: the edge sweeping outward. A ring look is stretched to
+ * the radius and laid flat; anything else (the stomp's dust) is planted round the circumference.
+ */
+function drawRing(h, x, y, look) {
+  if (!look) return;
+  const k = Math.min(1, h.t / h.dur);
+  const r = Math.max(4, h.r1 * k);
+  const fade = Math.min(1, (1 - k) * 3 + 0.3);
+  if (look.ring) {
+    const seq = getSequence(look.seq);
+    if (!seq) return;
+    ctx.globalAlpha = fade;
+    ctx.drawImage(seq.canvas, 0, 0, seq.w, seq.h, Math.round(x - r), Math.round(y - r * 0.62), r * 2, r * 1.24);
+    ctx.globalAlpha = 1;
+    return;
+  }
+  const n = 8;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    drawFrame(look, frameAt(look, k), x + Math.cos(a) * r, y + Math.sin(a) * r * 0.62 + 6, fade, 0);
+  }
+}
+
+/** Rock Tomb: the wall of boulders, standing until it crumbles. */
+function drawTomb(h, x, y, look) {
+  if (!look) return;
+  const n = h.dur || 12;
+  const fade = Math.min(1, (h.life - h.t) / 0.4);
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    drawFrame(look, 0, x + Math.cos(a) * h.r, y + Math.sin(a) * h.r * 0.62, fade, 0);
+  }
+}
+
+/** Electric Terrain: a square of floor, outlined while it charges, crackling once it is live. */
+function drawTerrain(h, x, y, live) {
+  const s = h.r, half = s / 2;
+  if (!live) {
+    const on = ((G.clock * 8) | 0) & 1;
+    ctx.globalAlpha = on ? 0.8 : 0.4;
+    ctx.strokeStyle = '#fff060';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(Math.round(x - half) + 0.5, Math.round(y - half) + 0.5, s - 1, s - 1);
+    ctx.globalAlpha = 1;
+    return;
+  }
+  const fade = Math.min(1, (h.life - h.t) / 0.3);
+  ctx.globalAlpha = (0.28 + Math.sin(G.clock * 20 + x) * 0.08) * fade;
+  ctx.fillStyle = '#fff060';
+  ctx.fillRect(Math.round(x - half), Math.round(y - half), s, s);
+  ctx.globalAlpha = 1;
+  const z = LOOK_DEFS[LOOK_KEYS.indexOf('zigzag')];
+  if (z) drawFrame(z, ((G.clock * 14 + x) | 0) % 4, x, y + half, fade, 0);
 }
 
 /**
@@ -461,13 +646,39 @@ const BURN_MARK = { x: 104, y: 112, w: 16, h: 16, frames: 7 };
 /** Frozen solid, burning, crackling or frosted over -- drawn on top of the player sprite. */
 export function drawPlayerStatus(p, sx, sy) {
   if (p.freezeT > 0) {
-    const seq = getSequence('fx_iceblock');
+    // Frozen solid: the PMD freeze, the ice crystal from status.png, glinting over you.
+    const seq = getSequence('status_freeze');
     if (seq) {
-      const s = 0.42, w = seq.w * s, h = seq.h * s;
-      ctx.globalAlpha = 0.72;
-      ctx.drawImage(seq.canvas, 0, 0, seq.w, seq.h, Math.round(sx - w / 2), Math.round(sy - h + 3), w, h);
+      const f = ((G.clock * 10) | 0) % seq.frames;
+      ctx.globalAlpha = 0.85;
+      ctx.drawImage(seq.canvas, f * seq.w, 0, seq.w, seq.h, Math.round(sx - seq.w / 2), Math.round(sy - seq.h + 4), seq.w, seq.h);
       ctx.globalAlpha = 1;
     }
+  }
+  // Regice's cold building up in you: a ring that fills, white when it is about to freeze you.
+  const L = legend;
+  if (L.active && L.frostMax > 0 && L.frost > 0.05 && p.freezeT <= 0) {
+    const k = Math.min(1, L.frost / L.frostMax);
+    ctx.strokeStyle = k > 0.75 ? '#ffffff' : '#9ad8f4';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(sx, sy - 10, 13, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2);
+    ctx.stroke();
+  }
+  // Metal Coat: a shield over you while its barrier is up.
+  if (p.barrier) {
+    const seq = getSequence('status_shield');
+    if (seq) ctx.drawImage(seq.canvas, 0, 0, seq.w, seq.h, Math.round(sx - 18), Math.round(sy - 26), seq.w, seq.h);
+  }
+  // Silver Wing: a white shimmer for the second it is protecting you.
+  if (p.graceT > 0 && ((G.tick >> 1) & 1)) {
+    ctx.globalAlpha = 0.6;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.ellipse(sx, sy - 8, 11, 14, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
   }
   if (p.burnT > 0) {
     const img = getImage('status');

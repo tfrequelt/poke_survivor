@@ -37,8 +37,18 @@ export const SECRET_ARENA = { w: 1008, h: 720 };
  */
 export const legendHpScale = (level) => {
   const l = Math.max(1, level);
-  return 0.6 + 0.05 * l + 0.003 * l * l;
+  return LEGEND_HP * (0.6 + 0.05 * l + 0.003 * l * l);
 };
+
+// The fight-wide difficulty knobs. The first tuning made the bosses last 30-70 seconds and they
+// were too easy, so: two and a half times the health (about two minutes against a decent build),
+// a fifth more damage on everything they do, and a quarter less waiting between moves.
+export const LEGEND_HP = 2.5;
+export const LEGEND_DMG = 1.2;
+export const LEGEND_CD = 0.75;
+
+/** Below this share of health, the last stand: phase 3. Rage (phase 2) begins at half. */
+export const LAST_STAND_AT = 0.2;
 
 // --- Visuals ---------------------------------------------------------------------------------
 //
@@ -65,6 +75,20 @@ export const LOOKS = {
   shard: { seq: 'fx_shard', scale: 0.6, rot: true, fps: 0, glow: '#e8e8f0' },
   diamond: { seq: 'fx_diamond', scale: 0.32, rot: false, spin: 9, fps: 0, glow: '#c8d0e0' },
   tornado: { seq: 'fx_tornado', scale: 0.9, anchor: 'bottom', fps: 12, loop: 4 },
+  // From the sheets the first pass left alone: Dialga and Palkia's moves in dragon_moves.png, the
+  // Thunder Wave rings in dark_moves.png, the blue zigzag bolts in thunderbolt.png.
+  crescent: { seq: 'fx_crescent', scale: 1.6, rot: false, fps: 16, glow: '#ffffff' },
+  firestar: { seq: 'fx_firestar', scale: 0.8, rot: false, fps: 18, glow: '#ffb050' },
+  ring: { seq: 'fx_ring', scale: 1, ring: true },
+  zigzag: { seq: 'fx_zigzag', scale: 0.8, anchor: 'bottom', fps: 14 },
+  outrage: { seq: 'fx_outrage', scale: 0.75, anchor: 'bottom', order: [0, 1, 2, 3, 2, 3, 4, 5] },
+  meteor: { seq: 'fx_meteor', scale: 1, rot: false, spin: 4, fps: 0 },
+  dust: { seq: 'fx_dust', scale: 0.7, anchor: 'bottom' },
+  boulder_s: { seq: 'fx_boulder', scale: 0.32, rot: false, fps: 0 },
+  ice_block_s: { seq: 'fx_iceblock', scale: 0.5, anchor: 'bottom' },
+  bigbubble: { seq: 'fx_bigbubble', scale: 0.55, rot: false, fps: 0 },
+  // Roar of Time's shockwave: the burst when a boss makes its last stand.
+  roar: { seq: 'fx_roar', scale: 2.2 },
 };
 
 /** Index 0 is "none". Projectiles carry these as plain numbers to keep their shape monomorphic. */
@@ -115,7 +139,19 @@ export const LEGENDS = [
         look: 'ice_rock_big', status: 'chill' },
       { id: 'hurricane', kind: 'tornado', anim: 'Attack', windup: 0.6, cd: 1.4, weight: 2, rage: true,
         count: 2, speed: 46, life: 5.5, r: 12, dmg: 14, look: 'tornado', status: 'chill' },
+      // Air Slash: blades of wind that bend in flight, alternately left and right.
+      { id: 'air_slash', kind: 'fan', anim: 'Attack', windup: 0.45, cd: 1.0, weight: 3,
+        count: 4, rageCount: 6, spread: 1.2, speed: 135, dmg: 12, volleys: 3, gap: 0.28, curve: 1.3,
+        look: 'crescent' },
     ],
+    // Ice Body: every chunk of health it loses comes back at you as a shard of ice.
+    trait2: { kind: 'shed', every: 0.025, speed: 150, dmg: 11, look: 'ice_shard', status: 'chill' },
+    last: {
+      text: 'THE AIR ITSELF FREEZES', weather: 'hail',
+      move: { id: 'absolute_zero', kind: 'storm', anim: 'RearUp', windup: 0.6, cd: 1.4, weight: 3,
+        weather: 'hail', dur: 6, drops: 26, radius: 140, delay: 0.9, r: 16, dmg: 18,
+        look: 'ice_rock_big', status: 'chill' },
+    },
   },
   {
     id: 'moltres', name: 'Moltres', type: 'fire', stage: 'grass',
@@ -137,7 +173,18 @@ export const LEGENDS = [
         count: 14, waves: 2, rageWaves: 3, gap: 0.35, speed: 120, dmg: 10, look: 'fireball', status: 'burn' },
       { id: 'fire_spin', kind: 'closing', anim: 'Charge', windup: 0.6, cd: 1.5, weight: 2, rage: true,
         count: 12, from: 115, to: 18, dur: 2.6, holes: 2, r: 13, dmg: 14, look: 'flame', status: 'burn' },
+      // Fire stars thrown wide that turn round and come back to it -- dodge them twice.
+      { id: 'fire_shuriken', kind: 'boomerang', anim: 'Shoot', windup: 0.45, cd: 1.1, weight: 3,
+        count: 5, rageCount: 7, spread: 1.6, speed: 175, dmg: 13, out: 0.75, look: 'firestar', status: 'burn' },
     ],
+    // Heat: too close to it and you start to burn.
+    trait2: { kind: 'heat', r: 78, status: 'burn' },
+    last: {
+      text: 'THE SKY CATCHES FIRE', trailEvery: 0.15,
+      move: { id: 'sky_inferno', kind: 'dive', anim: 'Attack', windup: 0.4, cd: 1.3, weight: 3,
+        rise: 0.5, track: 1.0, lock: 0.3, r: 44, dmg: 30, times: 3,
+        look: 'fire_dome', status: 'burn', ring: { count: 12, radius: 70, r: 14, dmg: 14, look: 'flame' } },
+    },
   },
   {
     id: 'zapdos', name: 'Zapdos', type: 'electric', stage: 'grass',
@@ -161,7 +208,20 @@ export const LEGENDS = [
       { id: 'thunder_cage', kind: 'strikes', anim: 'Emit', windup: 0.5, cd: 1.6, weight: 2, rage: true,
         pattern: 'cage', count: 16, radius: 88, holes: 2, delay: 0.8, stagger: 0.05, r: 16, dmg: 20,
         finale: { delay: 1.3, r: 26, dmg: 24 }, look: 'bolt', status: 'para' },
+      // Thunder Wave: rings of static spreading from points around you. Inside one, you are caught.
+      { id: 'thunder_wave', kind: 'waves', anim: 'Charge', windup: 0.5, cd: 1.2, weight: 3,
+        count: 3, rageCount: 5, radius: 95, r1: 70, delay: 0.7, dur: 0.45, dmg: 14,
+        look: 'ring', status: 'para' },
     ],
+    // Static Storm: stand still too long and the lightning finds you.
+    trait2: { kind: 'still', after: 1.2, delay: 0.65, r: 18, dmg: 22, look: 'bolt', status: 'para' },
+    last: {
+      text: 'THE STORM BREAKS',
+      barrage: { every: 0.45, count: 1, radius: 150, delay: 0.7, r: 16, dmg: 18, look: 'bolt', status: 'para' },
+      move: { id: 'judgement', kind: 'strikes', anim: 'Emit', windup: 0.5, cd: 1.4, weight: 2,
+        pattern: 'around', count: 14, radius: 130, delay: 1.0, waves: 2, wave: 0.6, r: 18, dmg: 22,
+        look: 'bolt', status: 'para' },
+    },
   },
 
   // =========================================================================
@@ -189,7 +249,21 @@ export const LEGENDS = [
         burst: { count: 8, speed: 120, dmg: 10, look: 'rock' } },
       { id: 'ancient_power', kind: 'orbit', anim: 'Charge', windup: 0.5, cd: 1.4, weight: 2, rage: true,
         count: 6, radius: 36, spinUp: 2.0, speed: 150, dmg: 12, look: 'rock' },
+      // Rock Tomb: boulders fall in a ring around you and wall you in, then the rocks come down
+      // inside it.
+      { id: 'rock_tomb', kind: 'tomb', anim: 'RearUp', windup: 0.5, cd: 1.4, weight: 2,
+        radius: 72, count: 14, fallDelay: 0.6, life: 3.2, dmg: 16, look: 'boulder_s',
+        then: { count: 5, delay: 0.9, r: 14, dmg: 18, look: 'rock' } },
     ],
+    // Seismic Stomp: every few seconds of walking, the ground around it bursts.
+    trait2: { kind: 'stomp', every: 3.0, r: 88, dur: 0.35, dmg: 16, look: 'dust' },
+    last: {
+      text: 'THE MOUNTAIN COMES DOWN',
+      barrage: { every: 0.6, count: 1, radius: 160, delay: 1.0, r: 18, dmg: 20, look: 'meteor', impact: 'fire_dome', fall: true },
+      move: { id: 'meteor_crash', kind: 'strikes', anim: 'RearUp', windup: 0.6, cd: 1.3, weight: 2,
+        pattern: 'random', count: 14, radius: 130, delay: 1.1, r: 18, dmg: 22, look: 'meteor',
+        impact: 'fire_dome', fall: true },
+    },
   },
   {
     id: 'regice', name: 'Regice', type: 'ice', stage: 'cave',
@@ -213,7 +287,17 @@ export const LEGENDS = [
         look: 'ice_rock_big', fall: true, status: 'chill' },
       { id: 'freeze_prison', kind: 'prison', anim: 'Attack', windup: 0.4, cd: 1.5, weight: 2, rage: true,
         r: 46, delay: 1.4, dmg: 20, look: 'ice_block', status: 'freeze' },
+      // Avalanche: blocks of ice slide across the room in lanes, each lane shown first.
+      { id: 'avalanche', kind: 'avalanche', anim: 'Charge', windup: 0.5, cd: 1.3, weight: 2,
+        lanes: 4, rageLanes: 6, speed: 190, warn: 0.9, r: 16, dmg: 20, look: 'ice_block_s', status: 'chill' },
     ],
+    // Frostbite: stay near it and the cold builds in you until you freeze solid.
+    trait2: { kind: 'frostbite', r: 85, build: 2.5, freeze: 1.5, dmg: 14 },
+    last: {
+      text: 'EVERYTHING FREEZES', frostMul: 1.6, floorLife: 14,
+      move: { id: 'ice_age', kind: 'avalanche', anim: 'RearUp', windup: 0.5, cd: 1.3, weight: 3,
+        lanes: 8, speed: 220, warn: 0.9, r: 16, dmg: 20, look: 'ice_block_s', status: 'chill' },
+    },
   },
   {
     id: 'registeel', name: 'Registeel', type: 'steel', stage: 'cave',
@@ -239,7 +323,18 @@ export const LEGENDS = [
       { id: 'magnet_bomb', kind: 'homing', anim: 'Charge', windup: 0.5, cd: 1.4, weight: 2, rage: true,
         count: 4, speed: 72, turn: 2.2, life: 4.5, dmg: 16, look: 'diamond',
         blast: { r: 24, dmg: 14, look: 'fire_dome' } },
+      // Gyro Rend: steel blades spun off its body in a widening, curling spiral.
+      { id: 'gyro_rend', kind: 'spiral', anim: 'Rotate', windup: 0.5, cd: 1.2, weight: 2,
+        dur: 1.6, rate: 6, rageRate: 9, arms: 4, turn: 3.0, speed: 120, curve: 1.5, dmg: 13, look: 'crescent' },
     ],
+    // Magnet Pull: on a clock, it drags you toward it. Walk against it.
+    trait2: { kind: 'magnet', every: 9, warn: 0.8, dur: 1.6, pull: 85 },
+    last: {
+      text: 'AN IRON FORTRESS', guardEvery: 5,
+      move: { id: 'flash_barrage', kind: 'beam', anim: 'Shoot', windup: 0.25, cd: 1.2, weight: 3,
+        telegraph: 0.6, dur: 0.3, width: 12, length: 440, dmg: 24, beams: 3, fan: 0.5, repeat: 4,
+        color: '#ffffff', edge: '#a0a8c0' },
+    },
   },
 
   // =========================================================================
@@ -267,7 +362,20 @@ export const LEGENDS = [
         trail: { every: 0.08, life: 3, r: 13, dps: 10, look: 'flame', status: 'burn' } },
       { id: 'lava_plume', kind: 'ring', anim: 'Charge', windup: 0.55, cd: 1.2, weight: 2, rage: true,
         count: 18, waves: 2, gap: 0.3, speed: 125, dmg: 11, look: 'fireball', status: 'burn' },
+      // Sacred Fire: towering pillars of flame erupt out of it in a great X across the room.
+      { id: 'sacred_fire', kind: 'line', anim: 'SpAttack', windup: 0.6, cd: 1.4, weight: 2,
+        count: 9, step: 36, gap: 0.07, delay: 0.6, r: 18, dmg: 24, lines: 4, fan: 1.5708,
+        look: 'outrage', status: 'burn' },
     ],
+    // Volcanic Roar: it roars, hurling you back, and every patch of burning ground explodes.
+    trait2: { kind: 'roar', every: 9, r: 100, push: 150, bursts: 8, dmg: 18 },
+    last: {
+      text: 'THE VOLCANO AWAKENS',
+      barrage: { every: 1.5, count: 3, radius: 150, delay: 1.0, r: 26, dmg: 22, look: 'fire_dome', status: 'burn' },
+      move: { id: 'sacred_star', kind: 'line', anim: 'SpAttack', windup: 0.6, cd: 1.4, weight: 3,
+        count: 10, step: 36, gap: 0.06, delay: 0.6, r: 18, dmg: 24, lines: 8, fan: 0.785,
+        look: 'outrage', status: 'burn' },
+    },
   },
   {
     id: 'raikou', name: 'Raikou', type: 'electric', stage: 'beach',
@@ -291,7 +399,18 @@ export const LEGENDS = [
         r: 15, dmg: 18, look: 'spark', bolt: 'bolt', status: 'para' },
       { id: 'discharge', kind: 'ring', anim: 'Shoot', windup: 0.5, cd: 1.2, weight: 2, rage: true,
         count: 12, waves: 3, gap: 0.35, speed: 118, dmg: 12, look: 'spark', status: 'para' },
+      // Volt Chase: bolts that crawl along the ground after you.
+      { id: 'volt_chase', kind: 'tornado', anim: 'Shock', windup: 0.45, cd: 1.2, weight: 2,
+        count: 3, rageCount: 5, speed: 62, life: 4.5, r: 11, dmg: 15, look: 'zigzag', status: 'para' },
     ],
+    // Electric Terrain: patches of floor around you charge up, then crackle.
+    trait2: { kind: 'terrain', every: 7, count: 5, size: 36, radius: 90, warn: 1.2, life: 2.5, dmg: 12, status: 'para' },
+    last: {
+      text: 'THUNDER WITHOUT END', terrainEvery: 4,
+      move: { id: 'thunder_rush', kind: 'dash', anim: 'QuickStrike', windup: 0.3, cd: 1.2, weight: 3,
+        times: 5, speed: 360, telegraph: 0.4, dmg: 26,
+        bolts: { every: 30, delay: 0.35, r: 15, dmg: 18, look: 'bolt', status: 'para' } },
+    },
   },
   {
     id: 'suicune', name: 'Suicune', type: 'water', stage: 'beach',
@@ -316,9 +435,52 @@ export const LEGENDS = [
       { id: 'aurora_beam', kind: 'beam', anim: 'Attack', windup: 0.25, cd: 1.3, weight: 2, rage: true,
         telegraph: 0.7, dur: 0.45, width: 12, length: 440, dmg: 22, beams: 4, spin: true,
         color: '#e0fff8', edge: '#60d8c0', status: 'chill' },
+      // Hydro Sphere: one great bubble drifts at you, and bursts into a ring of small ones.
+      { id: 'hydro_sphere', kind: 'sphere', anim: 'Shoot', windup: 0.5, cd: 1.2, weight: 2,
+        speed: 70, life: 2.4, dmg: 20, look: 'bigbubble',
+        burst: { count: 16, rageCount: 22, speed: 120, dmg: 10, look: 'bubble', status: 'chill' } },
     ],
+    // Aurora Veil: on a clock, a shimmering veil -- whatever you hit it with comes back as bubbles.
+    trait2: { kind: 'veil', every: 11, dur: 3, per: 0.012, speed: 130, dmg: 10, look: 'bubble', status: 'chill' },
+    last: {
+      text: 'THE TIDE RISES',
+      barrage: { every: 1.0, count: 1, radius: 140, delay: 0.85, r: 16, dmg: 16, look: 'geyser', status: 'chill' },
+      move: { id: 'tidal_storm', kind: 'surf', anim: 'SpAttack', windup: 0.5, cd: 1.4, weight: 3,
+        warn: 1.0, speed: 240, gap: 92, dmg: 26, times: 3 },
+    },
   },
 ];
+
+// --- Relics ------------------------------------------------------------------------------------
+//
+// What each legendary leaves behind: one of its own items, kept for the rest of the run. They live
+// in their own row on the HUD and take none of the six item slots, so beating a boss is always a
+// pure gain. `shape` is the atlas sprite cut from items_2.png (see the manifest); the effect itself
+// is applied by main.js and player.js, keyed by the boss id.
+
+export const RELICS = {
+  articuno: { name: 'Silver Wing', shape: 'relic_articuno',
+    desc: 'The first second of touching an enemy does you no harm.' },
+  moltres: { name: 'Flame Plume', shape: 'relic_moltres',
+    desc: 'Every few seconds, a burst of fire erupts around you.' },
+  zapdos: { name: 'Zap Plume', shape: 'relic_zapdos',
+    desc: 'Every few seconds, lightning strikes the nearest enemy.' },
+  regirock: { name: 'Hard Stone', shape: 'relic_regirock',
+    desc: 'Every hit you take is 3 lighter.' },
+  regice: { name: 'Never-Melt Ice', shape: 'relic_regice',
+    desc: 'Enemies close to you are slowed by the cold.' },
+  registeel: { name: 'Metal Coat', shape: 'relic_registeel',
+    desc: 'A steel barrier blocks one hit, and comes back every 12 seconds.' },
+  entei: { name: 'Fire Stone', shape: 'relic_entei',
+    desc: 'Enemies you defeat sometimes explode in flames.' },
+  raikou: { name: 'Thunder Crystal', shape: 'relic_raikou',
+    desc: 'You move 15% faster.' },
+  suicune: { name: 'Mystic Water', shape: 'relic_suicune',
+    desc: 'You slowly regain health.' },
+};
+
+/** (shape, palette, fallback) for the atlas, like the other pickups. */
+export const relicSpritePairs = () => Object.values(RELICS).map((r) => [r.shape, 'gold', 'orb']);
 
 export const LEGEND_BY_ID = Object.fromEntries(LEGENDS.map((l) => [l.id, l]));
 export const LEGEND_IDS = LEGENDS.map((l) => l.id);

@@ -84,6 +84,8 @@ export const G = {
   portal: { x: 0, y: 0, active: false, near: false, back: false },
   // True while on a secret floor. The legendary itself lives in legends.js.
   secret: false,
+  // Relics carried this run, by legendary id, in the order they were taken. See data/legends.js.
+  relics: [],
 
   // --- run configuration ---
   stage: null,      // stage definition
@@ -177,6 +179,7 @@ export function resetRunState() {
   G.stairs.x = 0; G.stairs.y = 0; G.stairs.active = false; G.stairs.near = false;
   G.portal.x = 0; G.portal.y = 0; G.portal.active = false; G.portal.near = false; G.portal.back = false;
   G.secret = false;
+  G.relics.length = 0;
   G.player = null;
   G.form = null;
   G.bounds = null;

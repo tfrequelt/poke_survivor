@@ -26,9 +26,28 @@ ES modules will not load over `file://`, so the folder has to be served over HTT
 from this directory, then open the address it prints:
 
 ```
+python tools/serve.py       # -> http://localhost:8000   (recommended while developing)
 npx serve .                 # -> http://localhost:3000
 python -m http.server 8000  # -> http://localhost:8000
 ```
+
+`tools/serve.py` is the plain Python server with caching turned off. With the other two, a browser
+can keep running an old copy of a script after it has been edited -- even across a server restart
+-- so a change that is plainly in the code does not show up. If that happens, reload with
+`Ctrl+Shift+R`, or tick *Disable cache* in the DevTools Network tab.
+
+### Testing the secret floors
+
+Portals are rare (15% per floor), so there are shortcuts. Add these to the address:
+
+| Option | Effect |
+|---|---|
+| `?debug=1` then `O` in a run | Opens a portal right beside you, now |
+| `?portal` | On floors 1-3, a portal opens beside you 3 seconds after arriving |
+| `?boss=<name>` | Every portal leads to that legendary (`articuno`, `moltres`, `zapdos`, `regirock`, `regice`, `registeel`, `entei`, `raikou`, `suicune`) |
+
+For example `?debug=1&char=eevee&stage=cave&boss=registeel` skips the menus; press `O`, step
+onto the portal and press `Enter`.
 
 ## Controls
 

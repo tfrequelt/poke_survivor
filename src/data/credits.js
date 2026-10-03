@@ -20,11 +20,11 @@ const RIPS = [
   ['75220', 'BEACH CAVE MAP', 'bundled'],
   ['5413', 'INTRO BACKGROUNDS', 'title screen'],
   ['5426', 'ITEMS', 'bundled (replaced by items_2)'],
-  ['69118', 'STATUS ICONS', 'low health, burn'],
+  ['69118', 'STATUS ICONS', 'low health, burn, freeze'],
   ['5422', 'FONT AND WINDOW', 'window styling'],
   ['163902', 'POISON MOVES', 'bundled'],
   ['39320', 'GHOST MOVES', 'shadow ball, night shade'],
-  ['41323', 'DARK MOVES', 'bundled'],
+  ['41323', 'DARK MOVES', 'thunder wave rings'],
   ['40562', 'FIRE MOVES', 'flamethrower, fire spin'],
   ['41326', 'ROCK MOVES', 'legendary rocks'],
   ['534323', 'RAIN', "Suicune's rain"],
@@ -42,9 +42,9 @@ const EXPLORERS_RIPS = [
   ['pokemonmysterydungeonexplorersofsky', '84937', 'DUNGEON FONT', 'floor title card'],
   ['pokemonmysterydungeonexplorersofsky', '86310', 'ICE TILESET', 'bundled'],
   ['pokemonmysterydungeonexplorersoftimedarkness', '85996', 'MIRACLE SEA TILES', 'bundled'],
-  ['pokemonmysterydungeonexplorersoftimedarkness', '14966', 'DRAGON MOVES', 'bundled'],
+  ['pokemonmysterydungeonexplorersoftimedarkness', '14966', 'DRAGON MOVES', 'legendary attacks'],
   ['pokemonmysterydungeonexplorersoftimedarkness', '158011', 'DIMENSIONAL HOLE', 'secret floor portal'],
-  ['pokemonmysterydungeonexplorersoftimedarkness', '15903', 'ITEMS 2', 'items, traps, stairs'],
+  ['pokemonmysterydungeonexplorersoftimedarkness', '15903', 'ITEMS 2', 'items, traps, relics'],
 ];
 
 const EXPLORERS_GAME = {

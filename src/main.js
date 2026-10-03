@@ -19,11 +19,15 @@ import {
 import {
   enemies, projectiles, orbs, coins, items, damageNumbers, particles, zones,
   spawn, despawn, clearWorld, rebuildGrid, sweepDead, entityCounts, spawnRequests, fxShapes,
+  nextHitId, cellRange, cellStart, cellItems, GW, setDamageSource,
 } from './world.js';
-import { initStats, ensureStats, addGrant, addMods, luckOf, luckK } from './stats.js';
+import { initStats, ensureStats, addGrant, addMods, addMod, luckOf, luckK } from './stats.js';
 import { loadSave, bankGold, bankTotal, rankOf, buyRank, resetProgress, saveData, persistSave } from './save.js';
 import { SHOP_ITEMS, rankCost } from './data/shop.js';
-import { hooks, damageEnemy, killAll, applyBurn, resetDamageTally, damageBreakdown } from './combat.js';
+import {
+  hooks, damageEnemy, killAll, applyBurn, applyChill, resetDamageTally, damageBreakdown, damageCircle,
+  damageSourceId,
+} from './combat.js';
 import { getDamageSource } from './world.js';
 import {
   checkCloseCall, checkKaboom, checkDeath, claimSuccess, successState,
@@ -38,6 +42,7 @@ import {
 } from './legends.js';
 import {
   legendFor, LEGEND_BY_ID, LEGEND_IDS, PORTAL_CHANCE, PORTAL_WINDOW, SECRET_ARENA,
+  RELICS, relicSpritePairs,
 } from './data/legends.js';
 import { ENEMIES } from './data/enemies.js';
 import { ENEMY_BY_ID, BOSS_TIERS } from './data/enemies.js';
@@ -153,6 +158,7 @@ async function boot() {
   for (const [shape, pal, rot] of abilitySpritePairs()) registerSprite(shape, pal, rot || 0);
   for (const [shape, pal] of propSpritePairs()) registerSprite(shape, pal);
   for (const [shape, pal, fb] of itemSpritePairs()) registerSprite(shape, pal, 0, fb);
+  for (const [shape, pal, fb] of relicSpritePairs()) registerSprite(shape, pal, 0, fb);
   for (const [shape, pal] of orbSpritePairs()) registerSprite(shape, pal);
   registerSprite('coin', 'gold');
   registerSprite('pokeball', 'crab');
@@ -178,6 +184,11 @@ async function boot() {
   fxSprites.leafbladeDirs = spriteDirs('fx_leafblade', 'leafblade');
   initPickupSprites();
   initItemSprites();
+  for (const id of Object.keys(RELICS)) {
+    const spr = spriteBase(RELICS[id].shape, 'gold');
+    relicSpr[id] = spr;
+    relicBySpr.set(spr, id);
+  }
   setHostileSprite(spriteBase('proj_bubble', 'fire'));
   setTrapSprites(Object.fromEntries(TRAP_KEYS.map((k) => [k, spriteBase('trap_' + k, 'rock')])));
   installHooks();
@@ -273,6 +284,7 @@ async function boot() {
       },
       takePortal: () => { G.portal.near = true; beginPortal(); },
       legend: () => legend,
+      relic: (id) => grantRelic(id),
       hazards: () => hazards,
       portalAt: () => portalAt,
       floor: () => ({ floor: G.floor, label: floorLabel(), stairs: { ...G.stairs } }),
@@ -338,6 +350,7 @@ function installHooks() {
     if (e.boss) { bossDrops(e); return; }
 
     dropXp(e.x, e.y, e.xp);
+    if (G.relics.includes('entei')) fireStone(e);
     if (e.coinChance > 0 && G.rngRun() < e.coinChance * (1 + luckOf())) {
       dropCoin(e.x, e.y, Math.round((G.rngRun() < 0.15 ? 5 : 1) * floorReward()));
     }
@@ -460,11 +473,19 @@ function installHooks() {
     grantCoins(20 + ((G.rngRun() * 20) | 0));
     if (!evolved) G.pendingLevelUps++;
   };
+  itemEffects.relic = (it) => grantRelic(relicBySpr.get(it.sprId));
   itemEffects.onCollect = (kind, label) => {
     sfx('pickup');
+    if (kind === 'relic') return;                  // grantRelic has its own, longer banner
     G.banner.text = label;
     G.banner.sub = '';
     G.banner.t = 1.6;
+  };
+  hooks.onBarrier = () => {
+    const p = G.player;
+    sfx('move_shield');
+    if (p) burst(p.x, p.y - 8, 12, '#e8eef8');
+    relicT.barrier = BARRIER_RECHARGE;
   };
 }
 
@@ -509,6 +530,7 @@ function startRun(character, q, stageId) {
   stairsSpawned = {};
   descent = null;
   leaveLegendBehind();
+  relicT.plume = PLUME_EVERY; relicT.zap = ZAP_EVERY; relicT.frost = 0; relicT.barrier = 0;
 
   const id = stageId || (q && q.get('stage')) || 'grass';
   G.stage = STAGE_BY_ID[id] || STAGES[0];
@@ -736,6 +758,132 @@ function updateDescent(dt) {
   }
 }
 
+// --- Relics -----------------------------------------------------------------------------------
+//
+// What the legendaries leave behind. Kept for the run, shown in their own HUD row, and none of
+// them takes an item slot. The stat ones (Hard Stone, Thunder Crystal, Mystic Water) are ordinary
+// modifiers added once; the rest act on a clock here, or at the one moment they care about (the
+// Silver Wing in player.js, the Metal Coat in combat.js, the Fire Stone on a kill).
+
+/** relic id -> atlas frame, and back. Filled at boot. */
+const relicSpr = {};
+const relicBySpr = new Map();
+
+const PLUME_EVERY = 5, ZAP_EVERY = 4, BARRIER_RECHARGE = 12;
+const relicT = { plume: PLUME_EVERY, zap: ZAP_EVERY, frost: 0, barrier: 0 };
+let RELIC_SRC = 0;
+let fireStoneBursts = 0;
+
+function grantRelic(id) {
+  const r = RELICS[id];
+  if (!r || G.relics.includes(id)) return;
+  G.relics.push(id);
+  if (id === 'regirock') addMod('armor', 'flat', 3, 'relic');
+  if (id === 'raikou') addMod('moveSpeed', 'inc', 0.15, 'relic');
+  if (id === 'suicune') addMod('regen', 'flat', 0.6, 'relic');
+  if (id === 'registeel' && G.player) G.player.barrier = true;
+  G.banner = { text: r.name.toUpperCase(), sub: r.desc.toUpperCase(), t: 3 };
+  sfx('levelup');
+}
+
+/** Relic power grows with the run, like everything else the player deals. */
+const relicDamage = (base, perLevel) => (base + perLevel * G.level) * ((G.stats && G.stats.power) || 1);
+
+function updateRelics(dt) {
+  const p = G.player;
+  if (!p || !G.relics.length) return;
+  fireStoneBursts = 0;
+  setDamageSource(RELIC_SRC || (RELIC_SRC = damageSourceId('relics', 'Relics')));
+
+  // Flame Plume: a burst of fire at your feet.
+  if (G.relics.includes('moltres')) {
+    relicT.plume -= dt;
+    if (relicT.plume <= 0) {
+      relicT.plume = PLUME_EVERY;
+      damageCircle(p.x, p.y, 56, relicDamage(18, 3), nextHitId());
+      pushFx(FX.BOOM, p.x, p.y, 56, 0, '#ffffff', 0.4);
+      sfx('move_fire');
+    }
+  }
+  // Zap Plume: lightning on the nearest enemy in reach.
+  if (G.relics.includes('zapdos')) {
+    relicT.zap -= dt;
+    if (relicT.zap <= 0) {
+      const e = nearestFoe(p.x, p.y, 220);
+      if (e) {
+        relicT.zap = ZAP_EVERY;
+        damageEnemy(e, relicDamage(30, 5), 0, 0, true);
+        pushFx(FX.BOLT, e.x, e.y, 110, 0, '#fff05a', 0.4, 0, (G.rngFx() * 65535) | 0);
+        sfx('move_thunder');
+      } else {
+        relicT.zap = 0.3;                   // nothing in reach: look again shortly
+      }
+    }
+  }
+  // Never-Melt Ice: the cold around you slows whatever comes close.
+  if (G.relics.includes('regice')) {
+    relicT.frost -= dt;
+    if (relicT.frost <= 0) {
+      relicT.frost = 0.25;
+      chillAround(p.x, p.y, 70, 0.35, 0.5);
+    }
+  }
+  // Metal Coat: the barrier comes back a while after it breaks.
+  if (G.relics.includes('registeel') && !p.barrier) {
+    relicT.barrier -= dt;
+    if (relicT.barrier <= 0) { p.barrier = true; sfx('move_shield'); }
+  }
+  setDamageSource(0);
+}
+
+/** Fire Stone: a quarter of kills go up in flames, hurting what stood next to them. */
+function fireStone(e) {
+  // Capped per tick: one explosion killing the next and the next could otherwise clear a screen
+  // in a single frame, which is a different relic.
+  if (fireStoneBursts >= 6 || G.rngRun() >= 0.25) return;
+  fireStoneBursts++;
+  const prev = getDamageSource();
+  setDamageSource(RELIC_SRC || (RELIC_SRC = damageSourceId('relics', 'Relics')));
+  pushFx(FX.BOOM, e.x, e.y, 42, 0, '#ffffff', 0.35);
+  damageCircle(e.x, e.y, 42, relicDamage(15, 3), nextHitId());
+  setDamageSource(prev);
+}
+
+/** The nearest live, non-scenery enemy within `range`, or null. A grid query, not a scan. */
+function nearestFoe(x, y, range) {
+  const r = cellRange(x, y, range);
+  if (!r) return null;
+  let best = null, bd = range * range;
+  for (let gy = r.y0; gy <= r.y1; gy++) {
+    for (let gx = r.x0; gx <= r.x1; gx++) {
+      const c = gy * GW + gx;
+      for (let k = cellStart[c]; k < cellStart[c + 1]; k++) {
+        const e = enemies[cellItems[k]];
+        if (!e || !e.alive || e.prop) continue;
+        const d = (e.x - x) * (e.x - x) + (e.y - y) * (e.y - y);
+        if (d < bd) { bd = d; best = e; }
+      }
+    }
+  }
+  return best;
+}
+
+function chillAround(x, y, radius, slow, secs) {
+  const r = cellRange(x, y, radius);
+  if (!r) return;
+  const rr = radius * radius;
+  for (let gy = r.y0; gy <= r.y1; gy++) {
+    for (let gx = r.x0; gx <= r.x1; gx++) {
+      const c = gy * GW + gx;
+      for (let k = cellStart[c]; k < cellStart[c + 1]; k++) {
+        const e = enemies[cellItems[k]];
+        if (!e || !e.alive) continue;
+        if ((e.x - x) * (e.x - x) + (e.y - y) * (e.y - y) <= rr) applyChill(e, slow, secs);
+      }
+    }
+  }
+}
+
 // --- Secret floors ----------------------------------------------------------------------------
 //
 // One roll per floor, on arrival: a portal opens at a random moment later on that floor, or it
@@ -917,6 +1065,13 @@ function legendDefeated(e) {
 
   for (let i = 0; i < 3; i++) dropPickup(e.x + (i - 1) * 24, e.y + 14, 'elixir');
   dropPickup(e.x, e.y - 20, 'berry');
+  // Its relic, unless this run already carries one (a debug portal can repeat a boss).
+  if (!G.relics.includes(def.id)) {
+    const relic = dropPickup(e.x, e.y + 34, 'relic');
+    if (relic) relic.sprId = relicSpr[def.id];
+  } else {
+    dropPickup(e.x, e.y + 34, 'elixir');
+  }
   const xp = xpToNext(G.level) * 3;
   const orbsN = 36;
   scatter(e.x, e.y, orbsN, 80, (x, y) => dropXp(x, y, Math.max(1, Math.round(xp / orbsN))));
@@ -1516,6 +1671,7 @@ function stepSim(dt) {
   updateZones(dt);
   updateProjectiles(dt);
   updatePlayer(dt);
+  updateRelics(dt);
   updatePickups(dt, (v) => { grantXp(v); sfx('xp'); }, (v) => { grantCoins(v); sfx('coin'); });
   updateItems(dt);
   if (!G.secret) {
