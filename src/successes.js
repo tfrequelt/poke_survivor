@@ -83,6 +83,21 @@ export function checkKaboom(castKills) {
   if (castKills >= KABOOM_KILLS) unlockSuccess('kaboom');
 }
 
+/** How many of the nine legendaries have ever been beaten. */
+export const legendsBeaten = () => Object.keys(saveData().legends || {}).length;
+
+/** After a legendary falls. All nine, across any number of runs, unlocks it. */
+export function checkLegendary() {
+  if (legendsBeaten() >= 9) unlockSuccess('legendary');
+}
+
+/** How far along a success with a `progress` tally is: [have, of], or null for the others. */
+export function successProgress(def) {
+  if (!def.progress) return null;
+  const tally = saveData()[def.progress.save] || {};
+  return [Math.min(def.progress.of, Object.keys(tally).length), def.progress.of];
+}
+
 /** When a run ends in death. The 20:00 boss is a win, so dying after it is not this. */
 export function checkDeath() {
   if (!G.won && G.runTime >= 19 * 60 + 30 && G.runTime < 20 * 60) unlockSuccess('punching_the_screen');

@@ -383,14 +383,18 @@ export function playMusicFile(url) {
   return true;
 }
 
-export function stopMusicFile() {
-  if (!musicEls) return;
+/** Fade every streamed track out over `fade` seconds and stop. A boss's theme dies slowly. */
+export function stopMusicFile(fade = 0.4) {
+  stopTrack();
+  if (!musicEls) { currentUrl = null; fileMusicOn = false; return; }
   const now = ctx.currentTime;
   for (let i = 0; i < 2; i++) {
     musicGains[i].gain.cancelScheduledValues(now);
-    musicGains[i].gain.linearRampToValueAtTime(0, now + 0.4);
+    musicGains[i].gain.setValueAtTime(musicGains[i].gain.value, now);
+    musicGains[i].gain.linearRampToValueAtTime(0, now + fade);
     const el = musicEls[i];
-    setTimeout(() => { try { el.pause(); } catch {} }, 460);
+    // Unless a new track has started in the meantime -- it may be on this very element.
+    setTimeout(() => { if (fileMusicOn) return; try { el.pause(); } catch {} }, fade * 1000 + 60);
   }
   currentUrl = null;
   fileMusicOn = false;

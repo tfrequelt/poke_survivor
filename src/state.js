@@ -41,7 +41,11 @@ export const G = {
 
   // --- run clock ---
   tick: 0,          // sim ticks since run start
-  runTime: 0,       // seconds; advances ONLY inside stepSim
+  runTime: 0,       // seconds; advances ONLY inside stepSim, and not at all on a secret floor
+  // Sim seconds that never stop. runTime is the RUN clock and stands still on a secret floor, so
+  // anything that measures time between two moments of play -- a cooldown, a pulse, a fire
+  // budget -- reads this instead, or it would freeze along with the clock.
+  clock: 0,
   runOver: false,
   won: false,
   // Set when the final boss dies. The sim keeps running for this long so the payout can fly in
@@ -76,6 +80,10 @@ export const G = {
   // At most ONE staircase is on the field at a time, so this is a plain record on G rather than
   // another entity pool. `near` is republished every tick by the proximity check.
   stairs: { x: 0, y: 0, active: false, near: false },
+  // The portal to a secret floor: the same shape as the stairs, plus where it leads back from.
+  portal: { x: 0, y: 0, active: false, near: false, back: false },
+  // True while on a secret floor. The legendary itself lives in legends.js.
+  secret: false,
 
   // --- run configuration ---
   stage: null,      // stage definition
@@ -155,6 +163,7 @@ export const winFrozen = () => G.won && !G.endless;
 export function resetRunState() {
   G.tick = 0;
   G.runTime = 0;
+  G.clock = 0;
   G.runOver = false;
   G.won = false;
   G.victoryT = 0;
@@ -166,6 +175,8 @@ export function resetRunState() {
   G.endless = false;
   G.endlessBosses = 0;
   G.stairs.x = 0; G.stairs.y = 0; G.stairs.active = false; G.stairs.near = false;
+  G.portal.x = 0; G.portal.y = 0; G.portal.active = false; G.portal.near = false; G.portal.back = false;
+  G.secret = false;
   G.player = null;
   G.form = null;
   G.bounds = null;

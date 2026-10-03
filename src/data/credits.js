@@ -26,8 +26,8 @@ const RIPS = [
   ['39320', 'GHOST MOVES', 'shadow ball, night shade'],
   ['41323', 'DARK MOVES', 'bundled'],
   ['40562', 'FIRE MOVES', 'flamethrower, fire spin'],
-  ['41326', 'ROCK MOVES', 'bundled'],
-  ['534323', 'RAIN', 'bundled'],
+  ['41326', 'ROCK MOVES', 'legendary rocks'],
+  ['534323', 'RAIN', "Suicune's rain"],
 ];
 
 /**
@@ -43,7 +43,7 @@ const EXPLORERS_RIPS = [
   ['pokemonmysterydungeonexplorersofsky', '86310', 'ICE TILESET', 'bundled'],
   ['pokemonmysterydungeonexplorersoftimedarkness', '85996', 'MIRACLE SEA TILES', 'bundled'],
   ['pokemonmysterydungeonexplorersoftimedarkness', '14966', 'DRAGON MOVES', 'bundled'],
-  ['pokemonmysterydungeonexplorersoftimedarkness', '158011', 'DIMENSIONAL HOLE', 'bundled'],
+  ['pokemonmysterydungeonexplorersoftimedarkness', '158011', 'DIMENSIONAL HOLE', 'secret floor portal'],
   ['pokemonmysterydungeonexplorersoftimedarkness', '15903', 'ITEMS 2', 'items, traps, stairs'],
 ];
 
@@ -59,8 +59,8 @@ const EXPLORERS_GAME = {
  * [site section, game folder, asset id, what it is].
  */
 const OTHER_RIPS = [
-  ['snes', 'ff6', '6705', 'FINAL FANTASY VI', 'thunderbolt'],
-  ['game_boy_advance', 'finalfantasy4advance', '5814', 'FINAL FANTASY IV ADVANCE', 'Tsunami'],
+  ['snes', 'ff6', '6705', 'FINAL FANTASY VI', 'thunderbolt, legendary attacks'],
+  ['game_boy_advance', 'finalfantasy4advance', '5814', 'FINAL FANTASY IV ADVANCE', 'Tsunami, legendary flames'],
   ['mobile', 'rockbotthemachinewars', '159762', 'ROCKBOT: THE MACHINE WARS', "Present's blast"],
   ['mobile', 'graalonlineera', '147250', 'GRAAL ONLINE ERA', 'water particles'],
   ['game_boy_advance', 'pokemonfireredleafgreen', '28883', 'POKEMON FIRERED/LEAFGREEN', 'R/S moves'],

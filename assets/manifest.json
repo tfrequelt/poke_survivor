@@ -241,27 +241,54 @@
   },
   "music": {
     "menu": [
-      "assets/musics/01. Pokémon Exploration Team Theme.mp3"
+      "assets/musics/stage/01. Pokémon Exploration Team Theme.mp3"
     ],
     "grass": [
-      "assets/musics/109. Murky Forest.mp3",
-      "assets/musics/120. Southern Jungle.mp3",
-      "assets/musics/29. Apple Woods.mp3",
-      "assets/musics/52. Dusk Forest.mp3"
+      "assets/musics/stage/109. Murky Forest.mp3",
+      "assets/musics/stage/120. Southern Jungle.mp3",
+      "assets/musics/stage/29. Apple Woods.mp3",
+      "assets/musics/stage/52. Dusk Forest.mp3"
     ],
     "cave": [
-      "assets/musics/24. Waterfall Cave.mp3",
-      "assets/musics/32. Mt. Horn.mp3",
-      "assets/musics/43. Crystal Cave.mp3",
-      "assets/musics/18. Mt. Bristle.mp3",
-      "assets/musics/93. Mt. Travail.mp3",
-      "assets/musics/116. Spring Cave.mp3"
+      "assets/musics/stage/24. Waterfall Cave.mp3",
+      "assets/musics/stage/32. Mt. Horn.mp3",
+      "assets/musics/stage/43. Crystal Cave.mp3",
+      "assets/musics/stage/18. Mt. Bristle.mp3",
+      "assets/musics/stage/93. Mt. Travail.mp3",
+      "assets/musics/stage/116. Spring Cave.mp3"
     ],
     "beach": [
-      "assets/musics/05. Beach Cave.mp3",
-      "assets/musics/89. Miracle Sea.mp3",
-      "assets/musics/136. In the Morning Sun.mp3",
-      "assets/musics/56. Brine Cave.mp3"
+      "assets/musics/stage/05. Beach Cave.mp3",
+      "assets/musics/stage/89. Miracle Sea.mp3",
+      "assets/musics/stage/136. In the Morning Sun.mp3",
+      "assets/musics/stage/56. Brine Cave.mp3"
+    ],
+    "legend_articuno": [
+      "assets/musics/boss/boss_battle_cheering.mp3"
+    ],
+    "legend_moltres": [
+      "assets/musics/boss/boss_battle_sky.mp3"
+    ],
+    "legend_zapdos": [
+      "assets/musics/boss/boss_battle_final.mp3"
+    ],
+    "legend_entei": [
+      "assets/musics/boss/boss_battle_dark.mp3"
+    ],
+    "legend_suicune": [
+      "assets/musics/boss/boss_battle_dark_stronger.mp3"
+    ],
+    "legend_raikou": [
+      "assets/musics/boss/boss_battle_dramatic.mp3"
+    ],
+    "legend_regirock": [
+      "assets/musics/boss/boss_battle_classic_short.mp3"
+    ],
+    "legend_registeel": [
+      "assets/musics/boss/boss_battle_classic_extended.mp3"
+    ],
+    "legend_regice": [
+      "assets/musics/boss/boss_battle_cheering.mp3"
     ]
   },
   "images": {
@@ -847,6 +874,1108 @@
           27,
           0,
           1
+        ]
+      ]
+    },
+    "legend_portal": {
+      "src": "assets/pmd/dimensional_hole.png",
+      "key": "#5f5f5f",
+      "tolerance": 8,
+      "cell": [
+        72,
+        58
+      ],
+      "cells": [
+        [
+          7,
+          7,
+          71,
+          57,
+          0,
+          0
+        ],
+        [
+          91,
+          7,
+          71,
+          57,
+          0,
+          0
+        ],
+        [
+          9,
+          78,
+          70,
+          55,
+          1,
+          1
+        ],
+        [
+          92,
+          78,
+          70,
+          56,
+          1,
+          1
+        ]
+      ]
+    },
+    "fx_icepillar": {
+      "src": "assets/pmd/thunderbolt.png",
+      "key": "#407800",
+      "tolerance": 10,
+      "cell": [
+        66,
+        104
+      ],
+      "cells": [
+        [
+          704,
+          179,
+          66,
+          104,
+          0,
+          0
+        ],
+        [
+          774,
+          179,
+          56,
+          104,
+          5,
+          0
+        ],
+        [
+          840,
+          179,
+          52,
+          104,
+          7,
+          0
+        ],
+        [
+          904,
+          179,
+          52,
+          104,
+          7,
+          0
+        ]
+      ]
+    },
+    "fx_iceshard": {
+      "src": "assets/pmd/thunderbolt.png",
+      "key": "#407800",
+      "tolerance": 10,
+      "cell": [
+        8,
+        14
+      ],
+      "cells": [
+        [
+          613,
+          417,
+          8,
+          14,
+          0,
+          0
+        ]
+      ]
+    },
+    "fx_icerock": {
+      "src": "assets/pmd/thunderbolt.png",
+      "key": "#407800",
+      "tolerance": 10,
+      "cell": [
+        31,
+        32
+      ],
+      "cells": [
+        [
+          657,
+          879,
+          31,
+          32,
+          0,
+          0
+        ]
+      ]
+    },
+    "fx_iceblock": {
+      "src": "assets/pmd/thunderbolt.png",
+      "key": "#407800",
+      "tolerance": 10,
+      "cell": [
+        77,
+        96
+      ],
+      "cells": [
+        [
+          755,
+          384,
+          77,
+          96,
+          0,
+          0
+        ]
+      ]
+    },
+    "fx_firedome": {
+      "src": "assets/pmd/thunderbolt.png",
+      "key": "#407800",
+      "tolerance": 10,
+      "cell": [
+        84,
+        80
+      ],
+      "cells": [
+        [
+          148,
+          947,
+          8,
+          7,
+          38,
+          73
+        ],
+        [
+          160,
+          944,
+          16,
+          13,
+          34,
+          67
+        ],
+        [
+          179,
+          937,
+          28,
+          22,
+          28,
+          58
+        ],
+        [
+          209,
+          925,
+          46,
+          34,
+          19,
+          46
+        ],
+        [
+          256,
+          900,
+          76,
+          59,
+          4,
+          21
+        ],
+        [
+          332,
+          879,
+          84,
+          80,
+          0,
+          0
+        ]
+      ]
+    },
+    "fx_bolt": {
+      "src": "assets/pmd/thunderbolt.png",
+      "key": "#407800",
+      "tolerance": 10,
+      "cell": [
+        44,
+        132
+      ],
+      "cells": [
+        [
+          146,
+          975,
+          13,
+          52,
+          15,
+          0
+        ],
+        [
+          161,
+          975,
+          24,
+          132,
+          10,
+          0
+        ],
+        [
+          187,
+          975,
+          32,
+          132,
+          6,
+          0
+        ],
+        [
+          221,
+          975,
+          42,
+          132,
+          1,
+          0
+        ],
+        [
+          290,
+          975,
+          23,
+          132,
+          10,
+          0
+        ],
+        [
+          315,
+          975,
+          24,
+          132,
+          10,
+          0
+        ],
+        [
+          265,
+          975,
+          23,
+          100,
+          10,
+          0
+        ]
+      ]
+    },
+    "fx_spark": {
+      "src": "assets/pmd/thunderbolt.png",
+      "key": "#407800",
+      "tolerance": 10,
+      "cell": [
+        18,
+        16
+      ],
+      "cells": [
+        [
+          17,
+          1016,
+          13,
+          16,
+          2,
+          0
+        ],
+        [
+          54,
+          1016,
+          18,
+          16,
+          0,
+          0
+        ],
+        [
+          0,
+          1048,
+          16,
+          16,
+          1,
+          0
+        ],
+        [
+          40,
+          1048,
+          8,
+          16,
+          5,
+          0
+        ]
+      ]
+    },
+    "fx_bubble": {
+      "src": "assets/pmd/thunderbolt.png",
+      "key": "#407800",
+      "tolerance": 10,
+      "cell": [
+        16,
+        16
+      ],
+      "cells": [
+        [
+          480,
+          1096,
+          16,
+          16,
+          0,
+          0
+        ]
+      ]
+    },
+    "fx_shard": {
+      "src": "assets/pmd/thunderbolt.png",
+      "key": "#407800",
+      "tolerance": 10,
+      "cell": [
+        24,
+        26
+      ],
+      "cells": [
+        [
+          434,
+          1138,
+          24,
+          26,
+          0,
+          0
+        ]
+      ]
+    },
+    "fx_boulder": {
+      "src": "assets/pmd/thunderbolt.png",
+      "key": "#407800",
+      "tolerance": 10,
+      "cell": [
+        80,
+        96
+      ],
+      "cells": [
+        [
+          740,
+          1081,
+          80,
+          96,
+          0,
+          0
+        ]
+      ]
+    },
+    "fx_diamond": {
+      "src": "assets/pmd/thunderbolt.png",
+      "key": "#407800",
+      "tolerance": 10,
+      "cell": [
+        70,
+        67
+      ],
+      "cells": [
+        [
+          856,
+          1000,
+          70,
+          67,
+          0,
+          0
+        ]
+      ]
+    },
+    "fx_flame": {
+      "src": "assets/pmd/wave.png",
+      "key": "#008080",
+      "tolerance": 10,
+      "cell": [
+        64,
+        88
+      ],
+      "cells": [
+        [
+          522,
+          275,
+          32,
+          32,
+          16,
+          56
+        ],
+        [
+          572,
+          259,
+          64,
+          48,
+          0,
+          40
+        ],
+        [
+          704,
+          243,
+          64,
+          64,
+          0,
+          24
+        ],
+        [
+          770,
+          219,
+          64,
+          88,
+          0,
+          0
+        ]
+      ]
+    },
+    "fx_geyser": {
+      "src": "assets/pmd/wave.png",
+      "key": "#008080",
+      "tolerance": 10,
+      "cell": [
+        64,
+        83
+      ],
+      "cells": [
+        [
+          522,
+          401,
+          30,
+          27,
+          17,
+          56
+        ],
+        [
+          570,
+          385,
+          62,
+          43,
+          1,
+          40
+        ],
+        [
+          702,
+          369,
+          64,
+          59,
+          0,
+          24
+        ],
+        [
+          770,
+          345,
+          62,
+          83,
+          1,
+          0
+        ]
+      ]
+    },
+    "fx_spire": {
+      "src": "assets/pmd/wave.png",
+      "key": "#008080",
+      "tolerance": 10,
+      "cell": [
+        40,
+        104
+      ],
+      "cells": [
+        [
+          545,
+          44,
+          34,
+          64,
+          3,
+          40
+        ],
+        [
+          581,
+          12,
+          31,
+          96,
+          4,
+          8
+        ],
+        [
+          614,
+          4,
+          31,
+          104,
+          4,
+          0
+        ],
+        [
+          647,
+          4,
+          39,
+          104,
+          0,
+          0
+        ]
+      ]
+    },
+    "fx_tornado": {
+      "src": "assets/pmd/wave.png",
+      "key": "#008080",
+      "tolerance": 10,
+      "cell": [
+        44,
+        64
+      ],
+      "cells": [
+        [
+          735,
+          6,
+          35,
+          64,
+          4,
+          0
+        ],
+        [
+          772,
+          6,
+          32,
+          64,
+          6,
+          0
+        ],
+        [
+          806,
+          6,
+          44,
+          64,
+          0,
+          0
+        ],
+        [
+          852,
+          6,
+          32,
+          64,
+          6,
+          0
+        ]
+      ]
+    },
+    "fx_rock": {
+      "src": "assets/pmd/rock_moves.png",
+      "key": "#008080",
+      "tolerance": 10,
+      "cell": [
+        12,
+        11
+      ],
+      "cells": [
+        [
+          4,
+          406,
+          10,
+          11,
+          1,
+          0
+        ],
+        [
+          21,
+          405,
+          11,
+          11,
+          0,
+          0
+        ],
+        [
+          40,
+          405,
+          10,
+          11,
+          1,
+          0
+        ],
+        [
+          58,
+          405,
+          11,
+          11,
+          0,
+          0
+        ],
+        [
+          77,
+          405,
+          12,
+          10,
+          0,
+          0
+        ]
+      ]
+    },
+    "weather_rain": {
+      "src": "assets/pmd/rain.png",
+      "key": "#5a5a78",
+      "tolerance": 14,
+      "cell": [
+        240,
+        160
+      ],
+      "cells": [
+        [
+          8,
+          8,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          256,
+          8,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          504,
+          8,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          752,
+          8,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          1000,
+          8,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          8,
+          176,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          256,
+          176,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          504,
+          176,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          752,
+          176,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          1000,
+          176,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          8,
+          344,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          256,
+          344,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          504,
+          344,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          752,
+          344,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          1000,
+          344,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          8,
+          512,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          256,
+          512,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          504,
+          512,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          752,
+          512,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          1000,
+          512,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          8,
+          680,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          256,
+          680,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          504,
+          680,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          752,
+          680,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          1000,
+          680,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          8,
+          848,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          256,
+          848,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          504,
+          848,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          752,
+          848,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          1000,
+          848,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          8,
+          1016,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          256,
+          1016,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          504,
+          1016,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          752,
+          1016,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          1000,
+          1016,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          8,
+          1184,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          256,
+          1184,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          504,
+          1184,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          752,
+          1184,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          1000,
+          1184,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          8,
+          1352,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          256,
+          1352,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          504,
+          1352,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          752,
+          1352,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          1000,
+          1352,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          8,
+          1520,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          256,
+          1520,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          504,
+          1520,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          752,
+          1520,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          1000,
+          1520,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          8,
+          1688,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          256,
+          1688,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          504,
+          1688,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          752,
+          1688,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          1000,
+          1688,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          8,
+          1856,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          256,
+          1856,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          504,
+          1856,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          752,
+          1856,
+          240,
+          160,
+          0,
+          0
+        ],
+        [
+          1000,
+          1856,
+          240,
+          160,
+          0,
+          0
         ]
       ]
     }

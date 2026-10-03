@@ -25,7 +25,7 @@ import { floorLabel, floorBonus, floorOrdinal, endlessBonus } from './floors.js'
 import { damageBreakdown, damageFor } from './combat.js';
 import { WEAPON_BY_ID } from './data/weapons.js';
 import { SUCCESSES, rewardLabel } from './data/successes.js';
-import { successState, unlockedCount, unlockedThisRun } from './successes.js';
+import { successState, unlockedCount, unlockedThisRun, successProgress } from './successes.js';
 
 /**
  * The main menu's entries. Shared with the key handler in main.js, so the two can never disagree
@@ -557,6 +557,22 @@ export function drawSuccesses(cursor) {
       : 'ENTER TO CLAIM';
     drawText(ctx, status, x + 10, y + SC_H - 15,
       state === 'locked' ? 'dim' : state === 'claimed' ? 'green' : 'gold');
+
+    // A tally kept across runs gets a bar between the status and the prize, so a 3 / 9 reads
+    // as progress rather than as a locked card that has not moved.
+    const prog = successProgress(sc);
+    if (prog) {
+      const [have, of] = prog;
+      const label = `${have} / ${of}`;
+      const bx = x + 64, bw = SC_W - 64 - 64 - textWidth(label) - 8, by = y + SC_H - 14;
+      ctx.fillStyle = '#101018';
+      ctx.fillRect(bx - 1, by - 1, bw + 2, 7);
+      ctx.fillStyle = '#2a2f4a';
+      ctx.fillRect(bx, by, bw, 5);
+      ctx.fillStyle = have >= of ? '#7fe08a' : '#ffd166';
+      ctx.fillRect(bx, by, Math.round(bw * (have / of)), 5);
+      drawText(ctx, label, bx + bw + 6, y + SC_H - 15, have >= of ? 'green' : 'white');
+    }
   }
 
   drawTextCentered(ctx, 'ARROWS MOVE    ENTER CLAIM    BACKSPACE BACK', VW / 2, VH - 16, 'dim');

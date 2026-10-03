@@ -15,6 +15,8 @@ import { newSuccessLine } from './ui.js';
 import { WEAPON_BY_ID } from './data/weapons.js';
 import { bankTotal } from './save.js';
 import { floorLabel, floorBonus, endlessBonus } from './floors.js';
+import { legend } from './legends.js';
+import { toScreenX, toScreenY } from './render.js';
 
 const PAD = 6;
 
@@ -24,6 +26,8 @@ export function drawHud() {
   drawAbilities();
   drawTimer();
   drawTallies();
+  drawLegendBar();
+  drawPortalMarker();
   if (G.banner.t > 0) drawBanner();
   drawStairsPrompt();
   drawSuccessToast();
@@ -153,10 +157,12 @@ function drawHealth() {
 }
 
 function drawTimer() {
-  drawTextCentered(ctx, formatTime(G.runTime), VW / 2, 9, 'white');
+  // On a secret floor the clock is stopped, and it says so by not moving -- dimmed, beside a
+  // floor number that does not exist.
+  drawTextCentered(ctx, formatTime(G.runTime), VW / 2, 9, G.secret ? 'dim' : 'white');
   // Shown from the first floor rather than only once it changes, so the indicator is part of
   // the furniture and a player who has never found the stairs still knows the number exists.
-  const f = floorLabel();
+  const f = G.secret ? '??F' : floorLabel();
   drawText(ctx, f, VW / 2 - textWidth(formatTime(G.runTime)) / 2 - textWidth(f) - 8, 9, 'gold');
 }
 
@@ -167,13 +173,67 @@ function drawTimer() {
  * tile, and a label there would be behind them half the time.
  */
 function drawStairsPrompt() {
-  if (!G.stairs.near) return;
-  const msg = 'PRESS ENTER TO CONTINUE';
+  if (!G.stairs.near && !G.portal.near) return;
+  const msg = G.portal.near
+    ? (G.portal.back ? 'PRESS ENTER TO RETURN' : 'PRESS ENTER TO STEP THROUGH')
+    : 'PRESS ENTER TO CONTINUE';
   const w = textWidth(msg);
   const x = Math.round((VW - w) / 2), y = VH - 34;
   ctx.fillStyle = 'rgba(8,8,18,0.72)';
   ctx.fillRect(x - 6, y - 4, w + 12, 15);
   drawTextCentered(ctx, msg, VW / 2, y, 'gold');
+}
+
+/**
+ * The legendary's health, across the bottom of the screen with its name -- the one enemy in the
+ * game that gets a bar of its own, because it is the one enemy the whole floor is about.
+ */
+function drawLegendBar() {
+  const L = legend, e = L.e;
+  if (!L.active || !L.def || !e || L.state === 'dead' || L.state === 'intro') return;
+  const w = 260, h = 6, x = Math.round((VW - w) / 2), y = VH - 14;
+  const pct = clamp(e.hp / e.maxHp, 0, 1);
+  drawTextCentered(ctx, L.def.name.toUpperCase(), VW / 2, y - 11, L.phase === 2 ? 'gold' : 'white');
+  ctx.fillStyle = '#101018';
+  ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+  ctx.fillStyle = '#3a1418';
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = L.def.color;
+  ctx.fillRect(x, y, Math.round(w * pct), h);
+  // The rage line: where the fight turns.
+  ctx.fillStyle = '#101018';
+  ctx.fillRect(x + w / 2, y, 1, h);
+  // Iron Defense: the bar turns to steel while the guard holds.
+  if (L.guardT > 0) {
+    ctx.fillStyle = 'rgba(232,238,248,0.55)';
+    ctx.fillRect(x, y, Math.round(w * pct), h);
+  }
+}
+
+/**
+ * A portal off the edge of the screen gets a marker on that edge. It is rare and it does not
+ * wait -- leave the floor and it is gone -- so unlike the stairs it is worth pointing at.
+ */
+function drawPortalMarker() {
+  const o = G.portal;
+  if (!o.active || G.secret) return;
+  const sx = toScreenX(o.x), sy = toScreenY(o.y);
+  if (sx > 0 && sx < VW && sy > 0 && sy < VH) return;
+  const cx = VW / 2, cy = VH / 2;
+  const dx = sx - cx, dy = sy - cy;
+  const k = Math.min((VW / 2 - 12) / Math.abs(dx || 1), (VH / 2 - 12) / Math.abs(dy || 1));
+  const x = cx + dx * k, y = cy + dy * k;
+  const a = Math.atan2(dy, dx);
+  const pulse = 0.6 + Math.sin(G.clock * 6) * 0.3;
+  ctx.globalAlpha = pulse;
+  ctx.fillStyle = '#a8f0ff';
+  ctx.beginPath();
+  ctx.moveTo(x + Math.cos(a) * 6, y + Math.sin(a) * 6);
+  ctx.lineTo(x + Math.cos(a + 2.4) * 6, y + Math.sin(a + 2.4) * 6);
+  ctx.lineTo(x + Math.cos(a - 2.4) * 6, y + Math.sin(a - 2.4) * 6);
+  ctx.closePath();
+  ctx.fill();
+  ctx.globalAlpha = 1;
 }
 
 function drawTallies() {
@@ -237,6 +297,6 @@ export function debugLines(fps, frameMs, simMs, drawMs, counts) {
     `enemies ${counts.enemies}/${c.cap | 0}  proj ${counts.proj}  orbs ${counts.orbs}  fx ${counts.fx}`,
     `t ${formatTime(G.runTime)}  min ${c.m.toFixed(2)}  sps ${c.sps.toFixed(1)}  hpx ${c.hp.toFixed(2)}`,
     `lv ${G.level}  xp ${G.xp | 0}/${G.xpNext}  kills ${G.kills}  seed ${G.seed}`,
-    `K +100 enemies  L level up  T +60s  G god  H hitboxes  R restart`,
+    `K +100 enemies  L level up  T +60s  G god  H hitboxes  O portal  R restart`,
   ];
 }

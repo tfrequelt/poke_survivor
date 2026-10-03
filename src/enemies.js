@@ -80,6 +80,12 @@ const AI = {
     e.vx = 0; e.vy = 0;
   },
 
+  /**
+   * Steered from outside. A legendary's movement is decided by legends.js, which sets vx/vy
+   * before this runs; leaving them alone here is the whole of this AI.
+   */
+  scripted() {},
+
   /** Drift toward the player and detonate on contact -- handled by the contact damage path. */
   rusher(e, dt, px, py) {
     const dx = px - e.x, dy = py - e.y;
@@ -219,13 +225,13 @@ function updateAttack(e, dt, px, py) {
   if (Math.abs(dx) > VIEW_HALF_W || Math.abs(dy) > VIEW_HALF_H) return false;
 
   if (!e.boss) {
-    if (G.runTime < nextVolley) {
+    if (G.clock < nextVolley) {
       // Budget spent: try again soon, staggered so the waiting shooters do not all queue for
       // the same instant.
       e.atkCd = 0.4 + G.rngRun() * 1.2;
       return false;
     }
-    nextVolley = G.runTime + VOLLEY_GAP;
+    nextVolley = G.clock + VOLLEY_GAP;
   }
 
   const d = Math.sqrt(d2) || 1;
@@ -301,6 +307,7 @@ export function spawnEnemy(def, x, y, opts) {
   e.flying = !!def.flying;
   e.prop = !!def.prop;
   e.harmless = !!def.harmless;
+  e.legend = !!def.legend;
   e.stunT = 0; e.weakenT = 0;
   e.burnSrc = 0;
   // Staggered by a random slice of the cooldown so a wave that spawns together does not fire in

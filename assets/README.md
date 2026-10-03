@@ -153,15 +153,20 @@ random each time that context starts:
 ```json
 {
   "music": {
-    "menu":  ["assets/musics/01. Pokemon Exploration Team Theme.mp3"],
-    "grass": ["assets/musics/109. Murky Forest.mp3", "..."],
-    "cave":  ["assets/musics/24. Waterfall Cave.mp3", "..."],
-    "beach": ["assets/musics/05. Beach Cave.mp3", "..."]
+    "menu":  ["assets/musics/stage/01. Pokemon Exploration Team Theme.mp3"],
+    "grass": ["assets/musics/stage/109. Murky Forest.mp3", "..."],
+    "cave":  ["assets/musics/stage/24. Waterfall Cave.mp3", "..."],
+    "beach": ["assets/musics/stage/05. Beach Cave.mp3", "..."],
+    "legend_zapdos": ["assets/musics/boss/boss_battle_final.mp3"]
   }
 }
 ```
 
-Stage keys match the stage ids in `src/data/stages.js`. Tracks are **streamed, not looped**: when
+Stage and menu tracks live in `assets/musics/stage/`, boss themes in `assets/musics/boss/`.
+Stage keys match the stage ids in `src/data/stages.js`. Each legendary's theme is under its own
+key, `legend_<id>`, named by the `music` field of its entry in `src/data/legends.js`; it starts as
+the boss appears and fades out over two and a half seconds when it falls.
+`boss_battle_evil.mp3` is in the folder but no boss uses it yet. Tracks are **streamed, not looped**: when
 one finishes, a *different* track from the same list starts. A list with one entry repeats that
 one. Everything is routed through the same music bus as the synthesised audio, so the volume and
 mute controls apply. Paths are URL-encoded on load, so spaces and accented characters in filenames
@@ -324,8 +329,29 @@ drawing a frame is a single `drawImage` with a source offset rather than jugglin
 images. A sequence that fails to load is warned about and skipped, like every other asset.
 
 The sequences today are `hail`, `fx_arrow`, `fx_flamethrower`, `fx_blastburn`, `fx_shadoworb`,
-`fx_nightshade`, `fx_tsunami` and `substitute`. `hail` is the only one in the per-file form; the
-rest are cut out of sheets.
+`fx_nightshade`, `fx_tsunami` and `substitute`, plus the secret floors' set: `legend_portal`,
+`weather_rain`, and the legendaries' attack effects (`fx_icepillar`, `fx_iceshard`, `fx_icerock`,
+`fx_iceblock`, `fx_firedome`, `fx_bolt`, `fx_spark`, `fx_bubble`, `fx_shard`, `fx_boulder`,
+`fx_diamond`, `fx_flame`, `fx_geyser`, `fx_spire`, `fx_tornado`, `fx_rock`). `hail` is the only
+one in the per-file form; the rest are cut out of sheets.
+
+The legendaries' effects come mostly from `thunderbolt.png` (its labelled Ice, Fire 3, Bolt 3 and
+Break rows) and `wave.png` (the Flame and blue-flame columns, the Earthquake spire, the Tornado),
+with the tumbling rock from `rock_moves.png`. Which effect each attack uses is the `LOOKS` table
+in `src/data/legends.js`. Two of the column effects (`fx_flame`, `fx_geyser`) skip one frame of
+the sheet's row on purpose: a loose flame from the row above overlaps it, and the skipped frame is
+a near-duplicate of its neighbour anyway. `weather_rain` is sixty 240x160 panels on an 8px gutter,
+five to a row, drawn over the screen like the hail.
+
+## Legendary sprites
+
+The nine legendaries (`assets/sprites/<id>/`, PMD collab folders like every other Pokemon) are NOT
+in `manifest.json` and NOT in the sprite atlas. Their sheets are large -- Moltres attacks in 104x136
+cells -- and only one is ever on screen, so they load when a portal is entered (`loadLegendAnims`
+in `src/assets.js`), during the two seconds of black, and are freed on the way back out. Each entry
+in `src/data/legends.js` lists the animations it needs in `anims`; `Walk` is always loaded. An
+animation that is only a `<CopyOf>` in `AnimData.xml` (Articuno's `Strike`, say) cannot be loaded
+by name -- list the one it copies.
 
 `substitute` is not an effect but a creature: the Substitute weapon's doll, fifteen 26x28 cells
 out of `substitute_sprite.png`, bottom-aligned so the doll's feet stay put. Cells 0-4 are the
@@ -405,9 +431,10 @@ the rips ask to be credited by name. Every one of them is listed on the in-game 
 it to `src/data/credits.js` at the same time.**
 
 The DS sheets — from **Explorers of Sky** and **Explorers of Time/Darkness** — have their own
-block on that screen. Three are in use: `substitute_sprite.png` (the Substitute weapon),
+block on that screen. Four are in use: `substitute_sprite.png` (the Substitute weapon),
 `dungeon_font.png` (the stage name and floor on the stairs title card; sliced by
-`src/data/dungeonfont.js`, white on black, each glyph cut to its inked width) and `items_2.png`.
+`src/data/dungeonfont.js`, white on black, each glyph cut to its inked width), `items_2.png`, and
+`dimensional_hole.png` (the secret floor's portal: its top-left four frames).
 
-**Credited, not yet used:** `maps.png`, `ice_stage_tileset.png`, `miracle_sea_tileset.png`,
-`dragon_moves.png`, `dimensional_hole.png` and `rain.png` (Red Rescue Team, in the main list).
+**Credited, not yet used:** `maps.png`, `ice_stage_tileset.png`, `miracle_sea_tileset.png` and
+`dragon_moves.png`.

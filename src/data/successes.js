@@ -28,6 +28,14 @@ export const SUCCESSES = [
     desc: 'Die between 19:30 and 20:00.',
     reward: { gold: 10 },
   },
+  {
+    id: 'legendary', title: 'Legendary',
+    desc: 'Defeat all nine legendary Pokemon of the secret floors.',
+    reward: { gold: 3000 },
+    // Counted across runs, so the card shows how far along it is: `save` names the field of the
+    // save that holds the tally and `of` is the target.
+    progress: { save: 'legends', of: 9 },
+  },
 ];
 
 export const SUCCESS_BY_ID = Object.fromEntries(SUCCESSES.map((s) => [s.id, s]));

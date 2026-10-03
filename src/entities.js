@@ -24,6 +24,10 @@ import { thrownItem, activeAbility, activeVisual } from './abilities.js';
 import { sampleDuration } from './audio.js';
 import { hash2 } from './util.js';
 import { liveTraps } from './traps.js';
+import {
+  drawPortal, drawLegendBoss, legendShadowScale, drawLegendGround, drawLegendAir, drawLegendShot,
+  drawLegendWeather, drawPlayerStatus,
+} from './legendfx.js';
 
 const MARGIN = 28;                    // draw a little beyond the edge so nothing pops in visibly
 
@@ -54,10 +58,13 @@ export function drawEntities() {
   drawZones(camOffX, camOffY);
   drawTraps(camOffX, camOffY);
   drawStairs(camOffX, camOffY);
+  drawPortal(camOffX, camOffY);
+  drawLegendGround(camOffX, camOffY);
   drawPickups(camOffX, camOffY);
   drawItems(camOffX, camOffY);
   drawShadows(camOffX, camOffY);
   drawSortedActors(camOffX, camOffY);
+  drawLegendAir(camOffX, camOffY);
   drawProjectiles(camOffX, camOffY);
   drawThrown(camOffX, camOffY);
   drawNightShade(camOffX, camOffY);
@@ -67,6 +74,7 @@ export function drawEntities() {
   drawParticles(camOffX, camOffY);
   drawDamageNumbers(camOffX, camOffY);
   drawWeather();
+  drawLegendWeather();
 }
 
 // The ripped hail overlay: 65 frames of 240x160, stitched into one strip at load. 240x160 is
@@ -702,7 +710,7 @@ function drawStairs(ox, oy) {
   if (sx < -32 || sy < -32 || sx > VW + 32 || sy > VH + 32) return;
 
   if (s.near) {
-    ctx.globalAlpha = 0.30 + Math.sin(G.runTime * 7) * 0.16;
+    ctx.globalAlpha = 0.30 + Math.sin(G.clock * 7) * 0.16;
     ctx.strokeStyle = '#ffd166';
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -738,7 +746,8 @@ function drawShadows(ox, oy) {
     const e = enemies[i];
     const sx = e.x + ox, sy = e.y + oy;
     if (sx < -MARGIN || sy < -MARGIN || sx > VW + MARGIN || sy > VH + MARGIN) continue;
-    drawShadow(ctx, sx, sy);
+    if (e.legend) drawShadow(ctx, sx, sy, legendShadowScale());
+    else drawShadow(ctx, sx, sy);
   }
   for (let i = 0; i < decoys.length; i++) {
     const d = decoys[i];
@@ -761,7 +770,8 @@ function drawSortedActors(ox, oy) {
     const e = enemies[i];
     const sy = e.y + oy;
     const sx = e.x + ox;
-    if (sx < -MARGIN || sy < -MARGIN || sx > VW + MARGIN || sy > VH + MARGIN) continue;
+    // A legendary is far bigger than the margin, so it is never culled here; it culls itself.
+    if (!e.legend && (sx < -MARGIN || sy < -MARGIN || sx > VW + MARGIN || sy > VH + MARGIN)) continue;
     let b = ((sy + MARGIN) / BAND) | 0;
     if (b < 0) b = 0; else if (b >= NBANDS) b = NBANDS - 1;
     bandNext[i] = bandHead[b];
@@ -861,6 +871,7 @@ function drawUnsorted(ox, oy) {
 const ELITE_SCALE = 1.35;
 
 function drawEnemy(e, ox, oy) {
+  if (e.legend) { drawLegendBoss(e, ox, oy); return; }
   const sx = e.x + ox, sy = e.y + oy;
   if (sx < -MARGIN || sy < -MARGIN || sx > VW + MARGIN || sy > VH + MARGIN) return;
   // id = base + flash*(nf*nd) + frame*nd + dir. The flash variant is pre-baked white.
@@ -879,7 +890,7 @@ function drawEnemy(e, ox, oy) {
       // its own colours, so there is no recoloured elite variant to fall back on -- the ring and
       // the size are the whole of the tell. There are never more than a handful on the field, so
       // this one stroked path is affordable where one per enemy would not be.
-      ctx.globalAlpha = fade * (0.5 + Math.sin(G.runTime * 4) * 0.2);
+      ctx.globalAlpha = fade * (0.5 + Math.sin(G.clock * 4) * 0.2);
       ctx.strokeStyle = '#ffd166';
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -908,6 +919,7 @@ function drawPlayer(p, ox, oy) {
     // id = base + flash*(nf*nd) + frame*nd + dir
     drawSprite(ctx, p.sprBase + p.frame * p.nd + p.dir, sx, sy);
   }
+  drawPlayerStatus(p, sx, sy);
   drawLowHealthMark(p, sx, sy);
 }
 
@@ -1030,6 +1042,7 @@ function drawProjectiles(ox, oy) {
     // It was briefly two ctx.arc() fills instead, which cost 13ms a frame with a hundred shots
     // in the air -- paths in this loop are exactly what the drawn-UI rule exists to prevent.
     if (pr.hostile) {
+      if (pr.look && drawLegendShot(pr, sx, sy)) continue;
       if (hostileSpr >= 0) drawSprite(ctx, hostileSpr, sx, sy);
       continue;
     }

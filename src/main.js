@@ -21,17 +21,24 @@ import {
   spawn, despawn, clearWorld, rebuildGrid, sweepDead, entityCounts, spawnRequests, fxShapes,
 } from './world.js';
 import { initStats, ensureStats, addGrant, addMods, luckOf, luckK } from './stats.js';
-import { loadSave, bankGold, bankTotal, rankOf, buyRank, resetProgress } from './save.js';
+import { loadSave, bankGold, bankTotal, rankOf, buyRank, resetProgress, saveData, persistSave } from './save.js';
 import { SHOP_ITEMS, rankCost } from './data/shop.js';
 import { hooks, damageEnemy, killAll, applyBurn, resetDamageTally, damageBreakdown } from './combat.js';
 import { getDamageSource } from './world.js';
 import {
   checkCloseCall, checkKaboom, checkDeath, claimSuccess, successState,
-  claimableCount, resetRunSuccesses, successHooks, updateToast,
+  claimableCount, resetRunSuccesses, successHooks, updateToast, legendsBeaten, checkLegendary,
 } from './successes.js';
 import { SUCCESSES } from './data/successes.js';
-import { createPlayer, updatePlayer, setReviveFx } from './player.js';
-import { initEnemyDefs, updateEnemies, spawnEnemy, ringPoint, resetAttacks } from './enemies.js';
+import { createPlayer, updatePlayer, setReviveFx, setLegendTouch, clearStatuses } from './player.js';
+import { initEnemyDefs, updateEnemies, spawnEnemy, ringPoint, resetAttacks, aiIndex } from './enemies.js';
+import {
+  legend, hazards, fx as legendFx, beginLegend, clearLegend, endLegend, updateLegend,
+  legendEnemyDef, legendTouched,
+} from './legends.js';
+import {
+  legendFor, LEGEND_BY_ID, LEGEND_IDS, PORTAL_CHANCE, PORTAL_WINDOW, SECRET_ARENA,
+} from './data/legends.js';
 import { ENEMIES } from './data/enemies.js';
 import { ENEMY_BY_ID, BOSS_TIERS } from './data/enemies.js';
 import {
@@ -76,12 +83,14 @@ import { CHARACTERS, CHARACTER_BY_ID, characterSpritePairs } from './data/charac
 import { enemySpritePairs } from './data/enemies.js';
 import { weaponSpritePairs } from './data/weapons.js';
 import { STAGE_BY_ID, STAGES, propSpritePairs } from './data/stages.js';
-import { loadAssets, pickMusic, getSheet, sfxFiles, sfxGains, getAttack } from './assets.js';
+import {
+  loadAssets, pickMusic, getSheet, sfxFiles, sfxGains, getAttack, loadLegendAnims, unloadLegendAnims,
+} from './assets.js';
 import {
   initAudio, audioReady, sfx, playTrack, playOnce, setIntensity, stopTrack,
   setVolume, toggleMute, settings as audioSettings, TITLE, ROUTE, BOSS, FANFARE,
   playMusicFile, musicFilePlaying, setMusicFallback, setMusicAdvance, currentMusicUrl, setSfxFiles,
-  sampleDuration, duckMusic,
+  sampleDuration, duckMusic, stopMusicFile,
 } from './audio.js';
 
 const STEP = 1 / 60;
@@ -255,6 +264,17 @@ async function boot() {
       startRunForTest: (charId, stageId) => startRun(CHARACTER_BY_ID[charId], bootParams, stageId),
       bankRunGold: () => bankRunGold(),
       takeStairs: () => { G.stairs.near = true; beginDescent(); },
+      // Open a portal beside the player and walk into it, optionally to a chosen legendary.
+      fight: (id) => {
+        secretOverride = id || null;
+        G.portal.x = G.player.x; G.portal.y = G.player.y;
+        G.portal.active = true; G.portal.back = false; G.portal.near = true;
+        beginPortal();
+      },
+      takePortal: () => { G.portal.near = true; beginPortal(); },
+      legend: () => legend,
+      hazards: () => hazards,
+      portalAt: () => portalAt,
       floor: () => ({ floor: G.floor, label: floorLabel(), stairs: { ...G.stairs } }),
       // castAbility, not fireAbility: the harness should take the same path the game does,
       // including the sound and the attack animation.
@@ -314,6 +334,7 @@ function installHooks() {
       }
     }
 
+    if (e.legend) { legendDefeated(e); return; }
     if (e.boss) { bossDrops(e); return; }
 
     dropXp(e.x, e.y, e.xp);
@@ -350,6 +371,12 @@ function installHooks() {
   // A sprung trap, whoever set it off. The shake only fires for the player's own mistakes --
   // the screen lurching every time something in the crowd steps on a tile would be unreadable.
   trapFx.abilityCooldown = (a) => abilityStats(a).cooldown;
+  // The legendary's feedback, for the same reason as the traps': legends.js reaches nothing upward.
+  legendFx.shake = addShake;
+  legendFx.sfx = (id) => sfx(id);
+  legendFx.banner = (text, sub, t) => { G.banner = { text, sub, t }; };
+  legendFx.burst = burst;
+  setLegendTouch(legendTouched);
   trapFx.sprung = (t, byPlayer) => {
     const def = trapDef(t.kind);
     sfx(t.kind === 'explosion' ? 'quake' : 'hit');
@@ -481,12 +508,12 @@ function startRun(character, q, stageId) {
   resetRunSuccesses();
   stairsSpawned = {};
   descent = null;
+  leaveLegendBehind();
 
   const id = stageId || (q && q.get('stage')) || 'grass';
   G.stage = STAGE_BY_ID[id] || STAGES[0];
   // The arena is centred on the origin, which is also where the player starts.
-  const a = G.stage.arena;
-  G.bounds = a ? { minX: -a.w / 2, minY: -a.h / 2, maxX: a.w / 2, maxY: a.h / 2 } : null;
+  G.bounds = arenaBounds(G.stage.arena);
 
   initStats();
   resetPicks();
@@ -526,10 +553,21 @@ function startRun(character, q, stageId) {
   setStairsSprite(spriteBase(stairsShape(G.stage), 'rock'));
 
   snapCamera(0, 0);
+  rollPortal();
   setMode(MODES.PLAYING);
   resetAccumulator();
   setIntensity(0);
   startMusic(G.stage.id, ROUTE);
+}
+
+/** A centred arena's bounds, or null for an open stage. */
+const arenaBounds = (a) => (a ? { minX: -a.w / 2, minY: -a.h / 2, maxX: a.w / 2, maxY: a.h / 2 } : null);
+
+/** The stage as the secret floor draws it: the same ground, in the secret floor's small room. */
+let _secretStage = null;
+function secretStage() {
+  if (!_secretStage || _secretStage.id !== G.stage.id) _secretStage = { ...G.stage, arena: SECRET_ARENA };
+  return _secretStage;
 }
 
 /**
@@ -573,6 +611,14 @@ let descent = null;
  * the camera on the first try almost every time.
  */
 function placeStairs() {
+  placeAway(G.stairs, G.portal.active ? G.portal : null);
+}
+
+/**
+ * Put `o` (the stairs, or the portal) somewhere off-screen, and well clear of `avoid` -- two
+ * things on the same tile would put two prompts under one Enter key.
+ */
+function placeAway(o, avoid) {
   const b = G.bounds, p = G.player;
   if (!b || !p) return;
   const padX = VW / 2 + 48, padY = VH / 2 + 48;
@@ -581,17 +627,18 @@ function placeStairs() {
     const x = b.minX + 64 + G.rngRun() * (b.maxX - b.minX - 128);
     const y = b.minY + 64 + G.rngRun() * (b.maxY - b.minY - 128);
     if (Math.abs(x - p.x) < padX && Math.abs(y - p.y) < padY) continue;
-    G.stairs.x = x; G.stairs.y = y;
-    G.stairs.active = true;
-    G.stairs.near = false;
+    if (avoid && Math.abs(x - avoid.x) < 96 && Math.abs(y - avoid.y) < 96) continue;
+    o.x = x; o.y = y;
+    o.active = true;
+    o.near = false;
     return;
   }
   // Cornered in a small arena: fall back to a point on the despawn ring, which is already off
   // screen in every direction.
   const pt = ringPoint(p.x, p.y, G.rngRun() * Math.PI * 2, 520, G.rngRun);
-  G.stairs.x = pt.x; G.stairs.y = pt.y;
-  G.stairs.active = true;
-  G.stairs.near = false;
+  o.x = pt.x; o.y = pt.y;
+  o.active = true;
+  o.near = false;
 }
 
 /**
@@ -627,7 +674,7 @@ function beginDescent() {
   // boss's payout flies in, so a player who happened to be standing on a staircase when the boss
   // died could otherwise press Enter and wipe the reward they just earned.
   if (G.won || G.runOver) return;
-  descent = { t: 0, swapped: false };
+  descent = { t: 0, swapped: false, kind: 'stairs' };
   G.stairs.active = false;
   G.stairs.near = false;
   sfx('stairs');
@@ -664,6 +711,8 @@ function swapFloor() {
   G.banner.text = `${floorLabel()}`;
   G.banner.sub = 'THE AIR FEELS HEAVIER';
   G.banner.t = 2.4;
+  // A new floor is a new roll for a portal.
+  rollPortal();
 }
 
 function updateDescent(dt) {
@@ -671,13 +720,223 @@ function updateDescent(dt) {
   descent.t += dt;
   if (!descent.swapped && descent.t >= FADE_OUT) {
     descent.swapped = true;
-    swapFloor();
+    if (descent.kind === 'secret') enterSecret();
+    else if (descent.kind === 'return') leaveSecret();
+    else swapFloor();
   }
   if (descent.t >= FADE_TOTAL) {
+    const kind = descent.kind;
     descent = null;
     setMode(MODES.PLAYING);
     resetAccumulator();
+    // The music changes as the screen comes back, not in the dark: the boss's theme starts as
+    // the boss appears, and the stage's comes back with the stage.
+    if (kind === 'secret') startLegendFight();
+    else if (kind === 'return') startMusic(G.stage.id, ROUTE);
   }
+}
+
+// --- Secret floors ----------------------------------------------------------------------------
+//
+// One roll per floor, on arrival: a portal opens at a random moment later on that floor, or it
+// does not. It lasts until the floor is left. Inside is a room with one legendary in it and
+// nothing else; beating it pays out and reopens the portal, which leads back to the same floor
+// on fresh ground. The run clock stands still the whole time you are in there.
+
+const PORTAL_REACH = 20;
+/** When this floor's portal opens, in run time; -1 if it will not. */
+let portalAt = -1;
+/** The legendary behind the portal, from the moment it is entered until you are back out. */
+let secretDef = null;
+let secretHadStairs = false;
+/** Clock time the way back opens after the boss falls, and where. */
+let portalBackAt = -1;
+const portalBackSpot = { x: 0, y: 0 };
+/** Debug: fight this one next, whatever the stage and floor would have picked. */
+let secretOverride = null;
+
+function rollPortal() {
+  portalAt = -1;
+  G.portal.active = false;
+  G.portal.near = false;
+  G.portal.back = false;
+  if (!G.stage || G.won || !legendFor(G.stage.id, G.floor)) return;
+  // ?portal forces one, a few seconds in, so a portal can be tested without forty runs.
+  const forced = bootParams && bootParams.has('portal');
+  if (!forced && G.rngRun() >= PORTAL_CHANCE) return;
+  const [a, b] = forced ? [3, 3] : PORTAL_WINDOW;
+  portalAt = G.runTime + a + G.rngRun() * (b - a);
+}
+
+function updatePortal() {
+  const p = G.player;
+  if (!p) return;
+  if (!G.secret && portalAt >= 0 && G.runTime >= portalAt && !G.won && !G.runOver) {
+    portalAt = -1;
+    // A forced portal (?portal) is for testing, so it opens where you can see it.
+    if (bootParams && bootParams.has('portal')) portalBeside();
+    else placeAway(G.portal, G.stairs.active ? G.stairs : null);
+    G.portal.back = false;
+    G.banner = { text: 'A STRANGE PORTAL HAS OPENED', sub: 'SOMEWHERE ON THIS FLOOR', t: 2.6 };
+    sfx('move_ghost');
+  }
+  if (G.secret && portalBackAt >= 0 && G.clock >= portalBackAt) {
+    portalBackAt = -1;
+    G.portal.x = portalBackSpot.x;
+    G.portal.y = portalBackSpot.y;
+    G.portal.active = true;
+    G.portal.back = true;
+    // Everything the boss dropped comes to you: the fight is the reward, not the walk after it.
+    magnetAll();
+    sfx('move_ghost');
+  }
+  G.portal.near = G.portal.active &&
+    Math.abs(p.x - G.portal.x) < PORTAL_REACH && Math.abs(p.y - G.portal.y) < PORTAL_REACH;
+}
+
+function beginPortal() {
+  if (descent || !G.portal.active || !G.portal.near || G.runOver) return;
+  const back = G.portal.back;
+  if (!back) {
+    if (G.won) return;
+    secretDef = (secretOverride && LEGEND_BY_ID[secretOverride]) || testLegend();
+    secretOverride = null;
+    if (!secretDef) return;
+    // Its sheets load in the dark: they are big, and most runs never need them at all.
+    loadLegendAnims(secretDef.id, `assets/sprites/${secretDef.id}`, ['Walk', ...secretDef.anims]);
+    // The floor's music stops at the threshold. The boss brings its own.
+    stopMusicFile(0.6);
+  }
+  descent = { t: 0, swapped: false, kind: back ? 'return' : 'secret' };
+  G.portal.active = false;
+  G.portal.near = false;
+  sfx('stairs');
+  setMode(MODES.STAIRS);
+}
+
+/** Put the portal a few steps to the player's right, inside the room. */
+function portalBeside() {
+  const p = G.player, b = G.bounds;
+  G.portal.x = b ? clamp(p.x + 48, b.minX + 40, b.maxX - 40) : p.x + 48;
+  G.portal.y = p.y;
+  G.portal.active = true;
+  G.portal.near = false;
+}
+
+/**
+ * The legendary a portal leads to. Normally the stage's trio member for this floor; `?boss=<id>`
+ * overrides it for testing, and a debug portal opened on a floor with no legendary (4F) falls
+ * back to the trio's last.
+ */
+function testLegend() {
+  const forced = bootParams && LEGEND_BY_ID[bootParams.get('boss')];
+  if (forced) return forced;
+  return legendFor(G.stage.id, G.floor) || legendFor(G.stage.id, 3);
+}
+
+/** Debug key O: a portal right beside you, now, whatever the floor and the odds. */
+function debugPortal() {
+  if (G.secret || G.won || !G.player || descent) return;
+  portalAt = -1;
+  portalBeside();
+  G.portal.back = false;
+  G.banner = { text: 'DEBUG PORTAL', sub: (testLegend() || { name: '?' }).name.toUpperCase(), t: 1.6 };
+}
+
+/** Into the secret floor, at the darkest point of the fade. */
+function enterSecret() {
+  const def = secretDef;
+  clearWorld();
+  resetTraps();
+  secretHadStairs = G.stairs.active;
+  G.stairs.active = false;
+  G.stairs.near = false;
+  G.secret = true;
+  G.bounds = arenaBounds(SECRET_ARENA);
+
+  const p = G.player;
+  p.x = 0; p.y = 100;
+  p.vx = 0; p.vy = 0;
+  p.iframes = Math.max(p.iframes, 1.2);
+  clearStatuses(p);
+  snapCamera(p.x, p.y);
+
+  const e = spawnEnemy(legendEnemyDef(def, aiIndex('scripted')), 0, -20);
+  if (e) beginLegend(def, e);
+}
+
+/** The screen is back: the boss arrives, and so does its theme. */
+function startLegendFight() {
+  const def = legend.def;
+  if (!def) return;
+  startMusic(def.music, BOSS);
+  G.banner = { text: def.name.toUpperCase(), sub: def.title, t: 2.8 };
+}
+
+/** Back to the floor the portal was on -- the same floor number, on fresh ground. */
+function leaveSecret() {
+  leaveLegendBehind();
+  clearWorld();
+  resetProps();
+  resetTraps();
+  G.bounds = arenaBounds(G.stage.arena);
+
+  const p = G.player;
+  p.x = 0; p.y = 0;
+  p.vx = 0; p.vy = 0;
+  p.iframes = Math.max(p.iframes, 1.2);
+  clearStatuses(p);
+  snapCamera(0, 0);
+  // Stairs that had already appeared are still yours to take; the floor is new, the find is not.
+  if (secretHadStairs) placeStairs();
+  secretHadStairs = false;
+  G.banner = { text: floorLabel(), sub: 'BACK FROM THE SECRET FLOOR', t: 2.4 };
+}
+
+/** Drop the legendary's fight state and free its sheets. Safe to call when there is none. */
+function leaveLegendBehind() {
+  clearLegend();
+  if (secretDef) unloadLegendAnims(secretDef.id);
+  secretDef = null;
+  portalBackAt = -1;
+  G.secret = false;
+  G.portal.active = false;
+  G.portal.near = false;
+  G.portal.back = false;
+}
+
+/**
+ * The legendary is down. Its theme fades, everything it had in the air goes with it, and it pays
+ * out like nothing else in the game: three Elixirs, a Sitrus Berry, a flood of experience and a
+ * pile of gold. Then the portal reopens where it fell.
+ */
+function legendDefeated(e) {
+  const def = legend.def;
+  endLegend();
+  stopMusicFile(2.5);
+
+  for (let i = 0; i < 3; i++) dropPickup(e.x + (i - 1) * 24, e.y + 14, 'elixir');
+  dropPickup(e.x, e.y - 20, 'berry');
+  const xp = xpToNext(G.level) * 3;
+  const orbsN = 36;
+  scatter(e.x, e.y, orbsN, 80, (x, y) => dropXp(x, y, Math.max(1, Math.round(xp / orbsN))));
+  scatter(e.x, e.y, 30, 70, (x, y) => dropCoin(x, y, Math.round((6 + G.rngRun() * 8) * floorReward())));
+  burst(e.x, e.y, 40, def.color);
+  addShake(0.9);
+  sfx('kill');
+  sfx('levelup');
+
+  const s = saveData();
+  s.legends[def.id] = 1;
+  persistSave();
+  const n = legendsBeaten();
+  checkLegendary();
+  G.banner = { text: `${def.name.toUpperCase()} FAINTED!`, sub: `LEGENDARY ${n} / ${LEGEND_IDS.length}`, t: 3 };
+
+  const b = G.bounds;
+  portalBackSpot.x = b ? clamp(e.x, b.minX + 48, b.maxX - 48) : e.x;
+  portalBackSpot.y = b ? clamp(e.y, b.minY + 48, b.maxY - 48) : e.y;
+  portalBackAt = G.clock + 2.2;
 }
 
 /** 0 while the field is visible, 1 at the darkest point. Read by the renderer. */
@@ -690,6 +949,9 @@ export function descentFade() {
 
 /** The label to show on the black, or '' -- only once the floor has actually changed. */
 export const descentLabel = () => (descent && descent.swapped ? floorLabel() : '');
+
+/** Which transition is playing: 'stairs', 'secret' or 'return'. */
+const descentKind = () => (descent ? descent.kind : '');
 
 /** How visible the title card is, 0..1. Zero outside the black hold. */
 function cardAlpha() {
@@ -793,6 +1055,7 @@ function handleKey(code) {
     // Enter is otherwise unbound during play, so the staircase can own it outright rather than
     // sharing a key with something the player might mean instead.
     if (code === 'Enter' && G.stairs.near) return beginDescent();
+    if (code === 'Enter' && G.portal.near) return beginPortal();
     if (isAction(code, 'ability1')) return void castAbility(0);
     if (isAction(code, 'ability2')) return void castAbility(1);
   }
@@ -804,6 +1067,7 @@ function handleKey(code) {
     case 'KeyK': stressSpawn(100); break;
     case 'KeyL': G.level++; G.xpNext = xpToNext(G.level); G.pendingLevelUps++; break;
     case 'KeyT': G.runTime += 60; catchUpSchedule(); break;
+    case 'KeyO': debugPortal(); break;
     case 'BracketRight': G.debug.timescale = Math.min(8, G.debug.timescale * 2); break;
     case 'BracketLeft': G.debug.timescale = Math.max(0.25, G.debug.timescale / 2); break;
   }
@@ -1203,7 +1467,9 @@ function frame(now) {
     musicPending = false;
     // A run entered directly via ?char= is already playing by the time audio unlocks, so it wants
     // its stage track rather than the menu theme.
-    if (G.mode === MODES.PLAYING && G.stage) startMusic(G.stage.id, ROUTE);
+    if (G.mode === MODES.PLAYING && G.secret) {
+      if (legend.active && legend.state !== 'dead') startMusic(legend.def.music, BOSS);
+    } else if (G.mode === MODES.PLAYING && G.stage) startMusic(G.stage.id, ROUTE);
     else startMusic('menu', TITLE);
   }
   if (G.mode === MODES.EVOLVING) updateEvolution(rawDt);
@@ -1223,10 +1489,15 @@ function frame(now) {
 /** The fixed update order. Everything about system sequencing is visible in this one function. */
 function stepSim(dt) {
   G.tick++;
-  G.runTime += dt;
+  G.clock += dt;
+  // The run clock stands still on a secret floor: the schedule waits for you to come back.
+  if (!G.secret) G.runTime += dt;
 
-  updateDirector(dt);
-  updateProps();
+  // A secret floor has its one legendary and nothing else: no spawns, no scenery, no schedule.
+  if (!G.secret) {
+    updateDirector(dt);
+    updateProps();
+  }
   drainBossQueue();
   drainSpawnRequests();
 
@@ -1234,6 +1505,8 @@ function stepSim(dt) {
   // last tick's sweep swap-popped the array and left the old indices dangling, and again after
   // movement so that combat queries see where enemies actually are.
   rebuildGrid();
+  // Before the enemies move: the legendary's velocity is decided here and applied there.
+  updateLegend(dt);
   updateEnemies(dt, !heavyLoad || (sepTick++ & 1) === 0);
   rebuildGrid();
 
@@ -1245,8 +1518,11 @@ function stepSim(dt) {
   updatePlayer(dt);
   updatePickups(dt, (v) => { grantXp(v); sfx('xp'); }, (v) => { grantCoins(v); sfx('coin'); });
   updateItems(dt);
-  updateTraps(dt);
-  updateStairs();
+  if (!G.secret) {
+    updateTraps(dt);
+    updateStairs();
+  }
+  updatePortal();
   dropPresents(dt);
   updateFx(dt);
   if (G.banner.t > 0) G.banner.t -= dt;
@@ -1722,7 +1998,14 @@ function drawDescent() {
   // The title card: the stage's name, and under it the floor being entered -- in the Mystery
   // Dungeon font, the way the DS games announce a new floor.
   const a = cardAlpha();
-  if (a > 0 && G.stage) {
+  // Going in, the card says only where you are going -- the boss is the surprise.
+  if (a > 0 && descentKind() === 'secret') {
+    if (!drawDungeonText('Secret floor', VW / 2, VH / 2 - 12, a)) {
+      ctx.globalAlpha = a;
+      drawTextCentered(ctx, 'SECRET FLOOR', VW / 2, VH / 2 - 4, 'white');
+      ctx.globalAlpha = 1;
+    }
+  } else if (a > 0 && G.stage) {
     const name = G.stage.name, floor = descentLabel();
     if (!drawDungeonText(name, VW / 2, VH / 2 - 26, a) || !drawDungeonText(floor, VW / 2, VH / 2 + 2, a)) {
       // No font sheet: the same card in the built-in font.
@@ -1761,7 +2044,13 @@ function draw() {
     return;
   }
 
-  drawBackground(G.stage);
+  drawBackground(G.secret ? secretStage() : G.stage);
+  // The secret floor is the same ground, in a much smaller room, and darker -- it should not
+  // look like anywhere you have been.
+  if (G.secret) {
+    ctx.fillStyle = 'rgba(18,6,40,0.38)';
+    ctx.fillRect(0, 0, VW, VH);
+  }
   drawEntities();
 
   if (G.debug.showHitboxes) drawHitboxes();

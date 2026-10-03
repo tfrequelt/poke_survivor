@@ -6,7 +6,8 @@ import { G } from './state.js';
 import { moveAxis } from './input.js';
 import { dist2, clampToBounds } from './util.js';
 import { enemies, cellRange, cellStart, cellItems, GW } from './world.js';
-import { damagePlayer } from './combat.js';
+import { damagePlayer, burnPlayer } from './combat.js';
+import { STATUS } from './data/legends.js';
 import { ensureStats } from './stats.js';
 import { dirFromAngle } from './assets.js';
 
@@ -35,6 +36,12 @@ export function createPlayer(x = 0, y = 0) {
     // while it runs; `actT` counts UP so the renderer can index the real PMD frame durations.
     actT: 0,
     actDur: 0,
+    // What a legendary's hits leave behind, in seconds remaining. See statusPlayer in combat.js.
+    chillT: 0,
+    paraT: 0,
+    freezeT: 0,
+    burnT: 0,
+    burnTick: 0,
   };
 }
 
@@ -44,10 +51,12 @@ export function updatePlayer(dt) {
   const s = ensureStats();
 
   const axis = moveAxis();
-  // Hyperbeam roots you while it channels -- that drawback is the whole point of the ability.
-  const rooted = p.rootT > 0;
-  p.vx = rooted ? 0 : axis.x * s.moveSpeed;
-  p.vy = rooted ? 0 : axis.y * s.moveSpeed;
+  // Hyperbeam roots you while it channels -- that drawback is the whole point of the ability. A
+  // freeze does the same from the outside.
+  const rooted = p.rootT > 0 || p.freezeT > 0;
+  const slowed = statusSlow(p);
+  p.vx = rooted ? 0 : axis.x * s.moveSpeed * slowed;
+  p.vy = rooted ? 0 : axis.y * s.moveSpeed * slowed;
   p.x += p.vx * dt;
   p.y += p.vy * dt;
   clampToBounds(p, G.bounds, p.r);
@@ -76,6 +85,7 @@ export function updatePlayer(dt) {
   }
 
   if (p.iframes > 0) p.iframes -= dt;
+  tickStatuses(p, dt);
 
   // Regen is applied in whole points so the HUD never shows a fractional bar creeping.
   if (s.regen > 0 && p.hp < s.maxHp) {
@@ -96,6 +106,7 @@ export function updatePlayer(dt) {
       G.revivesLeft--;
       p.hp = Math.max(1, Math.round(ensureStats().maxHp * 0.5));
       p.iframes = REVIVE_IFRAMES;
+      clearStatuses(p);
       if (onRevive) onRevive(p, G.revivesLeft);
       return;
     }
@@ -105,8 +116,42 @@ export function updatePlayer(dt) {
   }
 }
 
+/** Speed multiplier from chill and paralysis. The stronger one wins; they do not stack. */
+function statusSlow(p) {
+  let slow = 0;
+  if (p.chillT > 0) slow = STATUS.chill.slow;
+  if (p.paraT > 0) slow = Math.max(slow, STATUS.para.slow);
+  return 1 - slow;
+}
+
+/** Count the statuses down, and pay a burn out on the half second. */
+function tickStatuses(p, dt) {
+  if (p.chillT > 0) p.chillT -= dt;
+  if (p.paraT > 0) p.paraT -= dt;
+  if (p.freezeT > 0) p.freezeT -= dt;
+  if (p.burnT > 0) {
+    p.burnT -= dt;
+    p.burnTick -= dt;
+    if (p.burnTick <= 0) {
+      p.burnTick = 0.5;
+      burnPlayer(STATUS.burn.dps * 0.5);
+    }
+  } else {
+    p.burnTick = 0;
+  }
+}
+
+/** Clear every status. A revive and a new floor both start clean. */
+export function clearStatuses(p) {
+  p.chillT = 0; p.paraT = 0; p.freezeT = 0; p.burnT = 0; p.burnTick = 0;
+}
+
 /** Seconds of invulnerability after getting back up. Far longer than an ordinary hit's. */
 export const REVIVE_IFRAMES = 2.5;
+
+/** Set by main.js: a legendary's touch can carry a status (Raikou's Static). legends.js is L3 too. */
+export let onLegendTouch = null;
+export function setLegendTouch(fn) { onLegendTouch = fn; }
 
 /** Set by main.js so getting up can shake the screen and say so, without importing upward. */
 export let onRevive = null;
@@ -134,7 +179,10 @@ function contactDamage(p, dt) {
         const rr = p.r + e.r;
         if (dist2(p.x, p.y, e.x, e.y) > rr * rr) continue;
         const dmg = (e.weakenT > 0 ? e.dmg * 0.7 : e.dmg) * (G.stats.contactMult || 1);
-        if (damagePlayer(dmg)) e.contactCd = CONTACT_CD;
+        if (damagePlayer(dmg)) {
+          e.contactCd = CONTACT_CD;
+          if (e.legend && onLegendTouch) onLegendTouch(e);
+        }
       }
     }
   }

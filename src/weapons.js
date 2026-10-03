@@ -16,6 +16,7 @@ import {
 import { dirFromAngle } from './assets.js';
 import {
   damageEnemy, damageCircle, damageLine, applyBurn, applyChill, damagePlayer, damageSourceId,
+  statusPlayer,
 } from './combat.js';
 import { WEAPONS, WEAPON_BY_ID } from './data/weapons.js';
 import { spriteBase, spriteDirs, angleSlot } from './sprites.js';
@@ -800,7 +801,7 @@ const BEHAVIOR = {
       else if (!free) free = d;
     }
     if (!free || live >= Math.min(DECOY_MAX, st.amount)) return false;
-    if (G.runTime - decoyState.lastDeath < st.cooldown) return false;
+    if (G.clock - decoyState.lastDeath < st.cooldown) return false;
 
     const a = G.rngRun() * TAU;
     const dist = w.def.placeDist || 30;
@@ -837,6 +838,9 @@ export function updateDecoys(dt) {
     }
   }
 }
+
+/** Seconds between one projectile's hits on a legendary. See collideProjectile. */
+const LEGEND_REHIT = 0.3;
 
 /** How long a chill from a single projectile hit lasts. Area effects pass their own. */
 const CHILL_TIME = 1.2;
@@ -1167,7 +1171,8 @@ function hitsPlayer(pr) {
   if (!p || pr.r <= 0) return false;
   const rr = pr.r + p.r;
   if (dist2(pr.x, pr.y, p.x, p.y) > rr * rr) return false;
-  damagePlayer(pr.dmg);
+  // A legendary's shot carries what it does to you as well as how hard it hits.
+  if (damagePlayer(pr.dmg) && pr.status) statusPlayer(pr.status);
   return true;
 }
 
@@ -1282,6 +1287,16 @@ function collideProjectile(pr) {
         if (!e.alive || e.lastHitId === pr.hitId) continue;
         const rr = pr.r + e.r;
         if (dist2(pr.x, pr.y, e.x, e.y) > rr * rr) continue;
+
+        // A legendary is one huge target that a swarm of pierce-9999 claws sits on top of, and
+        // an enemy remembers only its LAST hit id -- so overlapping swarms trade it back and forth
+        // and re-hit every frame, which melted a 5,600 HP Moltres in two seconds. Against a
+        // legendary only, one projectile lands at most LEGEND_REHIT apart. Everything else keeps
+        // the behaviour the arsenal was balanced around.
+        if (e.legend) {
+          if (pr.bossT > G.clock) continue;
+          pr.bossT = G.clock + LEGEND_REHIT;
+        }
 
         e.lastHitId = pr.hitId;
 

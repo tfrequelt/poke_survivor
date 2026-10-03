@@ -53,6 +53,9 @@ const newEnemy = () => ({
   burnSrc: 0,
   coinChance: 0, boss: false, elite: false, flying: false, spawnT: 0,
   prop: false, harmless: false, propKey: 0, bossTier: 0,
+  // A secret floor's legendary. Driven and drawn by legends.js rather than by the AI registry and
+  // the atlas -- see there. Reset by spawnEnemy like every other single-path field.
+  legend: false,
   cell: -1, lastHitId: 0,
 });
 
@@ -80,6 +83,11 @@ const newProjectile = () => ({
   src: 0,
   // Launch damage, recorded on the first ricochet so later bounces grow from it. Reset by spawn().
   dmg0: 0,
+  // A legendary's shot: which of data/legends.js's LOOKS it is drawn as (0 = the plain enemy shot)
+  // and which player status it leaves (0 = none). Only legends.js sets them; spawn() clears them.
+  look: 0, status: 0,
+  // When this projectile may next hit a legendary (G.clock). See collideProjectile. Reset by spawn().
+  bossT: 0,
 });
 
 const newOrb = () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, value: 1, tier: 0, sprId: 0, age: 0, pulling: false });
@@ -163,7 +171,7 @@ export function spawn(kind) {
   // enemy shot recycled into one of the PLAYER's weapons came out still hostile: spawned on top
   // of the player, skipped by the enemy collision, and hitting the player with their own
   // weapon's damage. Every projectile now starts friendly, and fireHostile opts in afterwards.
-  if (kind === 'projectiles') { e.hostile = false; e.src = damageSource; e.dmg0 = 0; }
+  if (kind === 'projectiles') { e.hostile = false; e.src = damageSource; e.dmg0 = 0; e.look = 0; e.status = 0; e.bossT = 0; }
   // A zone is credited to whatever was running when it was laid, which is the only way a pool
   // of fire left behind by a shot can still count towards the weapon that fired it.
   else if (kind === 'zones') e.src = damageSource;
@@ -241,7 +249,7 @@ export function damageDecoy(d, dmg) {
   if (d.hp <= 0) {
     d.hp = 0;
     d.dyingT = DECOY_DIE;
-    decoyState.lastDeath = G.runTime;
+    decoyState.lastDeath = G.clock;
   }
 }
 

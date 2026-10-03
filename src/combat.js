@@ -11,6 +11,7 @@
 import { G, winFrozen } from './state.js';
 import { enemies, cellRange, cellStart, cellItems, GW , getDamageSource} from './world.js';
 import { dist2 } from './util.js';
+import { STATUS, STATUS_KEYS } from './data/legends.js';
 
 export const hooks = {
   onDamage: null,   // (enemy, dealt, crit) -- damage numbers, hit sparks
@@ -354,3 +355,36 @@ export function damagePlayer(amount) {
  * if players die at 17:00 to "I don't know what hit me", raise this before touching enemy damage.
  */
 export const IFRAMES = 0.35;
+
+/**
+ * Something a legendary's hit leaves on the player: chill, burn, paralysis or freeze. Callers apply
+ * it only when the hit itself landed, so i-frames and the Protect Bubble guard it for free.
+ *
+ * `kind` is a name or a STATUS_KEYS index -- projectiles carry the index, to keep their shape a
+ * plain number. `mul` stretches the duration, which is all Articuno's clinging cold is.
+ */
+export function statusPlayer(kind, mul = 1) {
+  const p = G.player;
+  if (!p || G.debug.godmode || G.runOver || winFrozen()) return;
+  const name = typeof kind === 'number' ? STATUS_KEYS[kind] : kind;
+  const s = STATUS[name];
+  if (!s) return;
+  const secs = s.secs * mul;
+  if (name === 'chill') p.chillT = Math.max(p.chillT, secs);
+  else if (name === 'burn') p.burnT = Math.max(p.burnT, secs);
+  else if (name === 'para') p.paraT = Math.max(p.paraT, secs);
+  else if (name === 'freeze') p.freezeT = Math.max(p.freezeT, secs);
+}
+
+/**
+ * A burn's tick. Damage over time ignores i-frames -- they exist so one crowd cannot land twenty
+ * hits in a frame, and a burn is one hit spread over three seconds, not twenty. Everything else
+ * that protects the player still applies.
+ */
+export function burnPlayer(amount) {
+  const p = G.player;
+  if (!p || G.debug.godmode || G.runOver || winFrozen() || p.shieldT > 0) return;
+  const dealt = Math.max(1, Math.round(amount));
+  p.hp -= dealt;
+  G.damageTaken += dealt;
+}

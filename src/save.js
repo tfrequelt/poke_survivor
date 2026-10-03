@@ -13,6 +13,7 @@
 
 import { G } from './state.js';
 import { SUCCESS_BY_ID } from './data/successes.js';
+import { LEGEND_IDS } from './data/legends.js';
 
 const KEY = 'pokesurvivor.save.v1';
 
@@ -20,7 +21,7 @@ const KEY = 'pokesurvivor.save.v1';
  * `spent` is tracked only so RESET PROGRESS can refund exactly what went in. `ach` is the
  * Successes: id -> 'unlocked' | 'claimed', absent while still locked.
  */
-const empty = () => ({ gold: 0, spent: 0, ranks: {}, ach: {} });
+const empty = () => ({ gold: 0, spent: 0, ranks: {}, ach: {}, legends: {} });
 
 const ACH_STATES = new Set(['unlocked', 'claimed']);
 
@@ -45,6 +46,10 @@ function sanitize(data) {
     for (const k of Object.keys(data.ach)) {
       if (SUCCESS_BY_ID[k] && ACH_STATES.has(data.ach[k])) s.ach[k] = data.ach[k];
     }
+  }
+  // Which legendaries have been beaten, ever -- the Legendary success's tally. Only real ids.
+  if (data.legends && typeof data.legends === 'object') {
+    for (const k of LEGEND_IDS) if (data.legends[k]) s.legends[k] = 1;
   }
   return s;
 }

@@ -404,6 +404,57 @@ export async function loadAttacks(manifest) {
   return n;
 }
 
+// --- Legendary animations, on demand ------------------------------------------------------
+//
+// A legendary's sheets are big -- Moltres attacks in 104x136 cells, fourteen frames, eight
+// directions -- and only one of them is ever on screen, behind a portal most runs never find.
+// Loading all nine at boot would cost tens of megabytes of canvas for nothing, and putting their
+// walks in the sprite atlas would eat a fifth of it. So they load when a portal is entered, during
+// the two seconds of black that follow, and are dropped again on the way out.
+//
+// Every animation gets a white silhouette alongside it, which is the hit flash: the atlas bakes
+// one for every walk sheet, and a boss that did not flash when struck would read as invulnerable.
+
+/** White silhouette of a canvas, for the hit flash. */
+function flashCopy(src) {
+  const c = document.createElement('canvas');
+  c.width = src.width;
+  c.height = src.height;
+  const g = c.getContext('2d');
+  g.drawImage(src, 0, 0);
+  g.globalCompositeOperation = 'source-atop';
+  g.fillStyle = 'rgba(255,255,255,0.85)';
+  g.fillRect(0, 0, c.width, c.height);
+  return c;
+}
+
+/**
+ * Load the named animations of one legendary into animSheets, as `${id}:${anim}`. Resolves to how
+ * many are available. A missing animation is skipped with a warning; the renderer falls back to
+ * Walk for any pose it cannot find, so a half-loaded boss still fights.
+ */
+export async function loadLegendAnims(id, dir, names) {
+  const jobs = names.map((n) => {
+    if (animSheets.has(`${id}:${n}`)) return Promise.resolve(true);
+    return loadNamed(dir, n).then((a) => {
+      a.flash = flashCopy(a.canvas);
+      animSheets.set(`${id}:${n}`, a);
+      return true;
+    });
+  });
+  let n = 0;
+  for (const r of await Promise.allSettled(jobs)) {
+    if (r.status === 'fulfilled') n++;
+    else console.warn('[assets] legendary animation failed:', r.reason && r.reason.message);
+  }
+  return n;
+}
+
+/** Free a legendary's animations once its floor is behind you. */
+export function unloadLegendAnims(id) {
+  for (const key of [...animSheets.keys()]) if (key.startsWith(`${id}:`)) animSheets.delete(key);
+}
+
 // --- Numbered frame sequences -----------------------------------------------
 //
 // Some ripped effects ship as one PNG per frame rather than as a strip -- the hail weather
