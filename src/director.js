@@ -91,6 +91,9 @@ export function catchUpSchedule() {
   spawnDebt = 0;
 }
 
+/** An enemy of this stage and minute, for a Summon trap or a totem's trial. */
+export const rollStageEnemy = (rng) => rollEnemy(G.runTime / 60, rng);
+
 /** Enemies eligible for the current stage and minute, weighted by their `weight`. */
 function rollEnemy(m, rng) {
   const stage = (G.stage && G.stage.id) || 'grass';
@@ -125,7 +128,7 @@ export function updateDirector(dt) {
   c.dmg = dmgMult(m) * power;
   c.spd = spdMult(m);
   c.cap = (t >= FINAL_SURGE ? 300 : aliveCap(m)) * swarm;
-  c.sps = sps(m) * spsK * spawnMultiplier(t) * swarm;
+  c.sps = sps(m) * spsK * spawnMultiplier(t) * swarm * (G.totemPressure ? 1.6 : 1);
 
   spawnAcc += dt;
   while (spawnAcc >= SPAWN_INTERVAL) {

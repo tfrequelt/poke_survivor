@@ -233,7 +233,8 @@ folder is a perfectly normal state. The ids the game plays:
 | combat | `hit` `crit` `kill` `hurt` |
 | pickups | `xp` `coin` `levelup` `pickup` |
 | ability fallbacks | `ability` `quake` `beam` `shield` |
-| events | `boss` `evolve` `select` `confirm` |
+| events | `boss` `evolve` `select` `confirm` `stairs` |
+| end of a run | `mission_success` `mission_failed` |
 | wheel | `wheel_spin` |
 | moves | one per ability — see below |
 
@@ -252,9 +253,16 @@ Every ability names its own sound in `sound:` in
 | `move_bigfire` / `move_flame` | Fire Spin (picks one) | `move_ghost` | Lick |
 | `move_throw` | Present | `move_hail` | Blizzard |
 
-Two sounds are not abilities and are played by name from the code that fires them: `evolve`,
+Some sounds are not abilities and are played by name from the code that fires them: `evolve`,
 `select`, `wheel_spin` and **`stairs`** — the last plays as the screen fades on the way to a new
 floor. Note the file it points at is `stairs_sounds.mp3`, plural.
+
+**`mission_success`** and **`mission_failed`** are the soundtrack's two result jingles (tracks 145
+and 146). Success plays when the victory screen opens, Failed the moment you faint -- in an endless
+run too. They are *jingles*, not effects (`playJingle` in `src/audio.js`): the stage music stops,
+anything the next screen starts waits silently until the jingle is over, and restarting the run or
+choosing to continue into endless cuts it short. Neither has a synthesised fallback; without the
+file, the end of a run is simply quiet.
 
 `sound` may be an **array of two**, and one is chosen at random on every cast — the choice comes
 from the cosmetic RNG, so it cannot shift anything the run's seed decides.
@@ -474,6 +482,22 @@ golden feather), and gems or stones for the rest -- see the `sprites` section of
 `RELICS` in `src/data/legends.js`.
 
 **Credited, not yet used:** `ice_stage_tileset.png` and `miracle_sea_tileset.png`.
+
+### More from items_2.png
+
+`items_2.png` also provides, as crops in the manifest's `sprites`:
+
+- **The Explorer's Bag:** `bag_*`. The sheet has two seeds and one orb, so most of the seeds and
+  orbs are the same sprite recoloured: a crop may carry `"hue"` (degrees to rotate every pixel's
+  hue) and `"sat"` (a saturation multiplier; 0 is grey), applied once at load. Oran Berry, Max
+  Elixir and Gravelerock are their own sprites.
+- **Totems:** `totem_blessing`, `totem_trial`, `totem_fortune` — three of the four totem poles in
+  the "Other 2" corner, anchored at the bottom. The pink pole with the skull is not used.
+- **The treasure chest:** `chest_deluxe`, the red Deluxe Box.
+- **Seven new trap tiles:** `trap_summon`, `trap_pitfall`, `trap_gust`, `trap_seal`,
+  `trap_wonder`, `trap_random`, `trap_slow`, cut from the same 25px grid as the first five.
+- **Ribbons and ranks:** `ribbon_grass` / `_cave` / `_beach` / `_none` (green, purple, blue, grey)
+  and `rank_0` … `rank_8` with `rank_lock`, the Explorer Rank badges in sheet order.
 
 ### The world map: the stage select
 

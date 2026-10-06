@@ -19,22 +19,38 @@ import {
 import {
   enemies, projectiles, orbs, coins, items, damageNumbers, particles, zones,
   spawn, despawn, clearWorld, rebuildGrid, sweepDead, entityCounts, spawnRequests, fxShapes,
-  nextHitId, cellRange, cellStart, cellItems, GW, setDamageSource,
+  nextHitId, cellRange, cellStart, cellItems, GW, setDamageSource, requestSpawn,
 } from './world.js';
 import { initStats, ensureStats, addGrant, addMods, addMod, luckOf, luckK } from './stats.js';
 import { loadSave, bankGold, bankTotal, rankOf, buyRank, resetProgress, saveData, persistSave } from './save.js';
 import { SHOP_ITEMS, rankCost } from './data/shop.js';
 import {
   hooks, damageEnemy, killAll, applyBurn, applyChill, resetDamageTally, damageBreakdown, damageCircle,
-  damageSourceId,
+  damageSourceId, srcOvl,
 } from './combat.js';
+import {
+  initOverloads, tickOverloads, resetOverloads, overloadHit, overloadKill, overloadExpire,
+  overloadEvery, overloadDollDown, overloadDollTick, weaponEvolved, ovlFx,
+} from './overload.js';
+import {
+  initBag, resetBag, bagAdd, bagUse, bagFull, bagRevive, rollBagItem, updateBuffs, bagFx,
+} from './bag.js';
+import { BAG_BY_ID, BAG_BY_KIND } from './data/bagitems.js';
+import {
+  placeTotems, relocateTotems, resetTotems, updateTotems, fortuneOffer, pickBlessings, totemHooks,
+  trialRing,
+} from './totems.js';
+import { CURSE, BLESSING_BY_ID } from './data/totems.js';
+import { addBuff } from './bag.js';
 import { getDamageSource } from './world.js';
+import { lastEffect } from './combat.js';
 import {
   checkCloseCall, checkKaboom, checkDeath, claimSuccess, successState,
   claimableCount, resetRunSuccesses, successHooks, updateToast, legendsBeaten, checkLegendary,
+  unlockSuccess, unlockIf, bumpStat, recordKey, flushRecords,
 } from './successes.js';
 import { SUCCESSES } from './data/successes.js';
-import { createPlayer, updatePlayer, setReviveFx, setLegendTouch, clearStatuses } from './player.js';
+import { createPlayer, updatePlayer, setReviveFx, setLegendTouch, clearStatuses, setBagRevive } from './player.js';
 import { initEnemyDefs, updateEnemies, spawnEnemy, ringPoint, resetAttacks, aiIndex } from './enemies.js';
 import {
   legend, hazards, fx as legendFx, beginLegend, clearLegend, endLegend, updateLegend,
@@ -48,7 +64,7 @@ import { ENEMIES } from './data/enemies.js';
 import { ENEMY_BY_ID, BOSS_TIERS } from './data/enemies.js';
 import {
   initWeaponDefs, addWeapon, updateWeapons, updateProjectiles, motionIndex, setWeaponFx,
-  evolveWeapon, setWeaponSfx, updateDecoys,
+  evolveWeapon, setWeaponSfx, updateDecoys, ovlHooks, motionOf, levelWeapon,
 } from './weapons.js';
 import {
   initAbilityDefs, addAbility, fireAbility, updateAbilities, updateZones, fx as abilityFx,
@@ -69,14 +85,15 @@ import {
 import {
   initPickupSprites, initItemSprites, dropXp, dropCoin, updatePickups,
   updateItems, dropPickup, dropRandomPickup, magnetAll, itemEffects, itemSpritePairs, orbSpritePairs,
+  KIND_KEYS,
 } from './pickups.js';
 import {
-  grantXp, grantCoins, initForm, xpToNext, rollOffers, takeOffer,
+  grantXp, grantCoins, initForm, xpToNext, rollOffers, takeOffer, grantBlessing,
   rerollOffers, banishOffer, skipOffer, resetPicks, pendingEvolution, applyEvolution,
 } from './progress.js';
-import { updateDirector, resetDirector, catchUpSchedule, stressSpawn } from './director.js';
+import { updateDirector, resetDirector, catchUpSchedule, stressSpawn, rollStageEnemy } from './director.js';
 import { updateProps, resetProps, clearProp } from './props.js';
-import { drawEntities, setStairsSprite, setHostileSprite, setTrapSprites } from './entities.js';
+import { drawEntities, setStairsSprite, setHostileSprite, setTrapSprites, setTotemSprites } from './entities.js';
 import { drawHud, debugLines } from './hud.js';
 import { buildAutotiles } from './autotile.js';
 import { waterAtWorld, nearestLand } from './terrain.js';
@@ -97,7 +114,7 @@ import {
   initAudio, audioReady, sfx, playTrack, playOnce, setIntensity, stopTrack,
   setVolume, toggleMute, settings as audioSettings, TITLE, ROUTE, BOSS, FANFARE,
   playMusicFile, musicFilePlaying, setMusicFallback, setMusicAdvance, currentMusicUrl, setSfxFiles,
-  sampleDuration, duckMusic, stopMusicFile,
+  sampleDuration, duckMusic, stopMusicFile, playJingle, stopJingle,
 } from './audio.js';
 
 const STEP = 1 / 60;
@@ -175,10 +192,16 @@ async function boot() {
   // the player's in a crowded frame.
   registerSprite('proj_bubble', 'fire');
   for (const k of TRAP_KEYS) registerSprite('trap_' + k, 'rock', 0, 'orb');
+  for (const k of ['blessing', 'trial', 'fortune']) registerSprite('totem_' + k, 'gold', 0, 'orb');
+  for (const k of ['grass', 'cave', 'beach', 'none']) registerSprite('ribbon_' + k, 'gold', 0, 'orb');
+  for (let i = 0; i < 9; i++) registerSprite('rank_' + i, 'gold', 0, 'orb');
+  registerSprite('rank_lock', 'gold', 0, 'orb');
   atlasStats = buildAtlas();
 
   initEnemyDefs();
   initWeaponDefs();
+  initOverloads(motionOf);
+  initBag(motionOf);
   initAbilityDefs(motionIndex('homing'));
   // Frame ids for the shared effect art, so the renderers never look anything up by name.
   fxSprites.bolt = spriteBase('fx_bolt', 'thunder');
@@ -195,6 +218,7 @@ async function boot() {
   }
   setHostileSprite(spriteBase('proj_bubble', 'fire'));
   setTrapSprites(Object.fromEntries(TRAP_KEYS.map((k) => [k, spriteBase('trap_' + k, 'rock')])));
+  setTotemSprites(Object.fromEntries(['blessing', 'trial', 'fortune'].map((k) => [k, spriteBase('totem_' + k, 'gold')])));
   installHooks();
 
   // Each starter needs a sprite id for the menus to draw it, plus the frame/direction counts --
@@ -317,8 +341,10 @@ async function boot() {
  * damage live below the L3 systems while still producing orbs, numbers and screen shake.
  */
 function installHooks() {
-  hooks.onDamage = (e, dealt, crit) => {
-    popDamage(e.x, e.y - 12, dealt, crit);
+  hooks.onDamage = (e, dealt, crit, eff) => {
+    popDamage(e.x, e.y - 12, dealt, crit, eff);
+    if (eff > 1.05 && G.trk && ++G.trk.superHits === 2000) unlockSuccess('super_effective');
+    if (e.elite && dealt >= e.maxHp) unlockSuccess('one_punch');
     sfx(crit ? 'crit' : 'hit');
   };
   hooks.onKill = (e) => {
@@ -339,6 +365,10 @@ function installHooks() {
       return;
     }
     G.kills++;
+    if (lastEffect > 1.05 && G.trk) G.trk.superKOs++;
+    // An overload's on-kill effect, if the blow came from an overloaded weapon.
+    const orec = srcOvl[getDamageSource()];
+    if (orec !== undefined) overloadKill(e, orec);
 
     // Credit the kill to the ability cast that caused it, if one did. The damage source is set
     // for everything an ability does and stamped onto what it leaves behind, so pools, rings and
@@ -362,12 +392,16 @@ function installHooks() {
     // at zero luck, so this only ever exists for a build that went looking for it.
     if (LUCKY_DROP > 0 && G.rngRun() < LUCKY_DROP * luckK()) dropRandomPickup(e.x, e.y);
     // Elites always leave something worth walking to.
-    if (e.elite) dropPickup(e.x, e.y, 'elixir');
+    if (e.elite) {
+      dropPickup(e.x, e.y, 'elixir');
+      if (G.rngRun() < 0.6) dropPickup(e.x + 12, e.y, BAG_BY_ID[rollBagItem()].kind);
+    }
     burst(e.x, e.y, e.elite ? 10 : 5, e.elite ? '#ffd166' : '#ffffff');
     sfx('kill');
   };
   successHooks.onUnlock = () => sfx('levelup');
   hooks.onPlayerHit = () => {
+    if (G.trk) G.trk.hitThisFloor = true;
     checkCloseCall(G.player);
     addShake(0.28);
     G.hitstop = 0.04;
@@ -396,6 +430,8 @@ function installHooks() {
   setLegendTouch(legendTouched);
   trapFx.sprung = (t, byPlayer) => {
     const def = trapDef(t.kind);
+    if (byPlayer && G.trk) G.trk.traps++;
+    if (byPlayer && t.kind === 'wonder') bumpStat('wonderTiles');
     sfx(t.kind === 'explosion' ? 'quake' : 'hit');
     burst(t.x, t.y, t.kind === 'explosion' ? 16 : 8, t.kind === 'poison' ? '#b070d0' : '#ffd166');
     if (def.radius) pushFx(FX.RING, t.x, t.y, def.radius, 0, '#ff9f6b', 0.3);
@@ -439,6 +475,24 @@ function installHooks() {
     (x, y, r, color) => { pushFx(FX.RING, x, y, r, 0, color, 0.3); burst(x, y, 10, color); },
   );
 
+  // Overloads: their hit hook, the weapon-side hooks, and the effects they draw with.
+  hooks.onHit = overloadHit;
+  ovlHooks.expire = overloadExpire;
+  ovlHooks.every = overloadEvery;
+  ovlHooks.dollDown = overloadDollDown;
+  ovlHooks.dollTick = overloadDollTick;
+  ovlFx.arc = (x0, y0, x1, y1, color) =>
+    pushFx(1, x0, y0, Math.hypot(x1 - x0, y1 - y0), Math.atan2(y1 - y0, x1 - x0), color, 0.16, 2);
+  ovlFx.ring = (x, y, r, color, life) => pushFx(FX.RING, x, y, r, 0, color, life);
+  ovlFx.burst = (x, y, n, color) => burst(x, y, n, color);
+  ovlFx.bolt = (x, y, height, life) =>
+    pushFx(FX.BOLT, x, y, height, 0, '#fff05a', life, 0, (G.rngFx() * 65535) | 0);
+  ovlFx.shake = addShake;
+  ovlFx.banner = (text, sub) => {
+    G.banner = { text, sub, t: 2.6 };
+    sfx('evolve');
+  };
+
   abilityFx.heal = (amount) => {
     const p = G.player;
     if (p) p.hp = Math.min(G.stats.maxHp, p.hp + amount);
@@ -463,6 +517,7 @@ function installHooks() {
   };
   itemEffects.magnet = () => magnetAll();
   itemEffects.berry = () => {
+    if (G.trk) G.trk.healed = true;
     const p = G.player;
     if (p) p.hp = Math.min(G.stats.maxHp, p.hp + Math.round(G.stats.maxHp * 0.3));
   };
@@ -478,9 +533,101 @@ function installHooks() {
     if (!evolved) G.pendingLevelUps++;
   };
   itemEffects.relic = (it) => grantRelic(relicBySpr.get(it.sprId));
+  itemEffects.bag = (it, kind) => bagAdd(BAG_BY_KIND[kind].id);
+  itemEffects.chest = () => openChest();
+  totemHooks.blessing = () => { pendingBlessing = true; };
+  totemHooks.grantBlessing = (id) => {
+    if (grantBlessing(id)) G.banner = { text: `BLESSING: ${BLESSING_BY_ID[id].name.toUpperCase()}`, sub: BLESSING_BY_ID[id].desc.toUpperCase(), t: 2.6 };
+  };
+  totemHooks.spawnTrial = (t) => {
+    // Three elites around the totem, and an escort of ordinary stage enemies further out.
+    for (const pt of trialRing(t, 3, 110, _ring)) {
+      const def = rollStageEnemy(G.rngRun);
+      if (def) requestSpawn(def.id, pt.x, pt.y, { elite: true, trial: t.id });
+    }
+    for (const pt of trialRing(t, 12, 170, _ring)) {
+      const def = rollStageEnemy(G.rngRun);
+      if (def) requestSpawn(def.id, pt.x, pt.y, null);
+    }
+    addShake(0.3);
+  };
+  totemHooks.chest = (x, y) => dropPickup(x, y, 'chest');
+  totemHooks.bagItem = (x, y) => dropPickup(x, y, BAG_BY_ID[rollBagItem()].kind);
+  totemHooks.curse = () => {
+    addBuff('curse', CURSE.name, CURSE.secs, CURSE.mods, '#ff4a4a', true);
+    G.banner = { text: 'CURSED!', sub: 'SLOWER, AND HURT HARDER, FOR A MINUTE', t: 2.4 };
+    sfx('hurt');
+  };
+  totemHooks.coins = (n) => grantCoins(n);
+  totemHooks.banner = (text, sub) => { G.banner = { text, sub, t: 2.4 }; };
+  totemHooks.ring = (x, y, r, color, life) => pushFx(FX.RING, x, y, r, 0, color, life);
+  totemHooks.burst = (x, y, n, color) => burst(x, y, n, color);
+  totemHooks.sfx = sfx;
+  totemHooks.woke = (what) => {
+    const t = G.trk;
+    if (!t) return;
+    if (what === 'blessing' || what === 'trial' || what === 'fortune') {
+      t.totemKinds.add(what);
+      unlockIf('shrine_keeper', t.totemKinds.size >= 3);
+    } else if (what === 'trial_won') {
+      bumpStat('trialsWon');
+    } else if (what === 'fortune_curse') {
+      t.cursed = true;
+    } else if (what.startsWith('fortune_')) {
+      t.fortuneWins++;
+      unlockIf('high_roller', t.fortuneWins >= 3 && !t.cursed);
+    }
+  };
+  trapFx.summon = (x, y) => {
+    const p = G.player;
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2;
+      const def = rollStageEnemy(G.rngRun);
+      if (def) requestSpawn(def.id, p.x + Math.cos(a) * 70, p.y + Math.sin(a) * 70, null);
+    }
+    burst(x, y, 16, '#ff8a5a');
+  };
+  trapFx.pitfall = () => forceDescent();
+  trapFx.wonder = () => {
+    const p = G.player;
+    if (!p) return;
+    clearStatuses(p);
+    ensureStats();
+    p.hp = Math.min(G.stats.maxHp, p.hp + Math.round(G.stats.maxHp * 0.15));
+    addBuff('wonder', 'WONDER', 15, [
+      { stat: 'power', op: 'inc', value: 0.2 }, { stat: 'moveSpeed', op: 'inc', value: 0.2 },
+    ], '#7fe08a');
+    burst(p.x, p.y, 24, '#7fe08a');
+    sfx('levelup');
+  };
+  trapFx.sealed = (w) => { G.banner = { text: `${w.def.name.toUpperCase()} IS SEALED!`, sub: 'IT CANNOT FIRE FOR 8 SECONDS', t: 2 }; };
+  itemEffects.rollBag = () => BAG_BY_ID[rollBagItem()].kind;
+  setBagRevive(bagRevive);
+  bagFx.burst = (x, y, n, color) => burst(x, y, n, color);
+  bagFx.ring = (x, y, r, color, life) => pushFx(FX.RING, x, y, r, 0, color, life);
+  bagFx.banner = (text, sub) => { G.banner = { text, sub, t: 1.8 }; };
+  bagFx.sfx = sfx;
+  bagFx.descend = forceDescent;
+  bagFx.used = (id) => {
+    bumpStat('bagUsed');
+    if (id === 'oran_berry' && G.trk) G.trk.healed = true;
+  };
+  bagFx.revived = (p) => {
+    killAll(130);
+    addShake(0.8);
+    burst(p.x, p.y, 30, '#ffd166');
+    sfx('levelup');
+    G.banner = { text: 'REVIVER SEED!', sub: 'BACK ON YOUR FEET', t: 2.2 };
+  };
+  bagFx.warped = (x0, y0, x1, y1) => {
+    burst(x0, y0, 20, '#7af0e8');
+    burst(x1, y1, 20, '#7af0e8');
+    pushFx(FX.RING, x1, y1, 30, 0, '#7af0e8', 0.4);
+    snapCamera(x1, y1);
+  };
   itemEffects.onCollect = (kind, label) => {
     sfx('pickup');
-    if (kind === 'relic') return;                  // grantRelic has its own, longer banner
+    if (kind === 'relic' || kind === 'chest') return;   // each has its own, longer banner
     G.banner.text = label;
     G.banner.sub = '';
     G.banner.t = 1.6;
@@ -503,7 +650,10 @@ function tryEvolveWeapon() {
     if (!ev || w.evolved) continue;
     if (w.level < w.def.levels.length) continue;
     if (!G.passives.includes(ev.needPassive)) continue;
+    const oldSrc = w.srcId;
     if (evolveWeapon(w)) {
+      // An overloaded weapon carries its overload into the evolved form.
+      weaponEvolved(w, oldSrc);
       G.banner.text = `${w.def.name.toUpperCase()} EVOLVED!`;
       G.banner.sub = '';
       G.banner.t = 2.6;
@@ -523,6 +673,7 @@ function tryEvolveWeapon() {
 const currentStageId = () => (G.stage ? G.stage.id : null);
 
 function startRun(character, q, stageId) {
+  stopJingle(0.15);
   clearWorld();
   resetRunState();
   resetDirector();
@@ -531,6 +682,17 @@ function startRun(character, q, stageId) {
   resetAttacks();
   resetDamageTally();
   resetRunSuccesses();
+  resetOverloads();
+  // Perks from claimed Expedition Records, read once per run.
+  G.perks = { ...saveData().perks };
+  resetBag(G.perks.bag4 ? 4 : 3);
+  if (G.perks.start_oran) bagAdd('oran_berry');
+  if (G.perks.start_reviver) bagAdd('reviver_seed');
+  // What this run has done toward the records. Counted here, judged at the moment each one can be.
+  G.trk = {
+    hitThisFloor: false, superHits: 0, superKOs: 0, traps: 0, healed: false,
+    totemKinds: new Set(), fortuneWins: 0, cursed: false, ribbon: false,
+  };
   stairsSpawned = {};
   descent = null;
   leaveLegendBehind();
@@ -559,8 +721,9 @@ function startRun(character, q, stageId) {
   G.xpNext = xpToNext(1);
 
   addWeapon(character.weapon);
+  placeTotems();
 
-  G.rerolls = shopCharges('rerolls');
+  G.rerolls = shopCharges('rerolls') + (G.perks.reroll1 ? 1 : 0);
   G.banishes = shopCharges('banishes');
   G.skips = shopCharges('skips');
 
@@ -605,6 +768,7 @@ function secretStage() {
  * one line at the end of stepSim that banks on death now also carries the endless gold.
  */
 function startEndless() {
+  stopJingle();
   G.endless = true;
   G.victoryT = 0;
   G.banner = { text: 'THE DUNGEON DOES NOT END', sub: 'BOSSES EVERY TWO MINUTES', t: 3 };
@@ -694,8 +858,47 @@ function updateStairs() {
     Math.abs(p.x - G.stairs.x) < STAIRS_REACH && Math.abs(p.y - G.stairs.y) < STAIRS_REACH;
 }
 
+/**
+ * A bag slot's key. Standing on a bag item with a full bag, it swaps: the slot's item goes down
+ * where you stand and the one on the ground goes in. Otherwise it uses the slot.
+ */
+function bagKey(i) {
+  const it = G.bagOver;
+  if (it && it.alive && bagFull()) {
+    const kind = KIND_KEYS[it.kind];
+    const def = BAG_BY_KIND[kind];
+    const old = G.bag[i];
+    G.bag[i] = def.id;
+    const idx = items.indexOf(it);
+    if (idx >= 0) despawn('items', items, idx);
+    if (old) dropPickup(G.player.x, G.player.y + 14, BAG_BY_ID[old].kind);
+    G.bagOver = null;
+    sfx('pickup');
+    G.banner = { text: def.name.toUpperCase(), sub: old ? `SWAPPED FOR ${BAG_BY_ID[old].name.toUpperCase()}` : '', t: 1.6 };
+    return;
+  }
+  bagUse(i);
+}
+
+// Scratch for the trial's spawn ring.
+const _ring = [];
+
 /** Which marks have already produced a staircase this run. Reset with the run. */
 let stairsSpawned = {};
+
+/**
+ * Straight down to the next floor, with no staircase: the Escape Orb, and the Pitfall trap. The
+ * same fade and floor change as the stairs. False when there is nowhere to go.
+ */
+function forceDescent() {
+  if (descent || G.won || G.runOver || G.secret || G.floor >= MAX_FLOOR) return false;
+  descent = { t: 0, swapped: false, kind: 'stairs' };
+  G.stairs.active = false;
+  G.stairs.near = false;
+  sfx('stairs');
+  setMode(MODES.STAIRS);
+  return true;
+}
 
 function beginDescent() {
   if (descent || !G.stairs.active || !G.stairs.near) return;
@@ -722,11 +925,19 @@ function beginDescent() {
  * resetting it here would fire the 5:00 and 10:00 mini-bosses again on every new floor.
  */
 function swapFloor() {
+  // Taken the way down without a scratch on this floor.
+  unlockIf('untouchable', G.trk && !G.trk.hitThisFloor);
+  if (G.trk) G.trk.hitThisFloor = false;
   clearWorld();
   resetProps();
   // A new floor is new ground: the traps you already found do not come with you.
   resetTraps();
+  G.lumFloor = false;
   G.floor++;
+  if (G.floor >= 4) {
+    recordKey('deep', G.stage.id);
+    unlockIf('speed_explorer', G.runTime < 16 * 60);
+  }
 
   const p = G.player;
   p.x = 0; p.y = 0;
@@ -736,6 +947,7 @@ function swapFloor() {
   // player could not act during.
   p.iframes = Math.max(p.iframes, 1.2);
   snapCamera(0, 0);
+  placeTotems();
 
   G.banner.text = `${floorLabel()}`;
   G.banner.sub = 'THE AIR FEELS HEAVIER';
@@ -785,6 +997,7 @@ function grantRelic(id) {
   const r = RELICS[id];
   if (!r || G.relics.includes(id)) return;
   G.relics.push(id);
+  unlockIf('relic_hunter', G.relics.length >= 3);
   if (id === 'regirock') addMod('armor', 'flat', 3, 'relic');
   if (id === 'raikou') addMod('moveSpeed', 'inc', 0.15, 'relic');
   if (id === 'suicune') addMod('regen', 'flat', 0.6, 'relic');
@@ -1045,6 +1258,7 @@ function leaveSecret() {
   // Stairs that had already appeared are still yours to take; the floor is new, the find is not.
   if (secretHadStairs) placeStairs();
   secretHadStairs = false;
+  relocateTotems();
   G.banner = { text: floorLabel(), sub: 'BACK FROM THE SECRET FLOOR', t: 2.4 };
 }
 
@@ -1067,6 +1281,7 @@ function leaveLegendBehind() {
  */
 function legendDefeated(e) {
   const def = legend.def;
+  unlockIf('prodigy', G.level <= 30);
   endLegend();
   stopMusicFile(2.5);
 
@@ -1218,8 +1433,12 @@ function handleKey(code) {
     // sharing a key with something the player might mean instead.
     if (code === 'Enter' && G.stairs.near) return beginDescent();
     if (code === 'Enter' && G.portal.near) return beginPortal();
+    if (code === 'Enter' && G.fortuneNear) return void fortuneOffer();
     if (isAction(code, 'ability1')) return void castAbility(0);
     if (isAction(code, 'ability2')) return void castAbility(1);
+    for (let i = 0; i < 4; i++) {
+      if (i < G.bag.length && isAction(code, `item${i + 1}`)) return void bagKey(i);
+    }
   }
 
   if (!G.debug.on) return;
@@ -1653,6 +1872,12 @@ function frame(now) {
 /** The fixed update order. Everything about system sequencing is visible in this one function. */
 function stepSim(dt) {
   G.tick++;
+  tickOverloads();
+  updateBuffs(dt);
+  if ((G.tick % 60) === 0) {
+    unlockIf('full_house', G.bag.filter(Boolean).length >= 3 && G.passives.length >= 6
+      && G.weapons.filter((w) => w.ovl).length >= 4);
+  }
   G.clock += dt;
   // The run clock stands still on a secret floor: the schedule waits for you to come back.
   if (!G.secret) G.runTime += dt;
@@ -1663,6 +1888,7 @@ function stepSim(dt) {
     updateProps();
   }
   drainBossQueue();
+  if (!G.secret) updateTotems(dt);
   drainSpawnRequests();
 
   // The grid stores INDICES into the enemies array, so it is rebuilt twice: once now, because
@@ -1715,6 +1941,10 @@ function stepSim(dt) {
 
   // Same reason and the same place: the tick that collected the present has to finish before
   // anything freezes the world.
+  if (pendingBlessing && G.mode === MODES.PLAYING && !winFrozen() && !G.runOver) {
+    pendingBlessing = false;
+    openBlessing();
+  }
   if (G.pendingWheel && G.mode === MODES.PLAYING && !winFrozen() && !G.runOver) {
     G.pendingWheel = false;
     openWheel();
@@ -1726,16 +1956,47 @@ function stepSim(dt) {
     G.victoryT -= dt;
     // The run is won either way by the time this lands; the only question left is whether to
     // stop. Endless runs are already endless -- their bosses do not re-open this.
-    if (G.victoryT <= 0) setMode(G.endless ? MODES.PLAYING : MODES.VICTORY);
+    if (G.victoryT <= 0) {
+      if (G.endless) setMode(MODES.PLAYING);
+      else { setMode(MODES.VICTORY); playResult('mission_success'); }
+    }
   }
   // Death banks here rather than in player.js, so every way a run can end goes through one line.
-  if (G.runOver && !G.banked) { checkDeath(); bankRunGold(); }
+  if (G.runOver && !G.banked) { checkDeath(); bankRunGold(); playResult('mission_failed'); }
+}
+
+/**
+ * The run has ended, one way or the other: the stage's music stops and the result's jingle plays
+ * in its place. Leaving for the menus lets it finish (their music comes in after it); starting a
+ * run, or carrying on into endless, cuts it.
+ */
+function playResult(id) {
+  stopMusicFile(0.5);
+  playJingle(id);
+}
+
+/**
+ * The run is won: the records that can only be judged at the end, the stage, and the ribbon for
+ * this partner on this stage.
+ */
+function recordWin() {
+  const t = G.trk;
+  unlockIf('lone_wolf', G.weapons.length === 1);
+  if (t) {
+    unlockIf('trap_dancer', t.traps >= 15);
+    unlockIf('iron_stomach', !t.healed);
+  }
+  recordKey('won', G.stage.id);
+  if (recordKey('ribbons', `${G.character.id}:${G.stage.id}`) && t) t.ribbon = true;
 }
 
 /** Bank the run's gold, exactly once, however the run ended. */
 function bankRunGold() {
   if (G.banked) return 0;
   G.banked = true;
+  // The run's share of the cross-run counters, written once.
+  if (G.trk && G.trk.superKOs) { bumpStat('superKOs', G.trk.superKOs); G.trk.superKOs = 0; }
+  flushRecords();
   // The depth bonus is paid for FINISHING down there, not for visiting: dying on the bottom
   // floor banks the gold that was actually collected and nothing more.
   return bankGold(G.coins + (G.won ? floorBonus() + endlessBonus() : 0));
@@ -1812,6 +2073,50 @@ function wheelKey(code) {
     }
   }
   closeWheel();
+}
+
+let pendingBlessing = false;
+
+/** A Blessing totem's draft: three blessings not yet taken, on the level-up screen. */
+function openBlessing() {
+  const picks = pickBlessings(3);
+  if (!picks.length) { grantCoins(150); G.banner = { text: 'EVERY BLESSING IS YOURS', sub: '+150 GOLD INSTEAD', t: 2.4 }; return; }
+  G.offers = picks.map((b) => ({ kind: 'blessing', id: b.id, name: b.name, desc: b.desc, level: 1, max: 0 }));
+  sfx('levelup');
+  ui.cursor = 0;
+  ui.banishArm = false;
+  setMode(MODES.LEVELUP);
+  resetAccumulator();
+}
+
+/**
+ * A trial won: a treasure chest, Vampire Survivors-style. One, three or five upgrades -- luck
+ * leans toward the bigger hauls -- each a level on one of your weapons, or gold once they are all
+ * at their last level.
+ */
+function openChest() {
+  const luck = luckOf();
+  const r = G.rngRun();
+  let n = r < 0.1 + luck * 0.15 ? 5 : r < 0.4 + luck * 0.25 ? 3 : 1;
+  if (G.perks && G.perks.chest_plus && n < 3) n = 3;
+  const got = [];
+  for (let i = 0; i < n; i++) {
+    const open = G.weapons.filter((w) => w.level < w.def.levels.length);
+    if (open.length) {
+      const w = open[(G.rngRun() * open.length) | 0];
+      levelWeapon(w);
+      got.push(`${w.def.name.toUpperCase()} LV${w.level}`);
+    } else {
+      grantCoins(60);
+      got.push('+60 GOLD');
+    }
+  }
+  const p = G.player;
+  if (p && G.rngRun() < 0.5) dropPickup(p.x + 16, p.y, BAG_BY_ID[rollBagItem()].kind);
+  if (p) { burst(p.x, p.y, 34, '#ffd166'); pushFx(FX.RING, p.x, p.y, 60, 0, '#ffd166', 0.5); }
+  addShake(0.4);
+  sfx('evolve');
+  G.banner = { text: `TREASURE CHEST  x${n}`, sub: got.slice(0, 3).join('   ') + (got.length > 3 ? '   ...' : ''), t: 3.4 };
 }
 
 function openLevelUp() {
@@ -2009,7 +2314,7 @@ function drainSpawnRequests() {
 
 // --- Feedback FX ------------------------------------------------------------
 
-function popDamage(x, y, value, crit) {
+function popDamage(x, y, value, crit, eff = 1) {
   const d = spawn('damageNumbers');
   if (!d) return;
   d.x = x + (G.rngFx() - 0.5) * 6;
@@ -2017,8 +2322,28 @@ function popDamage(x, y, value, crit) {
   d.vy = -26;
   d.life = 0.55;
   d.value = value;
+  d.text = '';
   d.crit = crit;
-  d.color = crit ? 'gold' : 'white';
+  // A matchup shows in the number: orange when it is super effective, grey when it is not.
+  d.color = crit ? 'gold' : eff > 1.05 ? 'orange' : eff < 0.95 ? 'dim' : 'white';
+  // And now and then out loud, throttled so a crowd being shredded does not wallpaper the screen.
+  if (eff > 1.05 && G.clock - calloutAt.super > 1.6) { calloutAt.super = G.clock; popText(x, y - 10, 'SUPER EFFECTIVE!', 'orange'); }
+  else if (eff < 0.95 && G.clock - calloutAt.weak > 4) { calloutAt.weak = G.clock; popText(x, y - 10, 'NOT VERY EFFECTIVE...', 'dim'); }
+}
+
+const calloutAt = { super: -99, weak: -99 };
+
+/** A floating word rather than a number, through the same pool. */
+function popText(x, y, text, color) {
+  const d = spawn('damageNumbers');
+  if (!d) return;
+  d.x = x; d.y = y;
+  d.vy = -16;
+  d.life = 0.9;
+  d.value = 0;
+  d.text = text;
+  d.crit = false;
+  d.color = color;
 }
 
 /** A cosmetic shape from the FX vocabulary. Damage is always applied by the ability itself. */
@@ -2080,6 +2405,7 @@ function bossDrops(e) {
   scatter(e.x, e.y, orbs, 34 + tier * 6, (x, y) => dropXp(x, y, per));
   scatter(e.x, e.y, 6 + tier * 2, 30 + tier * 6, (x, y) => dropCoin(x, y, 5 + ((G.rngRun() * 6) | 0)));
   dropPickup(e.x, e.y, tier >= 3 ? 'elixir' : 'berry');
+  dropPickup(e.x - 14, e.y, BAG_BY_ID[rollBagItem()].kind);
   burst(e.x, e.y, 26, '#ffd166');
   addShake(0.7);
   sfx('kill');
@@ -2090,10 +2416,12 @@ function bossDrops(e) {
   if (tier >= 4 && G.won && G.endless) {
     // A boss felled after the win. Worth gold, and worth saying so.
     G.endlessBosses++;
+    unlockIf('endless_hero', G.endlessBosses >= 10);
     G.banner = { text: `BOSS ${G.endlessBosses} DOWN`, sub: `+${endlessBonus()} BONUS GOLD`, t: 2.4 };
   }
   if (tier >= 4 && !G.won) {
     G.won = true;
+    recordWin();
     // Long enough for the far side of a wiped field to reach the player: the magnet tops out at
     // 450px/s and an enemy can die 700px away.
     G.victoryT = 4;

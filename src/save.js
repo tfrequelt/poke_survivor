@@ -12,8 +12,10 @@
 // their ability to play.
 
 import { G } from './state.js';
-import { SUCCESS_BY_ID } from './data/successes.js';
+import { SUCCESS_BY_ID, STAT_COUNTERS, PERKS } from './data/successes.js';
 import { LEGEND_IDS } from './data/legends.js';
+import { CHARACTERS } from './data/characters.js';
+import { STAGES } from './data/stages.js';
 
 const KEY = 'pokesurvivor.save.v1';
 
@@ -21,7 +23,13 @@ const KEY = 'pokesurvivor.save.v1';
  * `spent` is tracked only so RESET PROGRESS can refund exactly what went in. `ach` is the
  * Successes: id -> 'unlocked' | 'claimed', absent while still locked.
  */
-const empty = () => ({ gold: 0, spent: 0, ranks: {}, ach: {}, legends: {} });
+const empty = () => ({
+  gold: 0, spent: 0, ranks: {}, ach: {}, legends: {},
+  // Expedition Records. `stats` holds the cross-run counters, `ribbons` 'partner:stage' for every
+  // win, `perks` what claimed successes have unlocked, `deep` the stages reached on their 4th
+  // floor, `won` the stages won on.
+  stats: {}, ribbons: {}, perks: {}, deep: {}, won: {},
+});
 
 const ACH_STATES = new Set(['unlocked', 'claimed']);
 
@@ -50,6 +58,22 @@ function sanitize(data) {
   // Which legendaries have been beaten, ever -- the Legendary success's tally. Only real ids.
   if (data.legends && typeof data.legends === 'object') {
     for (const k of LEGEND_IDS) if (data.legends[k]) s.legends[k] = 1;
+  }
+  // Expedition Records, every one checked against what can really exist.
+  if (data.stats && typeof data.stats === 'object') {
+    for (const k of STAT_COUNTERS) {
+      const n = data.stats[k];
+      if (Number.isFinite(n) && n > 0) s.stats[k] = Math.floor(n);
+    }
+  }
+  if (data.ribbons && typeof data.ribbons === 'object') {
+    for (const c of CHARACTERS) for (const st of STAGES) if (data.ribbons[`${c.id}:${st.id}`]) s.ribbons[`${c.id}:${st.id}`] = 1;
+  }
+  if (data.perks && typeof data.perks === 'object') {
+    for (const k of Object.keys(PERKS)) if (data.perks[k]) s.perks[k] = 1;
+  }
+  for (const f of ['deep', 'won']) {
+    if (data[f] && typeof data[f] === 'object') for (const st of STAGES) if (data[f][st.id]) s[f][st.id] = 1;
   }
   return s;
 }

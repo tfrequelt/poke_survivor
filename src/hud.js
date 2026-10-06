@@ -19,6 +19,12 @@ import { legend } from './legends.js';
 import { RELICS } from './data/legends.js';
 import { spriteBase } from './sprites.js';
 import { toScreenX, toScreenY } from './render.js';
+import { itemSprite } from './pickups.js';
+import { BAG_BY_ID, BAG_BY_KIND } from './data/bagitems.js';
+import { KIND_KEYS } from './pickups.js';
+import { TOTEM_KINDS } from './data/totems.js';
+import { activeTrial, fortuneCost } from './totems.js';
+import { FORTUNE_USES } from './data/totems.js';
 
 const PAD = 6;
 
@@ -31,8 +37,13 @@ export function drawHud() {
   drawRelics();
   drawLegendBar();
   drawPortalMarker();
+  drawBag();
+  drawBuffs();
   if (G.banner.t > 0) drawBanner();
   drawStairsPrompt();
+  drawBagPrompt();
+  drawTrial();
+  if (!G.stairs.near && !G.portal.near) drawFortunePrompt();
   drawSuccessToast();
   if (G.runOver) drawRunOver();
 }
@@ -243,8 +254,20 @@ function drawLegendBar() {
  */
 function drawPortalMarker() {
   const o = G.portal;
-  if (!o.active || G.secret) return;
-  const sx = toScreenX(o.x), sy = toScreenY(o.y);
+  if (o.active && !G.secret) drawEdgeMarker(o.x, o.y, '#a8f0ff');
+  // A Luminous Orb shows the way to the stairs too.
+  if (G.lumFloor && G.stairs.active) drawEdgeMarker(G.stairs.x, G.stairs.y, '#ffe14a');
+  // Totems that still have something to give are always marked.
+  if (!G.secret && G.totems) {
+    for (const t of G.totems) {
+      if (t.state === 'idle' || t.state === 'awake' || t.state === 'trial') drawEdgeMarker(t.x, t.y, TOTEM_KINDS[t.kind].color);
+    }
+  }
+}
+
+/** A pulsing arrow at the screen edge pointing at a world point that is off-screen. */
+export function drawEdgeMarker(wx, wy, color) {
+  const sx = toScreenX(wx), sy = toScreenY(wy);
   if (sx > 0 && sx < VW && sy > 0 && sy < VH) return;
   const cx = VW / 2, cy = VH / 2;
   const dx = sx - cx, dy = sy - cy;
@@ -253,7 +276,7 @@ function drawPortalMarker() {
   const a = Math.atan2(dy, dx);
   const pulse = 0.6 + Math.sin(G.clock * 6) * 0.3;
   ctx.globalAlpha = pulse;
-  ctx.fillStyle = '#a8f0ff';
+  ctx.fillStyle = color;
   ctx.beginPath();
   ctx.moveTo(x + Math.cos(a) * 6, y + Math.sin(a) * 6);
   ctx.lineTo(x + Math.cos(a + 2.4) * 6, y + Math.sin(a + 2.4) * 6);
@@ -261,6 +284,88 @@ function drawPortalMarker() {
   ctx.closePath();
   ctx.fill();
   ctx.globalAlpha = 1;
+}
+
+// --- The Explorer's Bag --------------------------------------------------------
+//
+// Bottom left, out of the way of everything else: one slot per bag space, each with its key and
+// the item in it. The Reviver Seed is marked AUTO, because it is the one you never press.
+
+const BAG_Y = VH - 26;
+
+function drawBag() {
+  if (!G.bag || !G.bag.length) return;
+  for (let i = 0; i < G.bag.length; i++) {
+    const x = PAD + i * (SLOT + 4), y = BAG_Y;
+    const id = G.bag[i];
+    ctx.fillStyle = id ? '#101018' : 'rgba(16,16,24,0.55)';
+    ctx.fillRect(x, y, SLOT, SLOT);
+    if (id) {
+      const def = BAG_BY_ID[id];
+      const spr = itemSprite(def.kind);
+      if (spr >= 0) drawSprite(ctx, spr, x + SLOT / 2, y + SLOT / 2);
+      ctx.strokeStyle = def.color;
+    } else {
+      ctx.strokeStyle = '#2e2e44';
+    }
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, SLOT - 1, SLOT - 1);
+    drawText(ctx, String(i + 1), x + 2, y + 2, id ? 'white' : 'dim');
+    if (id && BAG_BY_ID[id].auto) drawText(ctx, 'A', x + SLOT - 7, y + SLOT - 8, 'gold');
+  }
+}
+
+/** The timed buffs on you, stacked above the bag: a name and a bar that runs down. */
+function drawBuffs() {
+  if (!G.buffs || !G.buffs.length) return;
+  let y = BAG_Y - 12;
+  for (const b of G.buffs) {
+    const w = 84;
+    ctx.fillStyle = 'rgba(8,8,18,0.7)';
+    ctx.fillRect(PAD, y, w, 10);
+    ctx.fillStyle = b.color;
+    ctx.fillRect(PAD + 1, y + 8, Math.round((w - 2) * clamp(b.t / b.max, 0, 1)), 1);
+    drawText(ctx, `${b.name} ${Math.ceil(b.t)}`, PAD + 3, y + 1, b.curse ? 'red' : 'white');
+    y -= 12;
+  }
+}
+
+/** A trial in progress: the clock and what is left, under the timer. */
+function drawTrial() {
+  const t = activeTrial();
+  if (!t || G.secret) return;
+  const msg = `TRIAL ${Math.max(0, Math.ceil(t.t))}s -- ${t.uses} ELITE${t.uses === 1 ? '' : 'S'} LEFT`;
+  const w = textWidth(msg);
+  ctx.fillStyle = 'rgba(40,8,8,0.75)';
+  ctx.fillRect(Math.round((VW - w) / 2) - 6, 22, w + 12, 13);
+  drawTextCentered(ctx, msg, VW / 2, 25, 'red');
+}
+
+/** At an awake Fortune totem: what an offering costs. */
+function drawFortunePrompt() {
+  const t = G.fortuneNear;
+  if (!t || t.state !== 'awake') return;
+  const left = FORTUNE_USES - t.uses;
+  const msg = `ENTER: OFFER ${fortuneCost(t)} GOLD (${left} LEFT)`;
+  const w = textWidth(msg);
+  const x = Math.round((VW - w) / 2), y = VH - 34;
+  ctx.fillStyle = 'rgba(8,8,18,0.72)';
+  ctx.fillRect(x - 6, y - 4, w + 12, 15);
+  drawTextCentered(ctx, msg, VW / 2, y, 'gold');
+}
+
+/** Standing on a bag item with no room for it: how to swap. */
+function drawBagPrompt() {
+  const it = G.bagOver;
+  if (!it || !it.alive) return;
+  const def = BAG_BY_KIND[KIND_KEYS[it.kind]];
+  if (!def) return;
+  const msg = `BAG FULL - PRESS 1-${G.bag.length} TO SWAP FOR ${def.name.toUpperCase()}`;
+  const w = textWidth(msg);
+  const x = Math.round((VW - w) / 2), y = VH - (G.stairs.near || G.portal.near ? 50 : 34);
+  ctx.fillStyle = 'rgba(8,8,18,0.72)';
+  ctx.fillRect(x - 6, y - 4, w + 12, 15);
+  drawTextCentered(ctx, msg, VW / 2, y, 'gold');
 }
 
 function drawTallies() {

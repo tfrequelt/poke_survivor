@@ -1,4 +1,4 @@
-// L3 -- may import L0-L2 and, same-layer, weapons.js.
+// L3 -- may import L0-L2 and, same-layer, weapons.js and overload.js.
 //
 // XP, levelling and the level-up offer. The card pool and evolution handling land here too.
 
@@ -10,6 +10,8 @@ import { WEAPONS, WEAPON_BY_ID } from './data/weapons.js';
 import { ABILITIES } from './data/abilities.js';
 import { addAbility } from './abilities.js';
 import { addWeapon, levelWeapon, MAX_WEAPONS } from './weapons.js';
+import { weaponAwaitingOverload, overloadOptions, applyOverload } from './overload.js';
+import { BLESSING_BY_ID } from './data/totems.js';
 import { checkLevel } from './successes.js';
 
 /**
@@ -226,8 +228,26 @@ function levelDesc(def, currentLevel) {
   return bits.length ? bits.join(', ') : 'Improves this weapon.';
 }
 
+/**
+ * A weapon at its last level turns its next level-up into an OVERLOAD level-up: the three cards
+ * are that weapon's three overloads, and nothing else. One weapon per level-up, in slot order.
+ */
+function overloadOffers() {
+  const w = weaponAwaitingOverload();
+  if (!w) return null;
+  return overloadOptions(w).map((ov) => ({
+    kind: 'overload', id: ov.id, name: ov.name, desc: ov.desc, weaponId: w.def.id, ovl: ov,
+    type: w.def.type || (w.def.universal ? 'any' : undefined), level: 1, max: 0,
+  }));
+}
+
+/** Is the open draft an overload choice? Reroll and banish do not apply to one. */
+export const overloadDraft = () => G.offers.length > 0 && G.offers[0].kind === 'overload';
+
 /** Roll three distinct cards. Falls back to a heal if the pool is somehow exhausted. */
 export function rollOffers(count = 3) {
+  const ovl = overloadOffers();
+  if (ovl) { G.offers = ovl; return ovl; }
   noteAbilityOffers();
   const pool = candidates();
   const chosen = [];
@@ -297,6 +317,15 @@ export function takeOffer(offer) {
       addAbility(offer.id);
       break;
     }
+    case 'overload': {
+      const w = G.weapons.find((x) => x.def.id === offer.weaponId);
+      if (w && !w.ovl) applyOverload(w, offer.ovl);
+      break;
+    }
+    case 'blessing': {
+      grantBlessing(offer.id);
+      break;
+    }
     case 'heal': {
       ensureStats();
       if (G.player) G.player.hp = Math.min(G.stats.maxHp, G.player.hp + 40);
@@ -305,13 +334,30 @@ export function takeOffer(offer) {
   }
 
   ensureStats();
+  // A blessing is a totem's gift, not a level-up: it costs none of the ones you have banked.
+  if (offer.kind !== 'blessing') G.pendingLevelUps = Math.max(0, G.pendingLevelUps - 1);
   G.offers = [];
-  G.pendingLevelUps = Math.max(0, G.pendingLevelUps - 1);
 }
+
+/** A blessing, for the rest of the run: its modifiers, and a heal if it carries one. */
+export function grantBlessing(id) {
+  const b = BLESSING_BY_ID[id];
+  if (!b || G.blessings.includes(id)) return false;
+  G.blessings.push(id);
+  addMods(b.mods, `blessing:${id}`);
+  if (b.heal && G.player) {
+    ensureStats();
+    G.player.hp = Math.min(G.stats.maxHp, G.player.hp + b.heal);
+  }
+  return true;
+}
+
+/** A blessing draft is not a level-up: none of the level-up's draft controls apply to it. */
+export const blessingDraft = () => G.offers.length > 0 && G.offers[0].kind === 'blessing';
 
 /** Reroll the current three. Limited by the meta-shop's Reroll ranks. */
 export function rerollOffers() {
-  if (G.rerolls <= 0) return false;
+  if (G.rerolls <= 0 || overloadDraft() || blessingDraft()) return false;
   G.rerolls--;
   rollOffers();
   return true;
@@ -319,7 +365,7 @@ export function rerollOffers() {
 
 /** Remove a card from the pool for the rest of the run, then refill the slot. */
 export function banishOffer(offer) {
-  if (G.banishes <= 0) return false;
+  if (G.banishes <= 0 || overloadDraft() || blessingDraft()) return false;
   G.banishes--;
   G.banished.add(offer.id);
   rollOffers();
@@ -328,7 +374,7 @@ export function banishOffer(offer) {
 
 /** Skip the level-up for a small heal and some gold. */
 export function skipOffer() {
-  if (G.skips <= 0) return false;
+  if (G.skips <= 0 || blessingDraft()) return false;
   G.skips--;
   ensureStats();
   if (G.player) G.player.hp = Math.min(G.stats.maxHp, G.player.hp + 15);

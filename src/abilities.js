@@ -12,7 +12,8 @@ import {
   enemies, zones, spawn, despawn, nextHitId,
   cellRange, cellStart, cellItems, GW,
  setDamageSource,} from './world.js';
-import { damageCircle, damageLine, damageRing, damageEnemy, damageSourceId } from './combat.js';
+import { damageCircle, damageLine, damageRing, damageEnemy, damageSourceId, setSrcType } from './combat.js';
+import { ABILITY_TYPES } from './data/types.js';
 import { ABILITIES, ABILITY_BY_ID } from './data/abilities.js';
 import { spriteBase, spriteDirs } from './sprites.js';
 import { ZONE, fxSprites } from './fx.js';
@@ -185,6 +186,7 @@ export function addAbility(id) {
     // including whatever the cast left burning or lingering on the ground.
     castKills: 0,
   };
+  setSrcType(a.srcId, ABILITY_TYPES[def.id]);
   abilityStats(a);
   G.abilities[def.slot] = a;
   return a;
@@ -883,6 +885,14 @@ function updateZonesInner(dt) {
     setDamageSource(z.src);
     z.life -= dt;
     if (z.life <= 0) {
+      // A zone with a `boom` erupts as it closes: an overload's collapsing vortex or delayed blast.
+      if (z.boom > 0) {
+        const r = z.kind === ZONE.NOVA || z.kind === ZONE.NOVA_STATIC ? Math.max(z.r, z.pull) : z.r;
+        damageCircle(z.x, z.y, r * 1.1, z.boom, nextHitId(), { knockback: 90, canCrit: true });
+        if (fx.ring) fx.ring(z.x, z.y, r * 1.1, z.color, 0.35);
+        if (fx.burst) fx.burst(z.x, z.y, 14, z.color);
+        if (fx.shake) fx.shake(0.25);
+      }
       despawn('zones', zones, i);
       continue;
     }
@@ -914,11 +924,13 @@ function updateNova(z, dt) {
   const prev = z.r;
   z.r = Math.max(2, k * target);
   const band = Math.max(10, (z.r - prev) * 0.5 + 12);
-  damageRing(z.x, z.y, z.r - band, z.r + band, z.dps, z.hitId, {
-    knockback: 140,
-    slow: z.slow, slowT: 1.0,
-  });
+  const o = _novaOpts;
+  o.knockback = z.knock; o.slow = z.slow; o.burn = z.burn;
+  damageRing(z.x, z.y, z.r - band, z.r + band, z.dps, z.hitId, o);
 }
+
+// Reused by every nova front, so a ring sweeping outward allocates nothing per tick.
+const _novaOpts = { knockback: 140, slow: 0, slowT: 1.0, burn: 0, burnT: 2.5 };
 
 /** A vortex: drags everything toward the middle and grinds whatever ends up there. */
 function updateVortex(z, dt) {

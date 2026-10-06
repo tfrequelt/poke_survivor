@@ -59,6 +59,8 @@ onto the portal and press `Enter`.
 | `1`-`3` / arrows + `Enter` | Choose on any card screen |
 | `Enter` | Take the stairs (standing on them); dismiss the evolution cutscene |
 | `1` / `2` (after the boss) | Take the win / keep going into endless |
+| `1`-`3` (`4` with the perk) during play | Use that slot of the Explorer's Bag; standing on an item with a full bag, swap it in |
+| `Enter` (at an awake Fortune totem) | Make an offering |
 | `R` | Reroll on level-up, restart otherwise |
 | `B` / `S` | Banish / skip a level-up (press `B` twice to confirm) |
 | `Q` (paused / after a run) | Back to partner select |
@@ -163,6 +165,46 @@ detonate seconds later, beams that burn everything on the line to their target, 
 the crowd together, and an attack that charges while you stand still -- and `initWeaponDefs()`
 warns at boot if two weapons ever end up with the same `behavior` + `motion` pair.
 
+### Overloads
+
+A weapon at **level 10** turns your next level-up into an **OVERLOAD** draft: its three overloads,
+side by side, and you take **one, for the rest of the run**. Every weapon has its own three — 234
+in all, the eleven evolutions and Substitute included:
+
+- **AMPLIFY** — what the weapon already does, pushed further, with a twist (Mudslide Barrage: two
+  more globs, and every splash leaves a deep bog).
+- **TRANSFORM** — a new shape or function: a ring of shots, front-and-back, four ways, a turning
+  spiral, three-shot volleys, a vortex that collapses for triple damage, a coil that becomes a
+  railgun, a sweep that goes all the way round.
+- **WILD** — an elemental or status twist: burns, freezes, paralysis, confusion, marks that make a
+  target take more from everything, chains of lightning, explosions and homing spirits on a kill.
+
+An overloaded weapon glows in its overload's colour, sheds particles, tints the ground it lays,
+and marks what it does on the enemies — a reticle, stars, a swirl, frost, poison bubbles. Its
+procs have their own line in the damage breakdown, under the overload's name. Reroll and banish do
+not apply to an overload draft; skip puts it off to the next level-up. An overloaded weapon keeps
+its overload when it evolves; one that evolves first offers its evolved form's own three.
+
+The data is `src/data/overloads.js` — a closed vocabulary of stats, patterns and hit / kill /
+expiry / every-Nth effects, documented at the top of the file. `src/overload.js` runs the effects.
+
+### Type matchups
+
+Every enemy is its real Pokémon type, and so is every weapon, ability and overload. The matchup is
+the real chart, softened:
+
+| | |
+|---|---|
+| Super effective | ×1.5 (both of a dual type: ×2.0) |
+| Not very effective | ×0.6 (floored at ×0.5) |
+| "No effect" | ×0.5 — never zero, so no partner's kit goes dead on a stage |
+
+Super effective damage numbers are orange (with the odd **SUPER EFFECTIVE!**), resisted ones grey.
+The stage select shows each stage's **STRONG HERE** types, weapon cards carry **STRONG HERE** /
+**WEAK HERE** for the floor you are on (or the legendary you are fighting), and the pause screen
+lists both. Grass Route is weak to Ice and Flying, Damp Cave to Water, Ground, Grass and Ice, Beach
+Cave to Grass and Electric. The chart and every species' types are `src/data/types.js`.
+
 ## Stages
 
 Every stage is a **bounded square**. Walls stop the player, the enemies and the camera, and the
@@ -232,6 +274,64 @@ half a second of warning at walking pace. And **enemies set them off too**: a tr
 spotted stops being a tax and becomes ground you can fight over. Deeper floors are visibly worse
 ground — density rises 35% per floor.
 
+Seven more tiles join them:
+
+| Tile | On you | On an enemy |
+|---|---|---|
+| **Summon** | seven of the stage's Pokémon burst in around you | — |
+| **Pitfall** | you fall straight to the next floor (spike damage on the last) | it falls: gone, no drop |
+| **Gust** | everything nearby is blown away, and so are you | the same blast |
+| **Seal** | one of your weapons is jammed for 8 seconds | — |
+| **Slow** | a long chill | slowed by half |
+| **"?"** | becomes some other tile when it goes off | the same |
+| **Wonder Tile** | the good one: cleanses you, heals 15%, then 15s of +20% power and speed | — |
+
+A Wonder Tile glints and shows from twice as far. Which tile turns up is weighted, and leans by
+stage: more pitfalls in the cave, more gusts on the beach, more Wonder Tiles on Grass Route.
+
+## Totems
+
+Two **totems** stand somewhere on every floor (never on a secret floor), two different kinds of
+three, and arrows at the edge of the screen point to them. **Stand in a totem's ring for four
+seconds** to wake it — the ring drains if you step out, and the crowd comes in 60% harder while
+you stand there.
+
+- **Blessing totem** — a draft of three **blessings**: rare boons that last the run, each at most
+  once (+1 projectile, +25% area, +20% damage, regeneration, +2 pierce and so on). It costs no
+  level-up.
+- **Trial totem** — 30 seconds: three elites and their escort appear around it. Defeat all three
+  elites in time and a **treasure chest** drops: one, three or five levels on your weapons (luck
+  favours the bigger hauls), and sometimes a bag item. Fail, and the totem crumbles.
+- **Fortune totem** — press `Enter` in its ring to offer gold (a quarter of what you carry, at
+  least 50, more each time, three times): a blessing, a bag item, double your gold back, or — less
+  often the luckier you are — a minute-long **curse**.
+
+Totems are `src/totems.js` and `src/data/totems.js`.
+
+## The Explorer's Bag
+
+Single-use items, kept in a bag of **three slots** (four with a perk), shown bottom left and used
+with **1, 2, 3**. Elites usually leave one, bosses always do, scenery sometimes; chests and Fortune
+totems give them too. Walk over one with a full bag and the game tells you how to swap.
+
+| Item | Use |
+|---|---|
+| Oran Berry | Restores half your health |
+| Sleep Seed | Everything within 240px sleeps for 6s — a hit wakes it |
+| Gravelerock | Sixteen rocks hurled out in every direction |
+| Warp Seed | Warps you somewhere safe, well away |
+| Totter Seed | Everything on screen totters about, confused, for 6s |
+| Petrify Orb | Everything on screen turns to stone for 5s and takes 50% more damage |
+| All-Power Orb | 20s of +40% power, +30% attack speed, +15% speed |
+| Max Elixir | Both abilities ready at once, then 15s of -30% ability cooldown |
+| Luminous Orb | Every trap on the floor shows, and arrows point to the stairs, portal and totems |
+| Joy Seed | A level-up, on the spot |
+| Escape Orb | Straight to the next floor, from anywhere |
+| Reviver Seed | Works on its own: when you would faint, you are back at half health |
+
+Timed effects — the orbs, the Wonder Tile, a Fortune curse — show above the bag with a bar that
+runs down. The items are `src/data/bagitems.js`; `src/bag.js` uses them.
+
 ## Elites
 
 Roughly once a minute from 2:30, one spawning enemy is promoted to an **elite**: six times the
@@ -268,6 +368,45 @@ Enter on the card banks the prize.
 | Maxed Out | Reach level 100 | 900 G |
 | Kaboom | Kill 30+ enemies with a single ability use | 600 G |
 | Punching the Screen | Die between 19:30 and 20:00 | 10 G |
+| Legendary | Defeat all nine legendaries | 3000 G |
+
+**Expedition Records** add twenty-two harder ones — each a bronze, silver, gold or platinum tier:
+
+| Success | Requirement | Reward |
+|---|---|---|
+| Lone Wolf | Win holding only one weapon | 1200 G |
+| Untouchable | Take the stairs without being hit on that floor | 600 G |
+| Deep Diver | Reach the fourth floor of every stage | 800 G + **Packed Lunch** |
+| Prodigy | Defeat a legendary at level 30 or lower | 1000 G |
+| It's Super Effective! | 2,000 super effective hits in a run | 400 G |
+| Overcharged | Four overloaded weapons at once | 700 G |
+| Pack Rat | Use 50 bag items | 500 G + **Bigger Bag** |
+| Trap Dancer | Spring 15 traps yourself, and win | 600 G |
+| Shrine Keeper | Wake all three kinds of totem in a run | 500 G + **Shrine Friend** |
+| Trial Champion | Win ten totem trials | 900 G + **Treasure Sense** |
+| High Roller | Three lucky offerings in a run, with no curse | 600 G |
+| Speed Explorer | The fourth floor before 16:00 | 900 G |
+| Relic Hunter | Carry three relics | 1000 G |
+| Ribbon Collector | A ribbon with every partner | 1500 G + **Second Wind** |
+| Grand Champion | All eighteen ribbons | 5000 G |
+| Iron Stomach | Win without eating a berry | 1000 G |
+| Endless Hero | Ten bosses in one endless run | 2000 G |
+| Type Expert | 5,000 super effective knockouts | 800 G + **Second Look** |
+| One Punch | An elite felled in a single hit | 400 G |
+| Full House | Three bag items, four overloads and six held items at once | 1000 G |
+| Conqueror | Win on every stage | 1500 G |
+| Wonder Walker | Step on 20 Wonder Tiles | 400 G |
+
+**Perks** are permanent from the next run on: *Packed Lunch* and *Second Wind* start every run
+with an Oran Berry / Reviver Seed in the bag, *Bigger Bag* adds a fourth slot, *Shrine Friend*
+wakes totems 30% faster, *Second Look* gives a reroll more, *Treasure Sense* makes every chest
+hold at least three upgrades.
+
+Claimed successes add up to your **Explorer Rank** — Normal, Bronze, Silver, Gold, Diamond, Super,
+Ultra, Hyper, Master, with Mystery Dungeon's rank badges — shown top left of the title screen and
+at the head of the Successes window. And every win earns a **ribbon** for that partner on that
+stage: green for Grass Route, purple for Damp Cave, blue for Beach Cave, shown on the partner
+cards.
 
 "Exactly 1 HP" means what the HUD shows. Kaboom counts everything one cast is responsible for —
 including the pools, rings and burns it leaves behind — and starts over each time the ability is

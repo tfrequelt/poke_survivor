@@ -41,6 +41,14 @@ const newEnemy = () => ({
   // next to the PLAYER, so sharing it would let a doll be hit every frame. Reset in spawnEnemy.
   decoyCd: 0,
   ai: 0, aiT: 0, aiState: 0, aiX: 0, aiY: 0,
+  // Overload effects. `markT`/`markMul`: takes markMul more damage while markT runs. `confuseT`:
+  // wanders instead of chasing. `dotKind`: how its burn is drawn (0 fire, 1 toxic). Reset in
+  // spawnEnemy.
+  markT: 0, markMul: 0, confuseT: 0, dotKind: 0,
+  // Put to sleep by a Sleep Seed: held still like a stun, but the next hit wakes it.
+  sleep: false,
+  // Which totem's trial this enemy belongs to (its index on the floor), or -1.
+  trial: -1,
   // Going round a pond (see paths.js): `detour` is set while the straight line to the player
   // crosses water, and `losT` counts down to the next time that line is checked. Reset in
   // spawnEnemy.
@@ -92,11 +100,15 @@ const newProjectile = () => ({
   look: 0, status: 0,
   // When this projectile may next hit a legendary (G.clock). See collideProjectile. Reset by spawn().
   bossT: 0,
+  // Overloads (see data/overloads.js). `grow` widens the shot over its life, `vis` is the scale it
+  // is drawn and collides at, and `pt` paces its particle emission. Reset by spawn().
+  grow: 0, vis: 1, pt: 0,
 });
 
 const newOrb = () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, value: 1, tier: 0, sprId: 0, age: 0, pulling: false });
 const newCoin = () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, value: 1, sprId: 0, age: 0, pulling: false });
-const newDamageNumber = () => ({ alive: false, x: 0, y: 0, vy: 0, life: 0, value: 0, crit: false, color: 'white' });
+// `text` is a word said instead of a number (SUPER EFFECTIVE!); '' for an ordinary number.
+const newDamageNumber = () => ({ alive: false, x: 0, y: 0, vy: 0, life: 0, value: 0, crit: false, color: 'white', text: '' });
 // `sprId` lets a particle be a real sprite (a rubble chunk, a shadow wisp) rather than a 1px
 // rect. -1 keeps the cheap path, which is still what the overwhelming majority of them use.
 const newParticle = () => ({
@@ -127,6 +139,10 @@ const newZone = () => ({
   burn: 0,
   // Damage-breakdown line, stamped by spawn() from whatever created the zone.
   src: 0,
+  // Overloads: `boom` is damage dealt across the zone the moment it ends (0 = it just fades), and
+  // `knock` is how hard a nova's front throws what it catches (negative pulls inward). Reset by
+  // spawn() to 0 and the nova's usual 140.
+  boom: 0, knock: 140,
 });
 
 // --- Pools and live arrays --------------------------------------------------
@@ -175,10 +191,13 @@ export function spawn(kind) {
   // enemy shot recycled into one of the PLAYER's weapons came out still hostile: spawned on top
   // of the player, skipped by the enemy collision, and hitting the player with their own
   // weapon's damage. Every projectile now starts friendly, and fireHostile opts in afterwards.
-  if (kind === 'projectiles') { e.hostile = false; e.src = damageSource; e.dmg0 = 0; e.look = 0; e.status = 0; e.bossT = 0; }
+  if (kind === 'projectiles') {
+    e.hostile = false; e.src = damageSource; e.dmg0 = 0; e.look = 0; e.status = 0; e.bossT = 0;
+    e.grow = 0; e.vis = 1; e.pt = 0;
+  }
   // A zone is credited to whatever was running when it was laid, which is the only way a pool
   // of fire left behind by a shot can still count towards the weapon that fired it.
-  else if (kind === 'zones') e.src = damageSource;
+  else if (kind === 'zones') { e.src = damageSource; e.boom = 0; e.knock = 140; }
   LIVE[kind].push(e);
   return e;
 }
@@ -238,6 +257,8 @@ export const DECOY_DIE = 0.36;
 
 const newDecoy = () => ({
   alive: false, x: 0, y: 0, hp: 0, maxHp: 0, dir: 0, t: 0, dyingT: 0, flash: 0,
+  // For an overloaded Substitute: whether its fall has been handled, and its own pulse clock.
+  downed: false, tick: 0,
 });
 export const decoys = Array.from({ length: DECOY_MAX }, newDecoy);
 /** Run time at which a doll was last destroyed; the next one waits a full cooldown after it. */

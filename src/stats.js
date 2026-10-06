@@ -79,6 +79,17 @@ export function addMods(list, source) {
 }
 
 /**
+ * Take back every modifier added under `source`. What makes a timed buff possible: a bag item's
+ * power surge, a Wonder Tile's lift and a Fortune totem's curse are each added under their own
+ * source and removed by it when they run out. Not a hot path -- it runs when a buff ends.
+ */
+export function removeMods(source) {
+  const before = G.mods.length;
+  G.mods = G.mods.filter((m) => m.source !== source);
+  if (G.mods.length !== before) G.statsDirty = true;
+}
+
+/**
  * Convenience for evolution and character grants written as a plain {stat: delta} object.
  * These are always flat deltas: multiplier-style stats sit on a base of 1, so `power: +0.10`
  * reads naturally as "+10% power" while still stacking additively like every other upgrade.

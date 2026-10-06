@@ -486,6 +486,54 @@ export function duckMusic(seconds, level = 0.18) {
   g.linearRampToValueAtTime(settings.music, now + Math.max(0.6, seconds));
 }
 
+// --- Jingles -----------------------------------------------------------------
+//
+// Mission Success and Mission Failed: three-second pieces of the soundtrack, played once with the
+// music bus held silent under them. Unlike a sound effect they can be cut short -- a
+// run started while one is still going must not open to it.
+
+let jingle = null;                  // { src, g } of the one playing, or null
+
+/** Play supplied sample `id` as a jingle. Returns its length in seconds, or 0 if it has none. */
+export function playJingle(id) {
+  stopJingle(0);
+  if (!ctx || ctx.state !== 'running') return 0;
+  const buf = samples.get(id);
+  if (!buf) return 0;
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  const g = ctx.createGain();
+  g.gain.value = sampleGainFor(id);
+  src.connect(g);
+  g.connect(sfxBus);
+  src.start(ctx.currentTime + 0.05);
+  const j = { src, g, id };
+  src.onended = () => { if (jingle === j) jingle = null; };
+  jingle = j;
+  // Whatever music the next screen starts stays silent until the jingle is over, then comes in.
+  duckMusic(buf.duration + 0.05, 0);
+  return buf.duration;
+}
+
+/** Cut the jingle short, if one is playing, and give the music back its volume. */
+export function stopJingle(fade = 0.3) {
+  if (!jingle || !ctx) { jingle = null; return; }
+  const { src, g } = jingle;
+  jingle = null;
+  const now = ctx.currentTime;
+  g.gain.cancelScheduledValues(now);
+  g.gain.setValueAtTime(g.gain.value, now);
+  g.gain.linearRampToValueAtTime(0, now + fade);
+  try { src.stop(now + fade + 0.02); } catch {}
+  const m = musicBus.gain;
+  m.cancelScheduledValues(now);
+  m.setValueAtTime(m.value, now);
+  m.linearRampToValueAtTime(settings.music, now + Math.max(0.05, fade));
+}
+
+/** The id of the jingle playing right now, or null. For the probes. */
+export const jinglePlaying = () => (jingle ? jingle.id : null);
+
 export function sfx(id, detune = 0) {
   if (!ctx || ctx.state !== 'running' || settings.muted) return;
   const def = SFX[id];

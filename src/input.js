@@ -37,6 +37,12 @@ export const BINDABLE = [
   { id: 'restart', label: 'RESTART RUN', def: 'KeyR', alias: [], group: 'play' },
   { id: 'mute', label: 'MUTE', def: 'KeyM', alias: [], group: 'play' },
   { id: 'fullscreen', label: 'FULLSCREEN', def: 'KeyF', alias: [], group: 'play' },
+  // The Explorer's Bag. The digits are free during play: the level-up screen, the only other
+  // thing that reads them, owns the keyboard while it is open.
+  { id: 'item1', label: 'BAG SLOT 1', def: 'Digit1', alias: [], group: 'play' },
+  { id: 'item2', label: 'BAG SLOT 2', def: 'Digit2', alias: [], group: 'play' },
+  { id: 'item3', label: 'BAG SLOT 3', def: 'Digit3', alias: [], group: 'play' },
+  { id: 'item4', label: 'BAG SLOT 4', def: 'Digit4', alias: [], group: 'play' },
   { id: 'reroll', label: 'REROLL CARD', def: 'KeyR', alias: [], group: 'levelup' },
   { id: 'banish', label: 'BANISH CARD', def: 'KeyB', alias: [], group: 'levelup' },
   { id: 'skip', label: 'SKIP LEVEL UP', def: 'KeyS', alias: [], group: 'levelup' },

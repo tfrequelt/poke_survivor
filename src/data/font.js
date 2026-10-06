@@ -36,4 +36,9 @@ export const FONT_COLORS = {
   green:  '#7fe08a',
   blue:   '#7ac8ff',
   dark:   '#141425',
+  // For text drawn in an element's own colour -- an overload's name, mostly.
+  orange: '#ffa04a',
+  purple: '#c49aff',
+  cyan:   '#7af0e8',
+  pink:   '#ff9ad8',
 };

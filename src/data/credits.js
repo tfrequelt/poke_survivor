@@ -44,7 +44,7 @@ const EXPLORERS_RIPS = [
   ['pokemonmysterydungeonexplorersoftimedarkness', '85996', 'MIRACLE SEA TILES', 'bundled'],
   ['pokemonmysterydungeonexplorersoftimedarkness', '14966', 'DRAGON MOVES', 'legendary attacks'],
   ['pokemonmysterydungeonexplorersoftimedarkness', '158011', 'DIMENSIONAL HOLE', 'secret floor portal'],
-  ['pokemonmysterydungeonexplorersoftimedarkness', '15903', 'ITEMS 2', 'items, traps, relics'],
+  ['pokemonmysterydungeonexplorersoftimedarkness', '15903', 'ITEMS 2', 'items, traps, relics, bag, totems, ribbons, ranks'],
 ];
 
 const EXPLORERS_GAME = {

@@ -12,10 +12,12 @@ import { G, winFrozen } from './state.js';
 import { enemies, cellRange, cellStart, cellItems, GW , getDamageSource} from './world.js';
 import { dist2 } from './util.js';
 import { STATUS, STATUS_KEYS } from './data/legends.js';
+import { TYPE_INDEX } from './data/types.js';
 
 export const hooks = {
   onDamage: null,   // (enemy, dealt, crit) -- damage numbers, hit sparks
   onKill: null,     // (enemy) -- XP orbs, coins, death puff, kill tally
+  onHit: null,      // (enemy, dealt, src) -- overload on-hit effects; only for sources in srcOvl
   onPlayerHit: null,
   onBarrier: null,  // () -- the Metal Coat's barrier just took a hit
 };
@@ -51,6 +53,25 @@ export function damageSourceId(key, name) {
 
 export function resetDamageTally() { srcDamage = SRC_KEYS.map(() => 0); }
 
+/**
+ * Damage source id -> the overload record of the weapon that owns it, or undefined. Set by
+ * overload.js; read here so a hit can be handed to its overload without this layer knowing what
+ * an overload is, and by weapons.js so a shot can find its own. A plain array: the hot path is one
+ * index per hit.
+ */
+export const srcOvl = [];
+
+/**
+ * Damage source id -> the index of its attacking type in ATTACK_TYPES, or undefined for a source
+ * with no type (traps, relics, the player's body). Weapons, abilities and overload procs register
+ * theirs; every hit then picks up its matchup from the enemy's own table with one more index.
+ */
+export const srcType = [];
+export function setSrcType(src, type) { srcType[src] = type ? TYPE_INDEX[type] : undefined; }
+
+/** The matchup of the last hit damageEnemy dealt: 1 neutral, above it super effective. */
+export let lastEffect = 1;
+
 /** Only the damage that actually came off an enemy counts -- overkill on a 1 HP enemy is not 400. */
 function credit(e, before) {
   const real = before - Math.max(0, e.hp);
@@ -80,9 +101,17 @@ export function damageFor(key) {
 
 export function damageEnemy(e, amount, knockX = 0, knockY = 0, canCrit = true) {
   if (!e.alive) return false;
+  // Type matchup first, so a crit, a mark and armour all apply to the matched damage.
+  const src = getDamageSource();
+  const ti = srcType[src];
+  let eff = 1;
+  if (ti !== undefined && e.def && e.def.typeMul) { eff = e.def.typeMul[ti]; amount *= eff; }
+  lastEffect = eff;
   const s = G.stats;
   const crit = canCrit && s && s.crit > 0 && G.rngRun() < s.crit;
-  const raw = crit ? amount * (s.critMult || 1.5) : amount;
+  let raw = crit ? amount * (s.critMult || 1.5) : amount;
+  // An overload's mark: the enemy takes more from everything while it lasts.
+  if (e.markT > 0) raw *= 1 + e.markMul;
   const dealt = Math.max(1, Math.round(raw) - e.armor);
 
   const before = e.hp;
@@ -90,6 +119,8 @@ export function damageEnemy(e, amount, knockX = 0, knockY = 0, canCrit = true) {
   e.flash = 0.09;
   G.damageDealt += dealt;
   credit(e, before);
+  // A Sleep Seed's sleep breaks on the first hit (a stun of any other kind does not).
+  if (e.sleep) { e.sleep = false; if (e.stunT > 0.3) e.stunT = 0.3; }
 
   if (knockX !== 0 || knockY !== 0) {
     const resist = 1 - e.knockResist;
@@ -97,7 +128,12 @@ export function damageEnemy(e, amount, knockX = 0, knockY = 0, canCrit = true) {
     e.knockY += knockY * resist;
   }
 
-  if (hooks.onDamage) hooks.onDamage(e, dealt, crit);
+  if (hooks.onDamage) hooks.onDamage(e, dealt, crit, eff);
+
+  // Statuses and procs first, so an enemy this hit kills still takes them with it -- a kill is
+  // what most on-kill effects are waiting for, and the hit effects of a lethal blow are harmless.
+  const ov = srcOvl[src];
+  if (ov !== undefined && hooks.onHit) hooks.onHit(e, dealt, ov);
 
   if (e.hp <= 0) {
     killEnemy(e);
@@ -133,6 +169,9 @@ export function applyChill(e, slow, seconds) {
  */
 export function damageOverTime(e, amount) {
   if (!e.alive) return false;
+  // A burn is its source's type too: fire burns rock badly, and grass better than anything.
+  const ti = srcType[getDamageSource()];
+  if (ti !== undefined && e.def && e.def.typeMul) amount *= e.def.typeMul[ti];
   const dealt = Math.max(1, Math.round(amount));
   const before = e.hp;
   e.hp -= dealt;

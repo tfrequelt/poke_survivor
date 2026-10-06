@@ -25,6 +25,7 @@ import {
   projectiles, spawn, nextHitId, decoys, decoyTargetable, damageDecoy,
 } from './world.js';
 import { damagePlayer, statusPlayer } from './combat.js';
+import { typeTable } from './data/types.js';
 import { dirFromAngle } from './assets.js';
 import {
   LOOKS, STATUS, lookIndex, statusIndex, legendHpScale, LEGEND_DMG, LEGEND_CD, LAST_STAND_AT,
@@ -115,6 +116,8 @@ export function legendEnemyDef(def, aiIdx) {
     armor: def.armor, knockResist: 1, coinChance: 0, boss: true,
     flying: false, prop: false, harmless: false, noScale: false,
     aiIdx, attack: null, sprBase: -1, sprEliteBase: -1, sprDirs: 8, sprFrames: 4,
+    // Its real types: a legendary is a type puzzle like anything else.
+    typeMul: typeTable(def.id),
   };
 }
 

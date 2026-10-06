@@ -11,7 +11,12 @@ import { G, MODES } from './state.js';
 import { ctx, VW, VH } from './render.js';
 import {
   drawText, drawTextCentered, textWidth, drawSprite, drawSpriteScaled, drawShadow, drawLogo,
+  glowCanvas, fontColorNear,
 } from './sprites.js';
+import { chipsFor } from './overload.js';
+import { ATTACK_TYPES, rosterMatchups, SUPER, RESISTED } from './data/types.js';
+import { ENEMIES } from './data/enemies.js';
+import { legend } from './legends.js';
 import { clamp, hash2, formatTime, formatNum } from './util.js';
 import { getPortrait, getImage, getAnim, dungeonFont, dirFromAngle } from './assets.js';
 import { CREDITS } from './data/credits.js';
@@ -25,8 +30,11 @@ import { SHOP_ITEMS, rankCost } from './data/shop.js';
 import { floorLabel, floorBonus, floorOrdinal, endlessBonus } from './floors.js';
 import { damageBreakdown, damageFor } from './combat.js';
 import { WEAPON_BY_ID } from './data/weapons.js';
-import { SUCCESSES, rewardLabel } from './data/successes.js';
-import { successState, unlockedCount, unlockedThisRun, successProgress } from './successes.js';
+import { SUCCESSES, rewardLabel, TIERS, PERKS, RANKS } from './data/successes.js';
+import { successState, unlockedCount, unlockedThisRun, successProgress, explorerRank } from './successes.js';
+import { spriteBase } from './sprites.js';
+import { saveData } from './save.js';
+import { STAGES } from './data/stages.js';
 
 /**
  * The main menu's entries. Shared with the key handler in main.js, so the two can never disagree
@@ -75,6 +83,7 @@ const KIND_COLOR = {
   heal: '#ff9f9f',
   // Gold, and the only card with no pip track: mastery has no cap to draw.
   mastery: '#ffd166',
+  blessing: '#7fe08a',
 };
 
 const KIND_LABEL = {
@@ -84,6 +93,7 @@ const KIND_LABEL = {
   stat: 'BOOST',
   heal: 'RECOVER',
   mastery: 'MASTERY',
+  blessing: 'BLESSING',
 };
 
 /** Colour-coded type badge, drawn from the character's typeLabel. */
@@ -135,6 +145,51 @@ function typeBadge(type) {
   return { text: t, color: TYPE_COLORS[t] || '#7a7a8a' };
 }
 
+// --- Matchups -------------------------------------------------------------------
+//
+// What each attacking type does against what you are about to fight: a stage's whole roster,
+// weighted by how often each species turns up, or -- on a secret floor -- the one legendary.
+
+const rosterCache = new Map();
+
+/** Per ATTACK_TYPES entry, the average multiplier against this stage's roster. Cached. */
+export function stageMatchups(stageId) {
+  let m = rosterCache.get(stageId);
+  if (m) return m;
+  const roster = ENEMIES.filter((e) => !e.prop && e.stages && e.stages.includes(stageId))
+    .map((e) => ({ id: e.id, weight: e.weight || 1 }));
+  m = rosterMatchups(roster);
+  rosterCache.set(stageId, m);
+  return m;
+}
+
+/** The matchups for what is on the field right now. */
+function matchupsNow() {
+  if (G.secret && legend.active && legend.def) return rosterMatchups([{ id: legend.def.id, weight: 1 }]);
+  return G.stage ? stageMatchups(G.stage.id) : null;
+}
+
+/** The types that do best here, best first, up to `n`. */
+function strongTypes(m, n) {
+  return ATTACK_TYPES.map((t, i) => [t, m[i]]).filter(([, v]) => v >= SUPER)
+    .sort((a, b) => b[1] - a[1]).slice(0, n).map(([t]) => t);
+}
+
+/** The types that do worst here, worst first, up to `n`. */
+function weakTypes(m, n) {
+  return ATTACK_TYPES.map((t, i) => [t, m[i]]).filter(([, v]) => v <= RESISTED)
+    .sort((a, b) => a[1] - b[1]).slice(0, n).map(([t]) => t);
+}
+
+/** A STRONG / WEAK tag for a weapon of this type against the field, or null. */
+function matchupTag(type, m) {
+  const i = ATTACK_TYPES.indexOf(String(type).toLowerCase());
+  if (i < 0 || !m) return null;
+  if (m[i] >= SUPER) return { text: 'STRONG HERE', color: '#7fe08a' };
+  if (m[i] <= RESISTED) return { text: 'WEAK HERE', color: '#ff8a8a' };
+  return null;
+}
+
 function drawTypeBadges(label, cx, y) {
   drawBadgeRow(label.split('/').map((t) => t.trim()).filter(Boolean).map(typeBadge), cx, y);
 }
@@ -173,11 +228,18 @@ function walkFrame(c, phase) {
 }
 
 export function drawLevelUp() {
+  if (G.offers.length && G.offers[0].kind === 'overload') { drawOverloadPick(); return; }
   ctx.fillStyle = 'rgba(8,8,18,0.82)';
   ctx.fillRect(0, 0, VW, VH);
 
-  drawTextCentered(ctx, 'LEVEL UP', VW / 2, 34, 'gold');
-  drawTextCentered(ctx, `LEVEL ${G.level}`, VW / 2, 48, 'dim');
+  const blessing = G.offers.length > 0 && G.offers[0].kind === 'blessing';
+  if (blessing) {
+    if (!drawDungeonText('Totem Blessing', VW / 2, 22)) drawTextCentered(ctx, 'TOTEM BLESSING', VW / 2, 30, 'green');
+    drawTextCentered(ctx, 'CHOOSE ONE -- IT LASTS THE WHOLE RUN', VW / 2, 50, 'green');
+  } else {
+    drawTextCentered(ctx, 'LEVEL UP', VW / 2, 34, 'gold');
+    drawTextCentered(ctx, `LEVEL ${G.level}`, VW / 2, 48, 'dim');
+  }
 
   const offers = G.offers;
   const totalW = offers.length * CARD_W + (offers.length - 1) * GAP;
@@ -208,6 +270,11 @@ export function drawLevelUp() {
     const tags = [];
     if (o.type) tags.push(typeBadge(o.type));
     if (o.isNew) tags.push({ text: 'NEW', color: '#ffd166' });
+    // How this weapon's type fares against what is on the field.
+    if (o.kind === 'weapon' && o.type) {
+      const mt = matchupTag(o.type, matchupsNow());
+      if (mt) tags.push(mt);
+    }
     drawBadgeRow(tags, x + CARD_W / 2, CARD_Y + 34);
 
     // Below the tag row with a clear gap. Five lines from here still finish well above the
@@ -221,7 +288,8 @@ export function drawLevelUp() {
     if (selected) drawCursorArrow(x + CARD_W / 2, CARD_Y - 11);
   }
 
-  drawFooter();
+  if (blessing) drawTextCentered(ctx, '1-3 / ARROWS + ENTER', VW / 2, VH - 26, 'dim');
+  else drawFooter();
 }
 
 /**
@@ -247,6 +315,119 @@ function drawPips(o, rightX, y, color) {
     ctx.fillRect(x, y + 2, size, size);
     x += size + gap;
   }
+}
+
+// --- Overload ---------------------------------------------------------------
+//
+// The level-up after a weapon reaches level 10 is this instead: its three overloads, side by side,
+// taller than ordinary cards because each one says a great deal more.
+
+const OVL_W = 194, OVL_H = 236, OVL_Y = 54, OVL_GAP = 11;
+const TAG_COLOR = { AMPLIFY: '#ffd166', TRANSFORM: '#7af0e8', WILD: '#ff9ad8' };
+
+function drawOverloadPick() {
+  const t = performance.now() / 1000;
+  ctx.fillStyle = 'rgba(6,6,16,0.9)';
+  ctx.fillRect(0, 0, VW, VH);
+
+  const offers = G.offers;
+  const w = G.weapons.find((x) => x.def.id === offers[0].weaponId);
+
+  // Embers of the selected overload's colour drifting up the screen: the whole screen takes on
+  // the choice under the cursor.
+  const sel = offers[clamp(ui.cursor, 0, offers.length - 1)].ovl;
+  ctx.fillStyle = sel.color;
+  for (let i = 0; i < 46; i++) {
+    const sx = hash2(i, 7) * VW;
+    const speed = 14 + hash2(i, 11) * 30;
+    const sy = VH - ((t * speed + hash2(i, 3) * VH) % (VH + 20));
+    ctx.globalAlpha = 0.25 + hash2(i, 5) * 0.45;
+    ctx.fillRect(Math.round(sx + Math.sin(t * 1.3 + i) * 6), Math.round(sy), i % 5 === 0 ? 2 : 1, i % 5 === 0 ? 2 : 1);
+  }
+  ctx.globalAlpha = 1;
+
+  if (!drawDungeonText('Overload', VW / 2, 6)) drawTextCentered(ctx, 'OVERLOAD', VW / 2, 10, 'gold');
+  const sub = w ? `${w.def.name.toUpperCase()} HAS REACHED LEVEL ${w.def.levels.length} -- CHOOSE ITS OVERLOAD` : 'CHOOSE AN OVERLOAD';
+  drawTextCentered(ctx, sub, VW / 2, 30, 'gold');
+
+  const totalW = offers.length * OVL_W + (offers.length - 1) * OVL_GAP;
+  const startX = Math.round((VW - totalW) / 2);
+  for (let i = 0; i < offers.length; i++) {
+    const o = offers[i];
+    const ov = o.ovl;
+    const x = startX + i * (OVL_W + OVL_GAP);
+    const selected = i === ui.cursor;
+    const cx = x + OVL_W / 2;
+
+    // A pulsing halo around the selected card, in its own colour.
+    if (selected) {
+      const a = 0.35 + Math.sin(t * 5) * 0.2;
+      ctx.globalAlpha = a;
+      ctx.fillStyle = ov.color;
+      ctx.fillRect(x - 3, OVL_Y - 3, OVL_W + 6, OVL_H + 6);
+      ctx.globalAlpha = 1;
+    }
+    panel(x, OVL_Y, OVL_W, OVL_H, selected ? { accent: '#ffffff', ...WIN_SELECTED } : { accent: ov.color });
+
+    // The weapon itself, twice size, in the overload's glow.
+    const gy = OVL_Y + 34;
+    const pulse = 1 + Math.sin(t * 3 + i) * 0.08;
+    const gr = 34 * pulse;
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = selected ? 0.95 : 0.6;
+    ctx.drawImage(glowCanvas(ov.color), cx - gr, gy - gr, gr * 2, gr * 2);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+    if (w) {
+      // Turning slowly, so a rotated sprite shows off its shape; a flat one bobs instead.
+      const rot = w.def.sprDirs > 2;
+      const frame = rot ? ((t * 4 + i * 5) | 0) % w.def.sprDirs : 1;
+      drawSpriteScaled(ctx, w.def.sprBase + frame, cx, gy + 8 + (rot ? 0 : Math.sin(t * 3 + i) * 2), 3);
+    }
+
+    drawBadgeRow([{ text: ov.tag, color: TAG_COLOR[ov.tag] || '#ffffff' }], cx, OVL_Y + 66);
+
+    const nameLines = wrap(ov.name.toUpperCase(), 30);
+    let y = OVL_Y + 80;
+    for (const line of nameLines.slice(0, 2)) {
+      drawTextCentered(ctx, line, cx, y, fontColorNear(ov.color));
+      y += 10;
+    }
+    y += 4;
+    ctx.fillStyle = ov.color;
+    ctx.globalAlpha = 0.5;
+    ctx.fillRect(x + 14, y - 3, OVL_W - 28, 1);
+    ctx.globalAlpha = 1;
+    y += 4;
+
+    for (const line of wrap(ov.desc, 30).slice(0, 10)) {
+      drawText(ctx, line, x + 9, y, 'white');
+      y += 10;
+    }
+
+    // What it does, in a word or two each, as many as fit on two rows.
+    const chips = chipsFor(ov).map((c) => ({ text: c, color: ov.color }));
+    let row = [], rowW = -BADGE_GAP, cy = OVL_Y + OVL_H - 46, rows = 0;
+    for (const c of chips) {
+      const cw = textWidth(c.text) + BADGE_PAD * 2 + BADGE_GAP;
+      if (rowW + cw > OVL_W - 16) {
+        drawBadgeRow(row, cx, cy);
+        cy += BADGE_H + 3; rows++;
+        row = []; rowW = -BADGE_GAP;
+        if (rows >= 2) break;
+      }
+      row.push(c); rowW += cw;
+    }
+    if (rows < 2 && row.length) drawBadgeRow(row, cx, cy);
+
+    drawTextCentered(ctx, `${i + 1}`, cx, OVL_Y + OVL_H - 14, selected ? 'gold' : 'dim');
+    if (selected) drawCursorArrow(cx, OVL_Y - 11);
+  }
+
+  const parts = ['1-3 / ARROWS + ENTER'];
+  if (G.skips > 0) parts.push(`S SKIP (${G.skips})`);
+  parts.push('ONE OVERLOAD PER WEAPON, FOR THE WHOLE RUN');
+  drawTextCentered(ctx, parts.join('      '), VW / 2, VH - 16, 'dim');
 }
 
 function drawFooter() {
@@ -452,6 +633,7 @@ export function drawTitle(starters, t, cursor = 0, claimable = 0) {
   }
 
   drawTitleMenu(subY + 20, cursor, claimable, t);
+  drawRankBadge();
 
   // The two footer lines get a band behind them for the same reason.
   ctx.fillStyle = 'rgba(6,10,26,0.62)';
@@ -460,6 +642,24 @@ export function drawTitle(starters, t, cursor = 0, claimable = 0) {
   // the front page and not only on the credits screen.
   drawTextCentered(ctx, 'SPRITES AND PORTRAITS BY THE PMD SPRITE COLLAB', VW / 2, VH - 28, 'blue');
   drawTextCentered(ctx, 'ARROWS + ENTER    M MUTE    F FULLSCREEN', VW / 2, VH - 16, 'dim');
+}
+
+/** Top left of the title: your Explorer Rank, its badge, and how far to the next. */
+function drawRankBadge() {
+  const r = explorerRank();
+  const id = spriteBase(`rank_${r.index}`, 'gold');
+  ctx.fillStyle = 'rgba(6,10,26,0.62)';
+  ctx.fillRect(4, 4, 112, 34);
+  if (id >= 0) drawSprite(ctx, id, 24, 21);
+  drawText(ctx, 'EXPLORER RANK', 44, 9, 'dim');
+  drawText(ctx, r.name, 44, 19, 'gold');
+  if (r.next !== null) {
+    const k = clamp((r.points - r.at) / (r.next - r.at), 0, 1);
+    ctx.fillStyle = '#2a2f4a';
+    ctx.fillRect(44, 29, 64, 3);
+    ctx.fillStyle = '#ffd166';
+    ctx.fillRect(44, 29, Math.round(64 * k), 3);
+  }
 }
 
 const MENU_ROW = 15;
@@ -502,7 +702,7 @@ function drawTitleMenu(y, cursor, claimable, t) {
 
 // --- Successes ----------------------------------------------------------------
 
-const SC_W = 284, SC_H = 62, SC_GAP = 14, SC_TOP = 36, SC_ROW = SC_H + 10;
+const SC_W = 284, SC_H = 64, SC_GAP = 14, SC_TOP = 42, SC_ROW = SC_H + 6;
 
 /** A 1px frame outside a card, in spans -- the golden outline of a reward waiting to be claimed. */
 function outline(x, y, w, h, color) {
@@ -516,9 +716,16 @@ function outline(x, y, w, h, color) {
 export function drawSuccesses(cursor) {
   ctx.fillStyle = '#17142a';
   ctx.fillRect(0, 0, VW, VH);
-  drawText(ctx, 'SUCCESSES', 30, 14, 'gold');
+  drawText(ctx, 'SUCCESSES', 30, 10, 'gold');
   const head = `${unlockedCount()} / ${SUCCESSES.length} UNLOCKED     ${formatNum(bankTotal())} G`;
-  drawText(ctx, head, VW - 30 - textWidth(head), 14, 'dim');
+  drawText(ctx, head, VW - 30 - textWidth(head), 10, 'dim');
+  // The Explorer Rank the claimed successes add up to, with the way to the next one.
+  const r = explorerRank();
+  const badge = spriteBase(`rank_${r.index}`, 'gold');
+  if (badge >= 0) drawSpriteScaled(ctx, badge, 30 + 8, 30, 0.5);
+  const rl = r.next === null ? `EXPLORER RANK  ${r.name}  -- ${r.points} PTS`
+    : `EXPLORER RANK  ${r.name}  -- ${r.points} / ${r.next} PTS TO ${RANKS[r.index + 1].name}`;
+  drawText(ctx, rl, 52, 26, 'white');
 
   // Scroll by whole rows so the selected card is always on screen.
   const rowsVisible = Math.floor((VH - SC_TOP - 26) / SC_ROW);
@@ -535,6 +742,11 @@ export function drawSuccesses(cursor) {
 
     const accent = state === 'unlocked' ? '#ffd166' : state === 'claimed' ? '#7ac8ff' : '#3a4466';
     panel(x, y, SC_W, SC_H, on ? { accent: '#ffffff', ...WIN_SELECTED } : { accent });
+    // The tier: a stripe down the left edge, and its name top right.
+    const tier = TIERS[sc.tier || 'bronze'];
+    ctx.fillStyle = tier.color;
+    ctx.fillRect(x + 4, y + 6, 2, SC_H - 12);
+    drawText(ctx, tier.label, x + SC_W - 10 - textWidth(tier.label), y + 9, state === 'locked' ? 'dim' : 'white');
     // Unlocked and unclaimed: a second, outer gold frame -- the "come and collect this" card.
     if (state === 'unlocked') {
       outline(x - 2, y - 2, SC_W + 4, SC_H + 4, '#ffd166');
@@ -546,7 +758,12 @@ export function drawSuccesses(cursor) {
 
     const lines = wrap(sc.desc.toUpperCase(), 42);
     for (let l = 0; l < lines.length && l < 2; l++) {
-      drawText(ctx, lines[l], x + 10, y + 23 + l * 10, state === 'locked' ? 'dim' : 'white');
+      drawText(ctx, lines[l], x + 10, y + 20 + l * 10, state === 'locked' ? 'dim' : 'white');
+    }
+    // A perk is the bigger part of the prize when there is one, so it gets a line of its own.
+    if (sc.reward && sc.reward.perk && PERKS[sc.reward.perk]) {
+      const pk = PERKS[sc.reward.perk];
+      drawText(ctx, `PERK: ${pk.name.toUpperCase()} -- ${pk.desc.toUpperCase()}`.slice(0, 44), x + 10, y + 39, state === 'claimed' ? 'green' : 'blue');
     }
 
     // The prize, bottom right; what to do about it, bottom left.
@@ -565,7 +782,7 @@ export function drawSuccesses(cursor) {
     if (prog) {
       const [have, of] = prog;
       const label = `${have} / ${of}`;
-      const bx = x + 64, bw = SC_W - 64 - 64 - textWidth(label) - 8, by = y + SC_H - 14;
+      const bx = x + 64, bw = SC_W - 64 - (textWidth(prize) + 18) - textWidth(label) - 8, by = y + SC_H - 14;
       ctx.fillStyle = '#101018';
       ctx.fillRect(bx - 1, by - 1, bw + 2, 7);
       ctx.fillStyle = '#2a2f4a';
@@ -719,6 +936,17 @@ export function drawSelect(starters, t) {
     }
 
     drawTextCentered(ctx, `${i + 1}`, px, SELECT_Y + SELECT_H - 13, selected ? 'gold' : 'dim');
+    // A ribbon for every stage this partner has won, a grey one where it has not yet.
+    const rib = saveData().ribbons;
+    for (let s = 0; s < STAGES.length; s++) {
+      const won = rib[`${c.id}:${STAGES[s].id}`];
+      const rid = spriteBase(won ? `ribbon_${STAGES[s].id}` : 'ribbon_none', 'gold');
+      if (rid < 0) continue;
+      if (!won) ctx.globalAlpha = 0.35;
+      // Stacked in the card's top-left corner, beside the portrait.
+      drawSprite(ctx, rid, x + 13, SELECT_Y + 14 + s * 15);
+      ctx.globalAlpha = 1;
+    }
     if (selected) drawCursorArrow(px, SELECT_Y - 11);
   }
 
@@ -860,7 +1088,7 @@ export function drawStageSelect(stages, partner, t) {
   let blurbRows = 0;
   for (const st of stages) blurbRows = Math.max(blurbRows, wrap(st.blurb || '', chars).length);
   const h = 8 + 10 + (partner ? 10 : 0) + 6 + stages.length * LIST_ROW + 11
-    + STAGE_ROWS.length * 10 + 4 + blurbRows * 9 + 6;
+    + STAGE_ROWS.length * 10 + 4 + 24 + blurbRows * 9 + 6;
   const x0 = LIST_X, y0 = Math.round(MAP_Y + mh / 2 - h / 2), cx = x0 + LIST_W / 2;
   panel(x0, y0, LIST_W, h, {});
   let y = y0 + 8;
@@ -898,7 +1126,14 @@ export function drawStageSelect(stages, partner, t) {
     ctx.fillRect(bx, y + 1, Math.round(bw * clamp(v / row.max, 0, 1)), 4);
     y += 10;
   }
-  y += 4;
+  // Which of your types this stage's roster is weak to: the planning the matchups ask for.
+  y += 2;
+  drawText(ctx, 'STRONG HERE', x0 + 10, y, 'dim');
+  y += 9;
+  const strong = strongTypes(stageMatchups(sel.id), 3).map(typeBadge);
+  if (strong.length) drawBadgeRow(strong, x0 + LIST_W / 2, y);
+  else drawText(ctx, 'NOTHING IN PARTICULAR', x0 + 10, y + 1, 'dim');
+  y += 13;
   for (const line of wrap(sel.blurb || '', chars)) {
     drawText(ctx, line, x0 + 10, y, 'white');
     y += 9;
@@ -1036,6 +1271,12 @@ export function drawSummary() {
 
   const ns = newSuccessLine();
   drawTextCentered(ctx, ns || 'SPEND IT AT THE KECLEON SHOP', VW / 2, VH - 42, ns ? 'gold' : 'blue');
+  if (G.trk && G.trk.ribbon && G.stage) {
+    const rid = spriteBase(`ribbon_${G.stage.id}`, 'gold');
+    const msg = `RIBBON EARNED: ${G.character.name.toUpperCase()} ON ${G.stage.name.toUpperCase()}`;
+    drawTextCentered(ctx, msg, VW / 2, 82, 'gold');
+    if (rid >= 0) { drawSprite(ctx, rid, VW / 2 - textWidth(msg) / 2 - 12, 85); drawSprite(ctx, rid, VW / 2 + textWidth(msg) / 2 + 12, 85); }
+  }
   drawTextCentered(ctx, 'PRESS ANY KEY', VW / 2, VH - 26, 'dim');
 }
 
@@ -1432,6 +1673,11 @@ export function drawPause() {
   if (G.form && G.form.types && G.form.types.length) {
     lines.push(G.form.types.map((t) => t.toUpperCase()).join(' / '));
   }
+  const mm = matchupsNow();
+  if (mm) {
+    const up = strongTypes(mm, 4), down = weakTypes(mm, 3);
+    lines.push(`STRONG HERE: ${up.length ? up.join(' ').toUpperCase() : '-'}    WEAK HERE: ${down.length ? down.join(' ').toUpperCase() : '-'}`);
+  }
   lines.push('');
   lines.push('- WEAPONS -');
   for (const w of G.weapons) {
@@ -1440,6 +1686,7 @@ export function drawPause() {
     const ev = w.def.evolution;
     const ready = ev && !w.evolved && w.level >= w.def.levels.length && G.passives.includes(ev.needPassive);
     lines.push(`${w.def.name.toUpperCase()}  ${w.level}/${w.def.levels.length}   ${shortNum(damageFor(`w:${w.def.id}`))}${ready ? '  EVOLVE: FIND AN ELIXIR' : ''}`);
+    if (w.ovl) lines.push(`  OVERLOAD: ${w.ovl.name.toUpperCase()}`);
   }
   if (G.passives.length) {
     lines.push('');

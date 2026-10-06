@@ -109,6 +109,43 @@ function floodKeyPacked(img, hex, tol = 10) {
   }
 }
 
+/** Rotate every opaque pixel's hue by `hue` degrees and scale its saturation by `sat`. */
+function recolorPacked(img, hue, sat) {
+  const d = img.data;
+  const shift = hue / 360;
+  for (let i = 0; i < d.length; i++) {
+    const v = d[i];
+    const a = v >>> 24;
+    if (!a) continue;
+    const r = (v & 255) / 255, g = ((v >>> 8) & 255) / 255, b = ((v >>> 16) & 255) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    const l = (max + min) / 2;
+    let h = 0, s = 0;
+    if (max !== min) {
+      const dd = max - min;
+      s = l > 0.5 ? dd / (2 - max - min) : dd / (max + min);
+      h = max === r ? (g - b) / dd + (g < b ? 6 : 0) : max === g ? (b - r) / dd + 2 : (r - g) / dd + 4;
+      h /= 6;
+    }
+    h = (h + shift + 1) % 1;
+    s = Math.min(1, s * sat);
+    let R = l, Gc = l, B = l;
+    if (s > 0) {
+      const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+      const pp = 2 * l - q;
+      const f = (t) => {
+        t = (t + 1) % 1;
+        if (t < 1 / 6) return pp + (q - pp) * 6 * t;
+        if (t < 1 / 2) return q;
+        if (t < 2 / 3) return pp + (q - pp) * (2 / 3 - t) * 6;
+        return pp;
+      };
+      R = f(h + 1 / 3); Gc = f(h); B = f(h - 1 / 3);
+    }
+    d[i] = ((a << 24) | (Math.round(B * 255) << 16) | (Math.round(Gc * 255) << 8) | Math.round(R * 255)) >>> 0;
+  }
+}
+
 /**
  * Load the manifest and every sprite it lists. Never throws: a missing manifest is the normal
  * case (no assets supplied), and one broken entry must not take the others down with it.
@@ -153,6 +190,9 @@ export async function loadAssets() {
         if (e.flood) floodKeyPacked(px, e.key, e.tolerance);
         else keyOutPacked(px, e.key, e.tolerance);
       }
+      // A recolour, for one sheet sprite standing in for several items: the sheet has two seeds
+      // and one orb, and Mystery Dungeon tells its seeds and orbs apart by colour anyway.
+      if (typeof e === 'object' && (e.hue || e.sat !== undefined)) recolorPacked(px, e.hue || 0, e.sat === undefined ? 1 : e.sat);
       return [name, px];
     });
   }));

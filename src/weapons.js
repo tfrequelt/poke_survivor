@@ -17,9 +17,10 @@ import { dirFromAngle } from './assets.js';
 import { waterAtWorld, nearestLand } from './terrain.js';
 import {
   damageEnemy, damageCircle, damageLine, applyBurn, applyChill, damagePlayer, damageSourceId,
-  statusPlayer,
+  statusPlayer, srcOvl, setSrcType,
 } from './combat.js';
 import { WEAPONS, WEAPON_BY_ID } from './data/weapons.js';
+import { OVL_PARTICLES } from './data/overloads.js';
 import { spriteBase, spriteDirs, angleSlot } from './sprites.js';
 import { ZONE, ROLE } from './fx.js';
 
@@ -167,12 +168,16 @@ const MOTION = {
     pr.angle += pr.spin * dt;
   },
 
-  /** Held in a circle around the player. Orbitals never expire on distance. */
+  /**
+   * Held in a circle around the player. Orbitals never expire on distance. `amp`, which nothing
+   * else sets on an orbital, is an overload's breathing: the ring swells and shrinks by that share.
+   */
   orbitPlayer(pr, dt) {
     const p = G.player;
     pr.orbitA += pr.spin * dt;
-    pr.x = p.x + Math.cos(pr.orbitA) * pr.orbitR;
-    pr.y = p.y + Math.sin(pr.orbitA) * pr.orbitR;
+    const r = pr.amp ? pr.orbitR * (1 + pr.amp * Math.sin(pr.life * (pr.freq || 2) * TAU)) : pr.orbitR;
+    pr.x = p.x + Math.cos(pr.orbitA) * r;
+    pr.y = p.y + Math.sin(pr.orbitA) * r;
     pr.angle = pr.orbitA;
     // Orbitals sweep through the same enemies repeatedly, so the hit id refreshes each lap.
     if (pr.orbitA - pr.t > Math.PI) { pr.t = pr.orbitA; pr.hitId = nextHitId(); }
@@ -306,13 +311,42 @@ export const motionIndex = (name) => {
   return i;
 };
 
+// --- Overload patterns ------------------------------------------------------
+//
+// One trigger pull of an aimed weapon is a fan of `n` headings around the aim. An overload can
+// replace that fan with a different shape, and every aimed behaviour asks here instead of laying
+// its own fan out, so a pattern means the same thing on a shot, a cone, a bouncer or a release.
+
+const MAX_HEADINGS = 64;
+const _heads = new Float32Array(MAX_HEADINGS);
+
+/** Fill _heads with the headings of one volley. Returns how many there are. */
+function headings(w, base, n, spread) {
+  const pat = w.ovl ? w.ovl.pattern : undefined;
+  let k = 0;
+  if (pat === 'ring' || pat === 'spiral') {
+    // All the way round. A spiral turns the whole ring a little further every pull.
+    const m = Math.max(n, pat === 'ring' ? 6 : 4);
+    const start = pat === 'spiral' ? (w.spinA += 0.55) : base;
+    for (let i = 0; i < m && k < MAX_HEADINGS; i++) _heads[k++] = start + (i / m) * TAU;
+    return k;
+  }
+  const dirs = pat === 'twin' ? 2 : pat === 'cross' ? 4 : 1;
+  const sp = pat === 'fan' ? spread * 2.2 + 0.12 : spread;
+  for (let d = 0; d < dirs; d++) {
+    const b = base + (d / dirs) * TAU;
+    for (let i = 0; i < n && k < MAX_HEADINGS; i++) _heads[k++] = n === 1 ? b : b + (i - (n - 1) / 2) * sp;
+  }
+  return k;
+}
+
 // --- Firing behaviours ------------------------------------------------------
 
 const BEHAVIOR = {
   /** Launch `amount` projectiles at the aimed target, fanned by `spread`. */
   projectile(w, st, p) {
     const def = w.def;
-    const idx = AIM[def.aim](p, def.range * (G.stats.range || 1));
+    const idx = AIM[def.aim](p, def.range * st.range);
     let baseAngle;
     if (idx >= 0) {
       const t = enemies[idx];
@@ -323,12 +357,9 @@ const BEHAVIOR = {
       return false;                                   // nothing in range: hold the shot
     }
 
-    const n = st.amount;
     const hitId = nextHitId();
-    for (let i = 0; i < n; i++) {
-      const off = n === 1 ? 0 : (i - (n - 1) / 2) * def.spread;
-      fireProjectile(w, st, p, baseAngle + off, idx, hitId);
-    }
+    const k = headings(w, baseAngle, st.amount, def.spread);
+    for (let i = 0; i < k; i++) fireProjectile(w, st, p, _heads[i], idx, hitId);
     return true;
   },
 
@@ -349,8 +380,10 @@ const BEHAVIOR = {
       if (!pr) break;
       pr.motion = def.motionIdx;
       pr.orbitA = (i / n) * TAU;
-      pr.orbitR = def.orbitRadius * st.area;
-      pr.spin = def.orbitSpeed;
+      const ko = w.ovl && w.ovl.orbit;
+      pr.orbitR = def.orbitRadius * st.area * (ko && ko.r ? ko.r : 1);
+      pr.spin = def.orbitSpeed * (ko && ko.spin ? ko.spin : 1);
+      if (ko && ko.pulse) { pr.amp = ko.pulse; pr.freq = ko.pulseFreq || 0.8; }
       pr.maxLife = st.duration;
       pr.t = 0;
       // An anchored ring is laid on the ground and left there, so it has to be placed in a ring
@@ -397,6 +430,7 @@ const BEHAVIOR = {
     z.color = def.zoneColor || '#b050d0';
     z.hitId = 0;
     z.burn = (def.burn || 0) * G.stats.power;
+    zoneKnobs(w, st, z, false);
     return true;
   },
 
@@ -406,16 +440,15 @@ const BEHAVIOR = {
    */
   cone(w, st, p) {
     const def = w.def;
-    const idx = AIM[def.aim](p, def.range * (G.stats.range || 1));
+    const idx = AIM[def.aim](p, def.range * st.range);
     const base = idx >= 0
       ? Math.atan2(enemies[idx].y - p.y, enemies[idx].x - p.x)
       : (p.dir ? 0 : Math.PI);
-    const n = st.amount;
     // Every pellet has its OWN hit id, so a dense burst stacks on one enemy instead of the
     // volley being spent on the first thing it touches.
-    for (let i = 0; i < n; i++) {
-      const off = (i - (n - 1) / 2) * def.spread + (G.rngRun() - 0.5) * def.spread * 0.6;
-      fireProjectile(w, st, p, base + off, idx, nextHitId());
+    const k = headings(w, base, st.amount, def.spread);
+    for (let i = 0; i < k; i++) {
+      fireProjectile(w, st, p, _heads[i] + (G.rngRun() - 0.5) * def.spread * 0.6, idx, nextHitId());
     }
     return true;
   },
@@ -441,6 +474,8 @@ const BEHAVIOR = {
     z.hitId = nextHitId();
     z.burn = 0;
     z.pull = def.r * st.area;                 // reuse: the radius the front grows to
+    z.knock = 140 * st.knock;
+    zoneKnobs(w, st, z, true);
     return true;
   },
 
@@ -495,15 +530,14 @@ const BEHAVIOR = {
    */
   bouncer(w, st, p) {
     const def = w.def;
-    const idx = AIM[def.aim](p, def.range * (G.stats.range || 1));
+    const idx = AIM[def.aim](p, def.range * st.range);
     if (idx < 0 && !def.fireWithoutTarget) return false;
     const base = idx >= 0
       ? Math.atan2(enemies[idx].y - p.y, enemies[idx].x - p.x)
       : (p.dir ? 0 : Math.PI);
-    const n = st.amount;
-    for (let i = 0; i < n; i++) {
-      const off = n === 1 ? 0 : (i - (n - 1) / 2) * def.spread;
-      const pr = fireProjectile(w, st, p, base + off, idx, nextHitId());
+    const k = headings(w, base, st.amount, def.spread);
+    for (let i = 0; i < k; i++) {
+      const pr = fireProjectile(w, st, p, _heads[i], idx, nextHitId());
       if (!pr) break;
       pr.bounces = st.bounces || 3;
       pr.payload = def.bounceGain || 0.3;
@@ -518,11 +552,13 @@ const BEHAVIOR = {
    */
   split(w, st, p) {
     const def = w.def;
-    const idx = AIM[def.aim](p, def.range * (G.stats.range || 1));
+    const idx = AIM[def.aim](p, def.range * st.range);
     if (idx < 0) return false;
     const t = enemies[idx];
-    const pr = fireProjectile(w, st, p, Math.atan2(t.y - p.y, t.x - p.x), idx, nextHitId());
-    if (pr) {
+    const k = headings(w, Math.atan2(t.y - p.y, t.x - p.x), 1, def.spread || 0.3);
+    for (let i = 0; i < k; i++) {
+      const pr = fireProjectile(w, st, p, _heads[i], idx, nextHitId());
+      if (!pr) break;
       pr.payload = st.shards || 3;
       pr.gen = ROLE.SPLITTER;
       pr.pierce = 0;
@@ -536,15 +572,15 @@ const BEHAVIOR = {
    */
   bloom(w, st, p) {
     const def = w.def;
-    const idx = AIM[def.aim](p, def.range * (G.stats.range || 1));
+    const idx = AIM[def.aim](p, def.range * st.range);
     const a = idx >= 0
       ? Math.atan2(enemies[idx].y - p.y, enemies[idx].x - p.x)
       : G.rngRun() * TAU;
-    const n = st.amount;
-    for (let i = 0; i < n; i++) {
+    const k = headings(w, a, st.amount, def.spread);
+    for (let i = 0; i < k; i++) {
       const pr = spawnFor(w, st, p);
       if (!pr) break;
-      const ang = a + (i - (n - 1) / 2) * def.spread;
+      const ang = _heads[i];
       // Planted CLOSE to the player, not out at the aimed target. A seed with a two second fuse
       // that lands where the crowd currently is detonates on empty ground: the crowd is chasing
       // the player and has left by then. Near the player is where it will be.
@@ -565,7 +601,7 @@ const BEHAVIOR = {
   /** A cloud of tiny shots that swarm the target and stay on it until they burn out. */
   swarm(w, st, p) {
     const def = w.def;
-    const idx = AIM[def.aim](p, def.range * (G.stats.range || 1));
+    const idx = AIM[def.aim](p, def.range * st.range);
     if (idx < 0) return false;
     const n = st.amount;
     for (let i = 0; i < n; i++) {
@@ -594,16 +630,32 @@ const BEHAVIOR = {
    */
   tether(w, st, p) {
     const def = w.def;
-    const idx = AIM[def.aim](p, def.range * (G.stats.range || 1));
+    const idx = AIM[def.aim](p, def.range * st.range);
     if (idx < 0) return false;
     const t = enemies[idx];
     const a = Math.atan2(t.y - p.y, t.x - p.x);
-    const len = Math.min(def.range * (G.stats.range || 1), Math.hypot(t.x - p.x, t.y - p.y) + 8);
-    damageLine(p.x, p.y, a, len, def.r * st.area, st.damage, nextHitId(), {
-      knockback: def.knockback || 0,
-      slow: def.slow || 0, slowT: 1.0,
-    });
-    if (arcFx) arcFx(p.x, p.y, t.x, t.y, def.arcColor || '#ffffff');
+    const len = Math.min(def.range * st.range, Math.hypot(t.x - p.x, t.y - p.y) + 8);
+    const opts = _lineOpts;
+    opts.knockback = (def.knockback || 0) * st.knock;
+    opts.slow = def.slow || 0; opts.slowT = 1.0; opts.weaken = 0;
+    const color = w.ovl ? w.ovl.color : (def.arcColor || '#ffffff');
+    damageLine(p.x, p.y, a, len, def.r * st.area, st.damage, nextHitId(), opts);
+    if (arcFx) arcFx(p.x, p.y, t.x, t.y, color);
+    // An overload can split the cable onto more than one enemy at once.
+    const extra = w.ovl && w.ovl.link ? w.ovl.link.targets || 0 : 0;
+    if (extra > 0) {
+      const used = _chainUsed;
+      used.length = 0; used.push(idx);
+      for (let j = 0; j < extra; j++) {
+        const ei = nearestNotIn(p.x, p.y, def.range * st.range, used);
+        if (ei < 0) break;
+        used.push(ei);
+        const e = enemies[ei];
+        const ea = Math.atan2(e.y - p.y, e.x - p.x);
+        damageLine(p.x, p.y, ea, Math.hypot(e.x - p.x, e.y - p.y) + 8, def.r * st.area, st.damage, nextHitId(), opts);
+        if (arcFx) arcFx(p.x, p.y, e.x, e.y, color);
+      }
+    }
     return true;
   },
 
@@ -615,7 +667,7 @@ const BEHAVIOR = {
     const def = w.def;
     const z = spawn('zones');
     if (!z) return true;
-    const idx = AIM[def.aim](p, def.range * (G.stats.range || 1));
+    const idx = AIM[def.aim](p, def.range * st.range);
     if (def.motion === 'anchor' && idx >= 0) { z.x = enemies[idx].x; z.y = enemies[idx].y; }
     else { z.x = p.x; z.y = p.y; }
     z.r = def.r * st.area;
@@ -628,6 +680,7 @@ const BEHAVIOR = {
     z.hitId = 0;
     z.burn = 0;
     z.pull = def.pullForce || 120;
+    zoneKnobs(w, st, z, false);
     return true;
   },
 
@@ -648,14 +701,14 @@ const BEHAVIOR = {
     const stacks = w.charge;
     w.charge = 0;
 
-    const idx = AIM[def.aim](p, def.range * (G.stats.range || 1));
+    const idx = AIM[def.aim](p, def.range * st.range);
     const base = idx >= 0
       ? Math.atan2(enemies[idx].y - p.y, enemies[idx].x - p.x)
       : Math.atan2(p.vy, p.vx);
     const hitId = nextHitId();
-    for (let i = 0; i < stacks; i++) {
-      const off = stacks === 1 ? 0 : (i - (stacks - 1) / 2) * def.spread;
-      const pr = fireProjectile(w, st, p, base + off, idx, hitId);
+    const k = headings(w, base, stacks, def.spread);
+    for (let i = 0; i < k; i++) {
+      const pr = fireProjectile(w, st, p, _heads[i], idx, hitId);
       // Each banked stack makes the release hit harder, not just wider.
       if (pr) pr.dmg = st.damage * (1 + stacks * (def.chargeGain || 0.25));
     }
@@ -668,25 +721,34 @@ const BEHAVIOR = {
    */
   link(w, st, p) {
     const def = w.def;
-    const idx = AIM[def.aim](p, def.range * (G.stats.range || 1));
+    const idx = AIM[def.aim](p, def.range * st.range);
     if (idx < 0) return false;
-    const t = enemies[idx];
-    const a = Math.atan2(t.y - p.y, t.x - p.x);
-    const len = Math.hypot(t.x - p.x, t.y - p.y);
-    const hits = damageLine(p.x, p.y, a, len, def.r * st.area, st.damage, nextHitId(), {
-      knockback: def.knockback || 0,
-      weaken: def.weaken || 0,
-    });
-    // The anchor itself takes the full stack of whatever the line caught.
-    if (hits > 1) damageEnemy(t, st.damage * (hits - 1) * (def.linkGain || 0.5), 0, 0, true);
-    if (arcFx) arcFx(p.x, p.y, t.x, t.y, def.arcColor || '#d0b0ff');
+    const opts = _lineOpts;
+    opts.knockback = (def.knockback || 0) * st.knock;
+    opts.slow = 0; opts.slowT = 0; opts.weaken = def.weaken || 0;
+    const color = w.ovl ? w.ovl.color : (def.arcColor || '#d0b0ff');
+    const extra = w.ovl && w.ovl.link ? w.ovl.link.targets || 0 : 0;
+    const used = _chainUsed;
+    used.length = 0;
+    let ti = idx;
+    // The first line goes to the aimed enemy; an overload's extra links go to the next nearest.
+    for (let j = 0; j <= extra && ti >= 0; j++) {
+      const e = enemies[ti];
+      used.push(ti);
+      const ea = Math.atan2(e.y - p.y, e.x - p.x);
+      const hits = damageLine(p.x, p.y, ea, Math.hypot(e.x - p.x, e.y - p.y), def.r * st.area, st.damage, nextHitId(), opts);
+      // The anchor itself takes the full stack of whatever the line caught.
+      if (hits > 1) damageEnemy(e, st.damage * (hits - 1) * (def.linkGain || 0.5), 0, 0, true);
+      if (arcFx) arcFx(p.x, p.y, e.x, e.y, color);
+      if (j < extra) ti = nearestNotIn(p.x, p.y, def.range * st.range, used);
+    }
     return true;
   },
 
   /** A single wide stroke swung through an arc in front of you. */
   sweep(w, st, p) {
     const def = w.def;
-    const idx = AIM[def.aim](p, def.range * (G.stats.range || 1));
+    const idx = AIM[def.aim](p, def.range * st.range);
     const a = idx >= 0
       ? Math.atan2(enemies[idx].y - p.y, enemies[idx].x - p.x)
       : (p.dir ? 0 : Math.PI);
@@ -697,7 +759,8 @@ const BEHAVIOR = {
       // Extra strokes alternate sides rather than stacking on one another.
       pr.motion = def.motionIdx;
       pr.angle = a + (i % 2 ? Math.PI : 0);
-      pr.amp = def.arcWidth || 2.4;
+      // An overload's full swing goes all the way round you.
+      pr.amp = w.ovl && w.ovl.sweepFull ? TAU : (def.arcWidth || 2.4);
       pr.orbitR = def.orbitRadius || 30;
       pr.r0 = pr.r = def.r * st.area;
       pr.maxLife = st.duration;
@@ -710,7 +773,7 @@ const BEHAVIOR = {
   /** Shots that fall onto a patch of ground rather than travelling to it. */
   rain(w, st, p) {
     const def = w.def;
-    const idx = AIM[def.aim](p, def.range * (G.stats.range || 1));
+    const idx = AIM[def.aim](p, def.range * st.range);
     const cx = idx >= 0 ? enemies[idx].x : p.x;
     const cy = idx >= 0 ? enemies[idx].y : p.y;
     const spreadR = def.zoneRadius || 60;
@@ -759,9 +822,11 @@ const BEHAVIOR = {
       pr.homingTurn = def.homingTurn || 4;
       pr.targetIdx = -1;
       pr.maxLife = st.duration;
-      pr.r0 = pr.r = def.r * st.area;
+      pr.r0 = pr.r = def.r * st.area * pr.vis;
       pr.pierce = 9999;
       pr.t = 0;
+      // An overload's `emit` makes the familiar shoot while it hunts: it runs the turret clock.
+      if (w.ovl && w.ovl.emit) { pr.gen = ROLE.TURRET; pr.emitT = 0.2 + i * 0.1; }
     }
     return true;
   },
@@ -769,20 +834,24 @@ const BEHAVIOR = {
   /** Instant lightning arcing between clustered enemies. Rewards letting the crowd build. */
   chain(w, st, p) {
     const def = w.def;
-    let x = p.x, y = p.y;
-    let dmg = st.damage;
     const used = _chainUsed;
     used.length = 0;
-
-    for (let j = 0; j < st.amount + st.jumps; j++) {
-      const idx = nearestNotIn(x, y, j === 0 ? def.range : def.jumpRange, used);
-      if (idx < 0) break;
-      const e = enemies[idx];
-      used.push(idx);
-      if (arcFx) arcFx(x, y, e.x, e.y, def.arcColor || '#f8e038');
-      damageEnemy(e, dmg, 0, 0, true);
-      x = e.x; y = e.y;
-      dmg *= def.falloff || 0.88;
+    const color = w.ovl ? w.ovl.color : (def.arcColor || '#f8e038');
+    // An overload's fork runs extra chains from the player, each starting on a different enemy.
+    const chains = 1 + (w.ovl && w.ovl.chainFork ? w.ovl.chainFork : 0);
+    for (let c = 0; c < chains; c++) {
+      let x = p.x, y = p.y;
+      let dmg = st.damage;
+      for (let j = 0; j < st.amount + st.jumps; j++) {
+        const idx = nearestNotIn(x, y, j === 0 ? def.range * st.range : def.jumpRange * st.range, used);
+        if (idx < 0) break;
+        const e = enemies[idx];
+        used.push(idx);
+        if (arcFx) arcFx(x, y, e.x, e.y, color);
+        damageEnemy(e, dmg, 0, 0, true);
+        x = e.x; y = e.y;
+        dmg *= def.falloff || 0.88;
+      }
     }
     return used.length > 0;
   },
@@ -811,7 +880,9 @@ const BEHAVIOR = {
     clampToBounds(free, G.bounds, DECOY_R + 4);
     if (waterAtWorld(free.x, free.y)) { const l = nearestLand(free.x, free.y); free.x = l.x; free.y = l.y; }
     free.maxHp = free.hp = Math.max(1, Math.round(((G.stats && G.stats.maxHp) || p.maxHp) / 3));
-    free.dir = 0; free.t = 0; free.dyingT = 0; free.flash = 0;
+    free.dir = 0; free.t = 0; free.dyingT = 0; free.flash = 0; free.downed = false; free.tick = 0;
+    // An overload's sturdier doll.
+    if (w.ovl && w.ovl.decoy && w.ovl.decoy.hp) free.maxHp = free.hp = Math.round(free.maxHp * w.ovl.decoy.hp);
     free.alive = true;
     return true;
   },
@@ -822,16 +893,25 @@ const BEHAVIOR = {
  * Enemies do the damaging, in enemies.js; enemy shots, in updateProjectiles below.
  */
 export function updateDecoys(dt) {
+  // Whichever weapon is the Substitute, and its overload if it has one.
+  let ov = null;
+  for (let k = 0; k < G.weapons.length; k++) {
+    const w = G.weapons[k];
+    if (w.def.behavior === 'decoy' && w.ovl) { ov = srcOvl[w.srcId]; break; }
+  }
   for (let i = 0; i < decoys.length; i++) {
     const d = decoys[i];
     if (!d.alive) continue;
     d.t += dt;
     if (d.flash > 0) d.flash -= dt;
     if (d.dyingT > 0) {
+      // The moment it falls, once.
+      if (!d.downed) { d.downed = true; if (ov && ovlHooks.dollDown) ovlHooks.dollDown(d, ov); }
       d.dyingT -= dt;
       if (d.dyingT <= 0) d.alive = false;
       continue;
     }
+    if (ov && ovlHooks.dollTick) ovlHooks.dollTick(d, ov, dt);
     // Faces whatever is coming for it, which is what makes it read as standing its ground.
     const idx = nearestEnemy(d.x, d.y, 200);
     if (idx >= 0) {
@@ -848,6 +928,85 @@ const LEGEND_REHIT = 0.3;
 const CHILL_TIME = 1.2;
 
 const _chainUsed = [];
+// The options object the line behaviours pass to damageLine, reused rather than rebuilt per fire.
+const _lineOpts = { knockback: 0, slow: 0, slowT: 0, weaken: 0 };
+
+// --- Overload hooks ---------------------------------------------------------
+//
+// What an overload does when a shot ends, every Nth trigger pull, or when a doll falls needs the
+// overload runtime (overload.js), which sits on this file's own layer and so cannot be imported.
+// main.js plugs it in here, the same way the effect hooks above are plugged in.
+
+export const ovlHooks = {
+  expire: null,   // (pr, ov) -- a shot of an overloaded weapon has ended
+  every: null,    // (w, st, p) -- an overloaded weapon's every-Nth pull
+  dollDown: null, // (doll, ov) -- a Substitute doll has fallen
+  dollTick: null, // (doll, ov, dt) -- a Substitute doll is standing
+};
+
+/** Particles left behind per frame by overloaded shots, all of them together. */
+const OVL_PARTICLE_BUDGET = 48;
+let ovlParticles = 0;
+
+/**
+ * An overload's zone knobs, applied to a zone a behaviour has just laid. `r` scales the zone (or a
+ * nova's front), `life` how long it lasts, `pull` a vortex's drag, and `slow`/`burn` add to it.
+ */
+function zoneKnobs(w, st, z, nova) {
+  const ov = w.ovl;
+  if (!ov) return;
+  // An overloaded weapon's ground takes the overload's colour, so the field shows what it is.
+  z.color = ov.color;
+  const k = ov.zone;
+  if (!k) return;
+  if (k.r) { if (nova) z.pull *= k.r; else z.r *= k.r; }
+  if (k.life) { z.maxLife *= k.life; z.life = z.maxLife; }
+  if (k.pull && z.kind === ZONE.VORTEX) z.pull *= k.pull;
+  if (k.slow) z.slow = Math.max(z.slow, k.slow);
+  if (k.burn) z.burn = Math.max(z.burn, st.damage * k.burn);
+  if (k.boom) z.boom = st.damage * k.boom;
+  if (k.knock !== undefined && nova) z.knock = k.knock;
+}
+
+/** Leave one particle of an overload's kind at (x, y). */
+function ovlParticle(kind, x, y) {
+  const P = OVL_PARTICLES[kind];
+  if (!P || ovlParticles >= OVL_PARTICLE_BUDGET) return;
+  const q = spawn('particles');
+  if (!q) return;
+  ovlParticles++;
+  q.x = x + (G.rngFx() - 0.5) * 6;
+  q.y = y + (G.rngFx() - 0.5) * 6;
+  q.vx = (G.rngFx() - 0.5) * P.spread;
+  q.vy = P.vy + (G.rngFx() - 0.5) * P.spread * 0.5;
+  q.maxLife = q.life = P.life * (0.7 + G.rngFx() * 0.6);
+  q.size = P.size;
+  q.color = P.colors[(G.rngFx() * P.colors.length) | 0];
+  q.grav = P.grav;
+  q.sprId = -1;
+}
+
+/**
+ * An overloaded weapon's own look on a shot it has just fired: its trail, impact colour, size,
+ * growth and homing. Shots from the turret paths and from forks are not routed here.
+ */
+function ovlShot(w, pr) {
+  const ov = w.ovl;
+  if (!ov) return;
+  const fx = ov.fx;
+  if (fx) {
+    if (fx.trail) { pr.trail = Math.max(pr.trail, 16); pr.trailColor = fx.trail; }
+    pr.impact = Math.max(pr.impact, 6);
+    pr.impactColor = fx.impact || ov.color;
+  }
+  if (ov.size) { pr.vis = ov.size; pr.r *= ov.size; pr.r0 = pr.r; }
+  if (ov.grow) pr.grow = ov.grow;
+  // Homing is a motion, so it only takes over motions that are a plain line to begin with.
+  if (ov.homing && (pr.motion === MOTION_STRAIGHT || pr.motion === MOTION_ACCEL)) {
+    pr.motion = MOTION_HOMING;
+    pr.homingTurn = ov.homing;
+  }
+}
 
 /** Set by main.js so the chain weapon can draw its arcs without importing render. */
 export let arcFx = null;
@@ -953,6 +1112,8 @@ function spawnFor(w, st, p) {
   pr.burn = def.burn || 0;
   pr.burnT = def.burnT || 3;
   pr.slow = def.slow || 0;
+  pr.knockback *= st.knock;
+  ovlShot(w, pr);
   return pr;
 }
 
@@ -1013,6 +1174,8 @@ function fireProjectile(w, st, p, angle, targetIdx, hitId) {
   pr.burn = def.burn || 0;
   pr.burnT = def.burnT || 3;
   pr.slow = def.slow || 0;
+  pr.knockback *= st.knock;
+  ovlShot(w, pr);
   return pr;
 }
 
@@ -1056,6 +1219,27 @@ export function weaponStats(w) {
   o.speed = def.speed * g.projSpeed;
   o.pierce = pierce + g.pierce;
   o.duration = duration * g.duration;
+  o.range = g.range || 1;
+  o.knock = 1;
+
+  // The overload, last: its multipliers apply to the finished numbers, so one tuned against a
+  // level-10 weapon stays tuned however the player's stats grow around it.
+  const ov = w.ovl;
+  if (ov && ov.stats) {
+    const m = ov.stats;
+    if (m.damage) o.damage *= m.damage;
+    if (m.cooldown) o.cooldown = Math.max(0.05, o.cooldown * m.cooldown);
+    if (m.amount) o.amount += m.amount;
+    if (m.area) o.area *= m.area;
+    if (m.speed) o.speed *= m.speed;
+    if (m.pierce) o.pierce += m.pierce;
+    if (m.duration) o.duration *= m.duration;
+    if (m.range) o.range *= m.range;
+    if (m.knockback) o.knock = m.knockback;
+    if (m.shards) o.shards += m.shards;
+    if (m.bounces) o.bounces += m.bounces;
+    if (m.jumps) o.jumps += m.jumps;
+  }
   return o;
 }
 
@@ -1069,13 +1253,20 @@ export function addWeapon(defId) {
   const w = {
     defIdx, def: WEAPONS[defIdx], level: 1, cd: 0, evolved: false,
     charge: 0,                  // banked stacks, for the `charge` behaviour only
+    // The overload taken for this weapon (an entry of data/overloads.js), or null. Kept through
+    // evolution. `fires` counts trigger pulls for `every`, `spinA` turns a spiral pattern, and
+    // `volleyN`/`volleyT` are the bursts still to come of a volley.
+    ovl: null, fires: 0, spinA: 0, volleyN: 0, volleyT: 0,
+    // Seconds left jammed by a Seal trap: it does not fire at all until this runs out.
+    sealT: 0,
     resolved: {
       damage: 0, cooldown: 1, amount: 1, area: 1, speed: 1, pierce: 0, duration: 1,
-      shards: 0, bounces: 0, jumps: 0,
+      shards: 0, bounces: 0, jumps: 0, range: 1, knock: 1,
     },
     // Which line of the damage breakdown this weapon's hits are counted on.
     srcId: damageSourceId(`w:${WEAPONS[defIdx].id}`, WEAPONS[defIdx].name),
   };
+  setSrcType(w.srcId, w.def.type);
   G.weapons.push(w);
   return w;
 }
@@ -1095,6 +1286,7 @@ export function evolveWeapon(w) {
   w.evolved = true;
   w.cd = 0;
   w.srcId = damageSourceId(`w:${w.def.id}`, w.def.name);
+  setSrcType(w.srcId, w.def.type);
   return true;
 }
 
@@ -1105,31 +1297,73 @@ export function levelWeapon(w) {
 
 // --- Update -----------------------------------------------------------------
 
+/** Behaviours a `volley` may repeat: the ones that aim and fire, not the ones that hold a ring. */
+const VOLLEYS = new Set(['projectile', 'cone', 'bouncer', 'split', 'chain', 'tether', 'link', 'rain', 'bloom', 'mine', 'nova', 'sweep']);
+const VOLLEY_GAP = 0.09;
+
 export function updateWeapons(dt) {
   const p = G.player;
   if (!p) return;
   for (let i = 0; i < G.weapons.length; i++) {
     const w = G.weapons[i];
+    // Sealed by a trap: the weapon does nothing until the seal wears off.
+    if (w.sealT > 0) { w.sealT -= dt; continue; }
     const st = weaponStats(w);
     setDamageSource(w.srcId);
+    // The rest of a volley, a beat apart, re-aimed each time.
+    if (w.volleyN > 0) {
+      w.volleyT -= dt;
+      if (w.volleyT <= 0) {
+        w.volleyN--;
+        w.volleyT = VOLLEY_GAP;
+        BEHAVIOR[w.def.behavior](w, st, p);
+      }
+    }
     w.cd -= dt;
     if (w.cd <= 0) {
       const fired = BEHAVIOR[w.def.behavior](w, st, p);
       if (fired && shotSfx) shotSfx(w.def);
       // Holding the shot when nothing is in range costs a short retry, not the full cooldown.
       w.cd = fired ? st.cooldown : 0.12;
+      const ov = w.ovl;
+      if (fired && ov) {
+        w.fires++;
+        if (ov.pattern === 'volley' && VOLLEYS.has(w.def.behavior)) {
+          w.volleyN = (ov.volley || 3) - 1;
+          w.volleyT = VOLLEY_GAP;
+        }
+        if (ov.every && w.fires % ov.every.n === 0 && ovlHooks.every) ovlHooks.every(w, st, p);
+      }
     }
   }
   setDamageSource(0);
 }
 
 export function updateProjectiles(dt) {
+  ovlParticles = 0;
   for (let i = projectiles.length - 1; i >= 0; i--) {
     const pr = projectiles[i];
     // A shot counts to whatever fired it, and so does anything it spawns or leaves behind.
     setDamageSource(pr.src);
     MOTION_FNS[pr.motion](pr, dt);
     pr.life += dt;
+
+    // An overload's growth widens the shot as it flies -- its hitbox and the way it is drawn.
+    if (pr.grow > 0) {
+      const nv = pr.vis + pr.grow * dt;
+      const f = nv / pr.vis;
+      pr.vis = nv;
+      pr.r0 *= f;
+      if (pr.r > 0) pr.r *= f;
+    }
+    // And its particles, a few a second per shot, drawn from one shared per-frame budget.
+    if (!pr.hostile) {
+      const ov = srcOvl[pr.src];
+      if (ov !== undefined && ov.def.fx && ov.def.fx.particles) {
+        pr.pt -= dt;
+        if (pr.pt <= 0) { pr.pt = 0.07; ovlParticle(ov.def.fx.particles, pr.x, pr.y - pr.z); }
+      }
+    }
 
     if (pr.gen === ROLE.TURRET) updateTurret(pr, dt);
 
@@ -1194,41 +1428,57 @@ function hitsDecoy(pr) {
 /** An emplacement firing on its own clock. */
 function updateTurret(pr, dt) {
   const def = WEAPONS[pr.weapon];
+  if (!def) return;
+  // An overload can retune the gun: its gap, its reach, how hard and how many at once. A
+  // companion with an `emit` overload shoots through this same path.
+  const ovr = srcOvl[pr.src];
+  const ov = ovr !== undefined ? ovr.def : null;
+  const kt = ov ? (ov.emit || ov.turret) : null;
   pr.emitT -= dt;
   if (pr.emitT > 0) return;
-  pr.emitT = def.emitGap || 0.5;
+  pr.emitT = (kt && kt.gap ? kt.gap : (def.emitGap || 0.5));
 
-  const idx = nearestEnemy(pr.x, pr.y, def.emitRange || 160);
+  const range = (def.emitRange || 160) * (kt && kt.range ? kt.range : 1);
+  const idx = nearestEnemy(pr.x, pr.y, range);
   if (idx < 0) return;
   const e = enemies[idx];
-  const a = Math.atan2(e.y - pr.y, e.x - pr.x);
+  const a0 = Math.atan2(e.y - pr.y, e.x - pr.x);
+  const barrels = kt && kt.barrels ? kt.barrels : 1;
+  for (let b = 0; b < barrels; b++) {
+    const a = a0 + (barrels === 1 ? 0 : (b - (barrels - 1) / 2) * 0.32);
+    emitShot(pr, def, ov, kt, a, idx);
+  }
+}
 
+function emitShot(pr, def, ov, kt, a, idx) {
   const shot = spawn('projectiles');
   if (!shot) return;
   shot.x = pr.x; shot.y = pr.y;
   shot.ox = pr.x; shot.oy = pr.y;
-  shot.vx = Math.cos(a) * (def.emitSpeed || 220);
-  shot.vy = Math.sin(a) * (def.emitSpeed || 220);
+  const speed = kt && kt.speed ? kt.speed : (def.emitSpeed || 220);
+  shot.vx = Math.cos(a) * speed;
+  shot.vy = Math.sin(a) * speed;
   shot.angle = a;
-  shot.r = shot.r0 = def.emitR || 4;
-  shot.dmg = pr.dmg * (def.emitDamage || 0.6);
+  shot.r = shot.r0 = (kt && kt.r) || def.emitR || 4;
+  shot.dmg = pr.dmg * (def.emitDamage || 0.6) * (kt && kt.dmg ? kt.dmg : 1);
   shot.pierce = def.emitPierce || 0;
   shot.life = 0;
-  shot.maxLife = def.emitLife || 0.9;
+  shot.maxLife = (kt && kt.life) || def.emitLife || 0.9;
   shot.motion = MOTION_STRAIGHT;
-  shot.sprBase = def.emitSprBase;
-  shot.nd = def.emitSprDirs;
+  // A companion has no shot of its own, so it fires small copies of itself.
+  shot.sprBase = def.emitSprBase !== undefined ? def.emitSprBase : def.sprBase;
+  shot.nd = def.emitSprBase !== undefined ? def.emitSprDirs : def.sprDirs;
   shot.knockback = 0;
   shot.weapon = -1;                        // not the turret: it must not drop the turret's zone
   shot.targetIdx = idx;
   shot.homingTurn = 0;
   shot.area = pr.area;
   shot.hitId = nextHitId();
-  shot.trail = def.emitTrail || 0;
-  shot.trailColor = def.trailColor || '#ffffff';
+  shot.trail = def.emitTrail || (ov ? 12 : 0);
+  shot.trailColor = ov && ov.fx && ov.fx.trail ? ov.fx.trail : (def.trailColor || '#ffffff');
   shot.pulse = 0;
-  shot.impact = def.impact || 0;
-  shot.impactColor = def.impactColor || '#ffffff';
+  shot.impact = def.impact || (ov ? 5 : 0);
+  shot.impactColor = ov ? ov.color : (def.impactColor || '#ffffff');
   shot.spin = 0; shot.amp = 0; shot.freq = 0;
   shot.returning = false; shot.crit = false;
   shot.orbitA = 0; shot.orbitR = 0;
@@ -1241,17 +1491,28 @@ function updateTurret(pr, dt) {
 
 /** A mine or a seed going off: area damage where it sits, then it is gone. */
 function detonate(pr) {
-  const r = (pr.payload || 30) * (pr.area || 1);
+  const r = (pr.payload || 30) * (pr.area || 1) * pr.vis;
   damageCircle(pr.x, pr.y, r, pr.dmg, nextHitId(), {
     knockback: pr.knockback || 0,
     stun: 0.2,
   });
+  // A mine's blast is its end, and the end is where an overload's aftermath lands.
+  if (pr.gen === ROLE.MINE && ovlHooks.expire) {
+    const ov = srcOvl[pr.src];
+    if (ov !== undefined && ov.def.expire) ovlHooks.expire(pr, ov);
+  }
   if (impactFx) impactFx(pr.x, pr.y, 10, pr.impactColor || '#ffffff');
   if (blastFx) blastFx(pr.x, pr.y, r, pr.impactColor || '#ffffff');
 }
 
 /** A lobbed shot that reaches the end of its arc leaves its zone behind. */
 function dropEndZone(pr) {
+  // An overloaded weapon's shot may do something as it ends. Not the forks it split into, and not
+  // the turret emplacement itself, or a single trigger pull would end a dozen times.
+  if (pr.gen !== ROLE.SHARD && pr.gen !== ROLE.TURRET && ovlHooks.expire) {
+    const ov = srcOvl[pr.src];
+    if (ov !== undefined && ov.def.expire) ovlHooks.expire(pr, ov);
+  }
   const def = pr.weapon >= 0 ? WEAPONS[pr.weapon] : null;
   const z0 = def && def.zoneOnEnd;
   if (!z0) return;
@@ -1424,9 +1685,15 @@ function nearestOther(x, y, range, skip) {
 
 // Resolved once at boot so the turret and split paths never look a motion up by name.
 let MOTION_STRAIGHT = 0;
+let MOTION_ACCEL = 0;
+let MOTION_HOMING = 0;
+/** For overload.js, which spawns shots of its own and must not hardcode an index. */
+export const motionOf = (name) => motionIndex(name);
 
 export function initWeaponDefs() {
   MOTION_STRAIGHT = motionIndex('straight');
+  MOTION_ACCEL = motionIndex('accelerate');
+  MOTION_HOMING = motionIndex('homing');
   const seenPair = new Map();
   for (const def of WEAPONS) {
     def.motionIdx = motionIndex(def.motion);

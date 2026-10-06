@@ -9,7 +9,8 @@
 
 import { G } from './state.js';
 import { saveData, persistSave, bankGold } from './save.js';
-import { SUCCESSES, SUCCESS_BY_ID } from './data/successes.js';
+import { SUCCESSES, SUCCESS_BY_ID, TIERS, RANKS } from './data/successes.js';
+import { CHARACTERS } from './data/characters.js';
 
 /** 'locked' | 'unlocked' | 'claimed' */
 export const successState = (id) => saveData().ach[id] || 'locked';
@@ -40,9 +41,66 @@ export function unlockSuccess(id) {
 export function claimSuccess(id) {
   const def = SUCCESS_BY_ID[id];
   if (!def || successState(id) !== 'unlocked') return 0;
-  saveData().ach[id] = 'claimed';
-  // bankGold persists, so the claimed mark and the gold land in the same write.
-  return bankGold((def.reward && def.reward.gold) || 0);
+  const s = saveData();
+  s.ach[id] = 'claimed';
+  // A perk is for good: every run from the next one on.
+  if (def.reward && def.reward.perk) s.perks[def.reward.perk] = 1;
+  // bankGold persists, so the claimed mark, the perk and the gold land in the same write.
+  return bankGold((def.reward && def.reward.gold) || 0) || 1;
+}
+
+// --- Explorer Rank -------------------------------------------------------------------------
+
+/** Points from every claimed success, by tier. */
+export function explorerPoints() {
+  let n = 0;
+  for (const sc of SUCCESSES) if (successState(sc.id) === 'claimed') n += TIERS[sc.tier || 'bronze'].points;
+  return n;
+}
+
+/** { index, name, points, at, next } -- `next` is the next rank's threshold, or null at Master. */
+export function explorerRank() {
+  const points = explorerPoints();
+  let i = 0;
+  while (i + 1 < RANKS.length && points >= RANKS[i + 1].at) i++;
+  return { index: i, name: RANKS[i].name, points, at: RANKS[i].at, next: i + 1 < RANKS.length ? RANKS[i + 1].at : null };
+}
+
+// --- Cross-run counters ----------------------------------------------------------------------
+
+/** Add to a save.stats counter. Persisted by the caller's next write, or by flushRecords. */
+export function bumpStat(key, n = 1) {
+  const s = saveData();
+  s.stats[key] = (s.stats[key] || 0) + n;
+  checkCounters();
+}
+
+export function flushRecords() { persistSave(); }
+
+/** Every success that is a counter reaching its target. */
+function checkCounters() {
+  for (const sc of SUCCESSES) {
+    const p = sc.progress;
+    if (!p || (!p.count && !p.save && !p.partners)) continue;
+    if (sc.id === 'legendary') continue;            // has its own check, with its own timing
+    const prog = successProgress(sc);
+    if (prog && prog[0] >= prog[1]) unlockSuccess(sc.id);
+  }
+}
+
+/** Mark a stage-keyed or ribbon tally and check what it completes. */
+export function recordKey(field, key) {
+  const s = saveData();
+  if (s[field][key]) return false;
+  s[field][key] = 1;
+  persistSave();
+  checkCounters();
+  return true;
+}
+
+/** Unlock `id` if `cond` holds. For the one-moment conditions main.js checks where they happen. */
+export function unlockIf(id, cond) {
+  if (cond) unlockSuccess(id);
 }
 
 export const claimableCount = () => SUCCESSES.filter((s) => successState(s.id) === 'unlocked').length;
@@ -93,9 +151,14 @@ export function checkLegendary() {
 
 /** How far along a success with a `progress` tally is: [have, of], or null for the others. */
 export function successProgress(def) {
-  if (!def.progress) return null;
-  const tally = saveData()[def.progress.save] || {};
-  return [Math.min(def.progress.of, Object.keys(tally).length), def.progress.of];
+  const p = def.progress;
+  if (!p) return null;
+  const s = saveData();
+  let have = 0;
+  if (p.count) have = s.stats[p.count] || 0;
+  else if (p.partners) have = CHARACTERS.filter((c) => Object.keys(s.ribbons).some((k) => k.startsWith(`${c.id}:`))).length;
+  else have = Object.keys(s[p.save] || {}).length;
+  return [Math.min(p.of, have), p.of];
 }
 
 /** When a run ends in death. The 20:00 boss is a win, so dying after it is not this. */

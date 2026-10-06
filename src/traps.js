@@ -23,7 +23,9 @@
 import { G } from './state.js';
 import { hash2, dist2 } from './util.js';
 import { enemies, cellRange, cellStart, cellItems, GW, nextHitId, setDamageSource } from './world.js';
-import { damagePlayer, damageEnemy, damageCircle, damageOverTime, damageSourceId } from './combat.js';
+import {
+  damagePlayer, damageEnemy, damageCircle, damageOverTime, damageSourceId, statusPlayer, applyChill,
+} from './combat.js';
 import { waterAtWorld } from './terrain.js';
 
 const CELL = 150;                 // one candidate per 150x150 world cell -- sparser than scenery
@@ -46,34 +48,34 @@ const BASE_DENSITY = 0.055;
 
 const TRAPS = {
   spike: {
-    label: 'SPIKE TRAP', damage: 12,
+    label: 'SPIKE TRAP', damage: 12, weight: 10,
     onPlayer: () => damagePlayer(12),
     onEnemy: (e) => damageEnemy(e, 40, 0, 0, false),
   },
   explosion: {
-    label: 'EXPLOSION TRAP', damage: 18, radius: 54,
+    label: 'EXPLOSION TRAP', damage: 18, radius: 54, weight: 8,
     onPlayer: (t) => { damagePlayer(18); blast(t); },
     onEnemy: (e, t) => { blast(t); },
   },
   slumber: {
-    label: 'SLUMBER TRAP',
+    label: 'SLUMBER TRAP', weight: 8,
     // The player is rooted, not damaged. Standing still for most of a second with a crowd on
     // you is already the punishment, and stacking damage on top would just be a spike trap.
     onPlayer: () => { const p = G.player; if (p) p.rootT = Math.max(p.rootT, 0.9); },
     onEnemy: (e) => { e.stunT = Math.max(e.stunT, 2.4); },
   },
   poison: {
-    label: 'POISON TRAP',
+    label: 'POISON TRAP', weight: 8,
     onPlayer: () => damagePlayer(9),
     onEnemy: (e) => damageOverTime(e, 30),
   },
   warp: {
-    label: 'WARP TRAP', range: 260,
+    label: 'WARP TRAP', range: 260, weight: 6,
     onPlayer: () => warp(G.player),
     onEnemy: (e) => warp(e),
   },
   ppdown: {
-    label: 'PP DOWN TRAP',
+    label: 'PP DOWN TRAP', weight: 6,
     // Both abilities go onto their full cooldown -- but only the ones that are ready. One that is
     // already cooling down keeps its remaining time: the trap takes away what you had, and an
     // ability you could not use anyway is not something it can take.
@@ -89,7 +91,110 @@ const TRAPS = {
     // No onEnemy: there is nothing for it to do to an enemy, so enemies walk over it and it stays
     // armed for the player. Letting the crowd spend it would quietly remove the hazard.
   },
+
+  // --- The second set, from the unused tiles of items_2.png -----------------------------------
+  summon: {
+    label: 'SUMMON TRAP', weight: 5,
+    // A pack of the stage's own Pokemon bursts in around you. Enemies cannot set it off.
+    onPlayer: (t) => { if (fx.summon) fx.summon(t.x, t.y); },
+  },
+  pitfall: {
+    label: 'PITFALL TRAP', weight: 3,
+    // Straight down to the next floor -- or, where there is none, a nasty fall.
+    onPlayer: () => { if (!(fx.pitfall && fx.pitfall())) damagePlayer(14); },
+    // An enemy that steps on it is simply gone: it fell, and leaves nothing behind.
+    onEnemy: (e) => { e.alive = false; },
+  },
+  gust: {
+    label: 'GUST TRAP', weight: 6, radius: 120,
+    onPlayer: (t) => { gust(t); shove(G.player, t); },
+    onEnemy: (e, t) => gust(t),
+  },
+  seal: {
+    label: 'SEAL TRAP', weight: 5,
+    // One of your weapons, jammed for eight seconds.
+    onPlayer: () => {
+      const free = G.weapons.filter((w) => !(w.sealT > 0));
+      if (!free.length) return;
+      const w = free[(G.rngRun() * free.length) | 0];
+      w.sealT = 8;
+      if (fx.sealed) fx.sealed(w);
+    },
+  },
+  wonder: {
+    label: 'WONDER TILE', weight: 4, good: true,
+    // The one tile worth stepping on: you are cleansed, healed a little, and lifted for a while.
+    onPlayer: () => { if (fx.wonder) fx.wonder(); },
+  },
+  random: {
+    label: '? TRAP', weight: 5,
+    // Becomes some other tile, the Wonder Tile included, at the moment it goes off.
+    onPlayer: (t) => {
+      t.kind = rollKind(G.rngRun(), (k) => k !== 'random');
+      TRAPS[t.kind].onPlayer(t);
+    },
+    onEnemy: (e, t) => {
+      t.kind = rollKind(G.rngRun(), (k) => k !== 'random' && !!TRAPS[k].onEnemy);
+      TRAPS[t.kind].onEnemy(e, t);
+    },
+  },
+  slow: {
+    label: 'SLOW TRAP', weight: 6,
+    onPlayer: () => statusPlayer('chill', 3),
+    onEnemy: (e) => applyChill(e, 0.5, 4),
+  },
 };
+
+/** How much more (or less) often each tile turns up on a given stage. */
+const STAGE_WEIGHT = {
+  grass: { wonder: 1.4, summon: 1.3 },
+  cave: { pitfall: 1.6, explosion: 1.2, gust: 0.6 },
+  beach: { gust: 1.6, slow: 1.3, summon: 0.8 },
+};
+
+/** A tile kind for a 0..1 roll, by weight, among the kinds `ok` allows. */
+function rollKind(roll, ok) {
+  const sw = (G.stage && STAGE_WEIGHT[G.stage.id]) || {};
+  let total = 0;
+  for (const k of TRAP_KEYS) if (!ok || ok(k)) total += TRAPS[k].weight * (sw[k] || 1);
+  let r = roll * total;
+  for (const k of TRAP_KEYS) {
+    if (ok && !ok(k)) continue;
+    r -= TRAPS[k].weight * (sw[k] || 1);
+    if (r <= 0) return k;
+  }
+  return 'spike';
+}
+
+/** The gust's blast: everything near the tile is thrown away from it. */
+function gust(t) {
+  const r = TRAPS.gust.radius, r2 = r * r;
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i];
+    if (!e.alive || e.prop || e.boss) continue;
+    const dx = e.x - t.x, dy = e.y - t.y, d2 = dx * dx + dy * dy;
+    if (d2 > r2) continue;
+    const d = Math.sqrt(d2) || 1;
+    const k = 340 * (1 - e.knockResist);
+    e.knockX += (dx / d) * k;
+    e.knockY += (dy / d) * k;
+  }
+}
+
+/** Blow the player a stride away from the tile, onto dry ground inside the arena. */
+function shove(p, t) {
+  if (!p) return;
+  const a = G.rngRun() * Math.PI * 2;
+  const b = G.bounds;
+  for (let k = 0; k < 8; k++) {
+    let x = p.x + Math.cos(a + k * 0.8) * 150, y = p.y + Math.sin(a + k * 0.8) * 150;
+    if (b) { x = Math.max(b.minX + 24, Math.min(b.maxX - 24, x)); y = Math.max(b.minY + 24, Math.min(b.maxY - 24, y)); }
+    if (waterAtWorld(x, y)) continue;
+    p.x = x; p.y = y;
+    p.iframes = Math.max(p.iframes, 0.4);
+    return;
+  }
+}
 
 export const TRAP_KEYS = Object.keys(TRAPS);
 export const trapDef = (kind) => TRAPS[kind];
@@ -134,6 +239,15 @@ export function resetTraps() {
 
 export function trapCount() { return active.size; }
 
+/** For the probes: lay a trap of `kind` at (x, y) and set it off, by the player or by an enemy. */
+export function debugSpring(kind, x, y, byPlayer = true) {
+  const key = -1 - (sprung.size + active.size);
+  const t = { x, y, kind, reveal: 1 };
+  active.set(key, t);
+  fire(t, key, byPlayer);
+  return t.kind;
+}
+
 /** The live traps, for the renderer. */
 export const liveTraps = () => active.values();
 
@@ -155,7 +269,10 @@ export function updateTraps(dt) {
   // enemy, which is how you find out it was there.
   for (const [key, t] of active) {
     const d2 = dist2(t.x, t.y, p.x, p.y);
-    const target = d2 < REVEAL_R * REVEAL_R ? 1 : 0;
+    // A Luminous Orb lights the whole floor: every trap shows, wherever it is. A Wonder Tile
+    // glints from twice as far: it is the one you want to find.
+    const rr = TRAPS[t.kind].good ? REVEAL_R * 2 : REVEAL_R;
+    const target = G.lumFloor || d2 < rr * rr ? 1 : 0;
     // Eased rather than snapped, so a trap fades up as you close instead of popping.
     t.reveal += (target - t.reveal) * Math.min(1, dt * 7);
 
@@ -207,7 +324,13 @@ function fire(t, key, byPlayer) {
  * Set by main.js so a sprung trap can make a noise and throw sparks without importing render, and
  * so PP Down can read an ability's resolved cooldown without importing abilities.js (same layer).
  */
-export const fx = { sprung: null, abilityCooldown: null };
+export const fx = {
+  sprung: null, abilityCooldown: null,
+  summon: null,  // (x, y) -- a pack bursts in
+  pitfall: null, // () -> bool: down to the next floor
+  wonder: null,  // () -- cleanse, heal, lift
+  sealed: null,  // (weapon) -- jammed
+};
 
 function place(p) {
   if (active.size >= MAX_LIVE) return;
@@ -236,8 +359,7 @@ function place(p) {
       if (b && (x < b.minX + 32 || x > b.maxX - 32 || y < b.minY + 32 || y > b.maxY - 32)) continue;
       if (waterAtWorld(x, y)) continue;                              // no traps under the water
 
-      const roll = hash2(gx + 977, gy + 977);
-      const kind = TRAP_KEYS[Math.min(TRAP_KEYS.length - 1, (roll * TRAP_KEYS.length) | 0)];
+      const kind = rollKind(hash2(gx + 977, gy + 977), null);
       active.set(key, { x, y, kind, reveal: 0 });
       if (active.size >= MAX_LIVE) return;
     }

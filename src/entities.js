@@ -15,8 +15,11 @@ import {
   decoys, DECOY_DIE,
 } from './world.js';
 import {
-  drawSprite, drawSpriteScaled, drawShadow, drawText, FRAMES, angleSlot,
+  drawSprite, drawSpriteScaled, drawShadow, drawText, drawTextCentered, FRAMES, angleSlot, glowCanvas,
 } from './sprites.js';
+import { srcOvl } from './combat.js';
+import { TOTEM_KINDS, RING_R } from './data/totems.js';
+import { wakeSecs } from './totems.js';
 import { tierScale, TIER_COUNT } from './pickups.js';
 import { FX, ZONE, fxSprites } from './fx.js';
 import { getImage, getAttack, getSequence } from './assets.js';
@@ -45,6 +48,9 @@ let hostileSpr = -1;
 let trapSpr = null;
 
 export function setTrapSprites(map) { trapSpr = map; }
+/** kind -> atlas frame of each totem, filled by main.js at boot. */
+let totemSpr = null;
+export function setTotemSprites(map) { totemSpr = map; }
 
 /** Told by main.js which frame an enemy shot draws with, once, at boot. */
 export function setHostileSprite(id) { hostileSpr = id; }
@@ -56,10 +62,12 @@ export function drawEntities() {
   const camOffX = toScreenX(0);
   const camOffY = toScreenY(0);
   burnMarksDrawn = 0;
+  statusMarksDrawn = 0;
 
   drawZones(camOffX, camOffY);
   drawTraps(camOffX, camOffY);
   drawStairs(camOffX, camOffY);
+  drawTotems(camOffX, camOffY);
   drawPortal(camOffX, camOffY);
   drawLegendGround(camOffX, camOffY);
   drawPickups(camOffX, camOffY);
@@ -691,6 +699,63 @@ function drawTraps(ox, oy) {
     ctx.globalAlpha = t.reveal;
     drawSprite(ctx, id, sx, sy);
     ctx.globalAlpha = 1;
+    // A Wonder Tile glints, so it can be told from a trap before you are on top of it.
+    if (t.kind === 'wonder') {
+      ctx.fillStyle = '#eaffea';
+      for (let k = 0; k < 3; k++) {
+        const ph = (G.clock * 1.7 + k * 0.37) % 1;
+        ctx.globalAlpha = t.reveal * (1 - ph);
+        ctx.fillRect(Math.round(sx - 9 + ((k * 7 + ((G.clock * 2) | 0) * 5) % 18)), Math.round(sy - 6 - ph * 10), 1, 2);
+      }
+      ctx.globalAlpha = 1;
+    }
+  }
+}
+
+/**
+ * The floor's totems: the pole, its ring, how far the ring has filled, and what state it is in.
+ * At most two of them, so a stroked ellipse each is affordable.
+ */
+function drawTotems(ox, oy) {
+  if (!G.totems || !G.totems.length || G.secret) return;
+  for (const t of G.totems) {
+    const sx = t.x + ox, sy = t.y + oy;
+    if (sx < -60 || sy < -80 || sx > VW + 60 || sy > VH + 40) continue;
+    const def = TOTEM_KINDS[t.kind];
+    const spent = t.state === 'done' || t.state === 'crumbled';
+    // The ring on the ground.
+    if (!spent) {
+      const pulse = 0.35 + Math.sin(G.clock * 3) * 0.12;
+      ctx.globalAlpha = t.state === 'trial' ? 0.7 : pulse;
+      ctx.strokeStyle = t.state === 'trial' ? '#ff4a4a' : def.color;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.ellipse(sx, sy, RING_R, RING_R * 0.55, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      if (t.state === 'idle' && t.charge > 0) {
+        ctx.globalAlpha = 0.9;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.ellipse(sx, sy, RING_R, RING_R * 0.55, 0, -Math.PI / 2, -Math.PI / 2 + t.charge * Math.PI * 2);
+        ctx.stroke();
+        ctx.lineWidth = 1;
+      }
+      ctx.globalAlpha = 1;
+    }
+    drawShadow(ctx, sx, sy, 1.4);
+    const id = totemSpr ? totemSpr[t.kind] : -1;
+    ctx.globalAlpha = t.state === 'crumbled' ? 0.3 : spent ? 0.55 : 1;
+    if (id >= 0) drawSprite(ctx, id, sx, sy);
+    ctx.globalAlpha = 1;
+    // An awake Fortune totem shimmers gold; a trial counts down over its head.
+    if (t.state === 'awake') {
+      ctx.fillStyle = '#ffe9a0';
+      for (let k = 0; k < 4; k++) {
+        const a = G.clock * 2 + k * 1.57;
+        ctx.fillRect(Math.round(sx + Math.cos(a) * 16), Math.round(sy - 30 + Math.sin(a) * 18), 1, 1);
+      }
+    }
+    if (t.state === 'trial') drawTextCentered(ctx, String(Math.max(0, Math.ceil(t.t))), sx, sy - 66, 'red');
   }
 }
 
@@ -925,8 +990,84 @@ function drawEnemy(e, ox, oy) {
     ctx.globalAlpha = 1;
   }
 
-  if (e.burnT > 0) drawBurnMark(e, sx, sy);
+  if (e.burnT > 0) { if (e.dotKind === 1) drawToxicMark(e, sx, sy); else drawBurnMark(e, sx, sy); }
+  if (e.markT > 0 || e.stunT > 0 || e.confuseT > 0 || (e.slowT > 0 && e.slow >= 0.3)) drawStatusMarks(e, sx, sy);
   if (e.boss || e.elite) drawHealthBar(e, sx, sy);
+}
+
+// --- Status marks ----------------------------------------------------------------
+//
+// What an overload has done to an enemy, drawn over it: a reticle for a mark, stars for a stun, a
+// swirl for confusion, frost for a heavy chill, bubbles for poison. All of them are a few
+// fillRects, and capped per frame like the burn marks, so a crowd of 300 marked enemies cannot
+// cost more than the cap does.
+
+const STATUS_MARK_CAP = 64;
+let statusMarksDrawn = 0;
+
+function enemyTop(e, sy) {
+  const f = FRAMES[e.sprBase + e.frame * e.nd + e.dir];
+  return sy - (f ? f.oy : 12);
+}
+
+function drawStatusMarks(e, sx, sy) {
+  if (statusMarksDrawn >= STATUS_MARK_CAP) return;
+  statusMarksDrawn++;
+  const t = G.clock;
+  const top = enemyTop(e, sy);
+  const x = Math.round(sx), cy = Math.round((top + sy) / 2);
+
+  if (e.markT > 0) {
+    // Four corner brackets closing in and out around the target.
+    const r = Math.round(e.r + 5 + Math.sin(t * 8) * 1.5);
+    const h = Math.round((sy - top) / 2 + 4);
+    ctx.fillStyle = '#ff4a4a';
+    ctx.fillRect(x - r, cy - h, 3, 1); ctx.fillRect(x - r, cy - h, 1, 3);
+    ctx.fillRect(x + r - 2, cy - h, 3, 1); ctx.fillRect(x + r, cy - h, 1, 3);
+    ctx.fillRect(x - r, cy + h, 3, 1); ctx.fillRect(x - r, cy + h - 2, 1, 3);
+    ctx.fillRect(x + r - 2, cy + h, 3, 1); ctx.fillRect(x + r, cy + h - 2, 1, 3);
+  }
+  if (e.stunT > 0) {
+    // Three stars wheeling over its head.
+    ctx.fillStyle = '#ffe14a';
+    for (let k = 0; k < 3; k++) {
+      const a = t * 5 + (k / 3) * Math.PI * 2;
+      const px = Math.round(x + Math.cos(a) * 7), py = Math.round(top - 3 + Math.sin(a) * 2);
+      ctx.fillRect(px - 1, py, 3, 1); ctx.fillRect(px, py - 1, 1, 3);
+    }
+  } else if (e.confuseT > 0) {
+    // A purple swirl: dots chasing each other round a small circle.
+    ctx.fillStyle = '#c49aff';
+    for (let k = 0; k < 4; k++) {
+      const a = -t * 7 + k * 1.2;
+      const rr = 2 + k;
+      ctx.fillRect(Math.round(x + Math.cos(a) * rr), Math.round(top - 4 + Math.sin(a) * rr * 0.6), 1, 1);
+    }
+  }
+  if (e.slowT > 0 && e.slow >= 0.3) {
+    // Frost: pale pixels flickering on the body.
+    ctx.fillStyle = '#c8f0ff';
+    const seed = (e.x | 0) * 31 + (e.y | 0);
+    for (let k = 0; k < 3; k++) {
+      const ph = ((G.tick >> 3) + k + seed) & 7;
+      ctx.fillRect(Math.round(x - e.r + ((seed + k * 37 + ph * 5) % (e.r * 2 + 1))), Math.round(cy - 4 + ((k * 13 + ph * 3) % 9)), 1, 1);
+    }
+  }
+}
+
+/** Poison instead of fire: green bubbles rising off the target. */
+function drawToxicMark(e, sx, sy) {
+  if (burnMarksDrawn >= BURN_MARK_CAP) return;
+  burnMarksDrawn++;
+  const top = enemyTop(e, sy);
+  const seed = ((e.x | 0) + (e.y | 0)) & 0xff;
+  for (let k = 0; k < 3; k++) {
+    const life = ((G.tick + seed * 7 + k * 20) % 60) / 60;
+    ctx.fillStyle = k === 1 ? '#7fe08a' : '#c070e0';
+    const px = Math.round(sx - 4 + k * 4 + Math.sin(life * 6 + k) * 1.5);
+    const py = Math.round(top + 4 - life * 10);
+    ctx.fillRect(px, py, k === 1 ? 2 : 1, k === 1 ? 2 : 1);
+  }
 }
 
 function drawPlayer(p, ox, oy) {
@@ -1053,6 +1194,7 @@ function drawHealthBar(e, sx, sy) {
 }
 
 function drawProjectiles(ox, oy) {
+  drawOverloadGlows(ox, oy);
   for (let i = 0; i < projectiles.length; i++) {
     const pr = projectiles[i];
     const sx = pr.x + ox, sy = pr.y + oy;
@@ -1073,11 +1215,36 @@ function drawProjectiles(ox, oy) {
       // Airborne: a shadow on the ground is the only thing that tells the player where it is
       // going to land, and where it lands is the entire decision the weapon asks of them.
       drawShadow(ctx, sx, sy, Math.max(0.4, 1 - pr.z / 220));
-      drawSprite(ctx, pr.sprBase + d, sx, sy - pr.z);
+      if (pr.vis !== 1) drawSpriteScaled(ctx, pr.sprBase + d, sx, sy - pr.z, pr.vis);
+      else drawSprite(ctx, pr.sprBase + d, sx, sy - pr.z);
+    } else if (pr.vis !== 1) {
+      // An overloaded shot that is bigger, or grows as it flies.
+      drawSpriteScaled(ctx, pr.sprBase + d, sx, sy, pr.vis);
     } else {
       drawSprite(ctx, pr.sprBase + d, sx, sy);
     }
   }
+}
+
+/**
+ * A glow under every shot of an overloaded weapon, in the overload's colour, all of them in one
+ * additive pass before the sprites -- so the blend mode is switched twice a frame, not twice a
+ * shot. A shot with no overload costs one array read here.
+ */
+function drawOverloadGlows(ox, oy) {
+  let on = false;
+  for (let i = 0; i < projectiles.length; i++) {
+    const pr = projectiles[i];
+    if (pr.hostile) continue;
+    const rec = srcOvl[pr.src];
+    if (rec === undefined) continue;
+    const sx = pr.x + ox, sy = pr.y + oy - pr.z;
+    if (sx < -32 || sy < -32 || sx > VW + 32 || sy > VH + 32) continue;
+    if (!on) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.55; on = true; }
+    const r = Math.max(7, pr.r * 1.9 + 4) * (pr.r > 0 ? 1 : 0.7);
+    ctx.drawImage(glowCanvas(rec.color), sx - r, sy - r, r * 2, r * 2);
+  }
+  if (on) { ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; }
 }
 
 function drawParticles(ox, oy) {
@@ -1098,6 +1265,8 @@ function drawDamageNumbers(ox, oy) {
     const d = damageNumbers[i];
     const sx = (d.x + ox) | 0, sy = (d.y + oy) | 0;
     if (sx < -20 || sy < -12 || sx > VW + 20 || sy > VH + 12) continue;
-    drawText(ctx, String(d.value), sx, sy, d.crit ? 'gold' : d.color);
+    // A word (SUPER EFFECTIVE!) is centred on where it was said; a number sits where it landed.
+    if (d.text) drawTextCentered(ctx, d.text, sx, sy, d.color);
+    else drawText(ctx, String(d.value), sx, sy, d.crit ? 'gold' : d.color);
   }
 }

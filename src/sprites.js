@@ -405,6 +405,45 @@ export function drawShadow(ctx, x, y, k = 1) {
 
 export const textWidth = (str, spacing = 1) => str.length * (GLYPH_W + spacing) - spacing;
 
+// --- Glows -------------------------------------------------------------------
+//
+// A soft radial glow in one colour, rendered once into a small canvas and blitted from then on.
+// The overloaded shots draw one under every projectile and the overload cards one behind the
+// weapon, so it must cost a drawImage and nothing more.
+
+const glows = new Map();
+
+/** A 32x32 radial glow in `hex`, cached. Draw it scaled to the size wanted. */
+export function glowCanvas(hex) {
+  let c = glows.get(hex);
+  if (c) return c;
+  c = document.createElement('canvas');
+  c.width = c.height = 32;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+  grad.addColorStop(0, hex);
+  grad.addColorStop(0.35, hex + 'aa');
+  grad.addColorStop(1, hex + '00');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 32, 32);
+  glows.set(hex, c);
+  return c;
+}
+
+/** The font colour nearest a hex colour, for text drawn in something's own tint. */
+const FONT_NEAR = ['white', 'gold', 'red', 'green', 'blue', 'orange', 'purple', 'cyan', 'pink'];
+export function fontColorNear(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = n >> 16, gg = (n >> 8) & 255, b = n & 255;
+  let best = 'white', bestD = Infinity;
+  for (const name of FONT_NEAR) {
+    const m = parseInt(FONT_COLORS[name].slice(1), 16);
+    const d = (r - (m >> 16)) ** 2 + (gg - ((m >> 8) & 255)) ** 2 + (b - (m & 255)) ** 2;
+    if (d < bestD) { bestD = d; best = name; }
+  }
+  return best;
+}
+
 /**
  * Draw a string of the pixel font. Unknown characters fall back to space, and lowercase maps to
  * uppercase so callers never have to think about it.

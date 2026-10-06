@@ -207,6 +207,21 @@ export const PICKUP_KINDS = {
   // the pool's item shape has no other field to put it in, and nine kinds for nine relics would
   // be nine copies of the same behaviour.
   relic:   { shape: 'relic_articuno', fallback: 'orb', palette: 'gold', label: 'RELIC' },
+  // The Explorer's Bag (data/bagitems.js). `bag` sends them to the bag rather than to an effect.
+  bag_oran:        { shape: 'bag_oran', fallback: 'orb', palette: 'water', label: 'ORAN BERRY', bag: true },
+  bag_sleep:       { shape: 'bag_sleep', fallback: 'orb', palette: 'water', label: 'SLEEP SEED', bag: true },
+  bag_gravelerock: { shape: 'bag_gravelerock', fallback: 'orb', palette: 'rock', label: 'GRAVELEROCK', bag: true },
+  bag_warp:        { shape: 'bag_warp', fallback: 'orb', palette: 'water', label: 'WARP SEED', bag: true },
+  bag_totter:      { shape: 'bag_totter', fallback: 'orb', palette: 'gift', label: 'TOTTER SEED', bag: true },
+  bag_petrify:     { shape: 'bag_petrify', fallback: 'orb', palette: 'rock', label: 'PETRIFY ORB', bag: true },
+  bag_allpower:    { shape: 'bag_allpower', fallback: 'orb', palette: 'fire', label: 'ALL-POWER ORB', bag: true },
+  bag_maxelixir:   { shape: 'bag_maxelixir', fallback: 'orb', palette: 'gold', label: 'MAX ELIXIR', bag: true },
+  bag_luminous:    { shape: 'bag_luminous', fallback: 'orb', palette: 'gold', label: 'LUMINOUS ORB', bag: true },
+  bag_joy:         { shape: 'bag_joy', fallback: 'orb', palette: 'grass', label: 'JOY SEED', bag: true },
+  bag_reviver:     { shape: 'bag_reviver', fallback: 'orb', palette: 'gold', label: 'REVIVER SEED', bag: true },
+  bag_escape:      { shape: 'bag_escape', fallback: 'orb', palette: 'grass', label: 'ESCAPE ORB', bag: true },
+  // A trial totem's prize.
+  chest:           { shape: 'chest_deluxe', fallback: 'orb', palette: 'gold', label: 'TREASURE CHEST' },
 };
 
 const KIND_KEYS = Object.keys(PICKUP_KINDS);
@@ -234,7 +249,15 @@ export function initItemSprites() {
 /** Hooks assigned by main.js so collecting an item can reach the systems that apply it. */
 export const itemEffects = {
   magnet: null, berry: null, bomb: null, elixir: null, present: null, relic: null, onCollect: null,
+  // (it, kind) -> false to leave the item lying there: the bag has no room for it.
+  bag: null,
+  // () -> a bag item's pickup kind, rolled by weight. For the drops below.
+  rollBag: null,
+  chest: null,
 };
+
+/** The atlas frame of an item kind, for the HUD's bag slots. */
+export const itemSprite = (kind) => (KIND_SPR[kind] === undefined ? -1 : KIND_SPR[kind]);
 
 export function dropPickup(x, y, kind) {
   const it = spawn('items');
@@ -254,7 +277,9 @@ export function dropPickup(x, y, kind) {
 /** Weighted random drop -- what a destroyed crate or a lucky kill yields. */
 export function dropRandomPickup(x, y) {
   const r = G.rngRun();
-  const kind = r < 0.40 ? 'berry' : r < 0.72 ? 'magnet' : r < 0.92 ? 'bomb' : 'elixir';
+  // One in eight is something for the bag.
+  if (r < 0.125 && itemEffects.rollBag) return dropPickup(x, y, itemEffects.rollBag());
+  const kind = r < 0.43 ? 'berry' : r < 0.71 ? 'magnet' : r < 0.92 ? 'bomb' : 'elixir';
   return dropPickup(x, y, kind);
 }
 
@@ -263,6 +288,7 @@ export function updateItems(dt) {
   if (!p) return;
   const grab = p.r + 10;
   const grab2 = grab * grab;
+  G.bagOver = null;
 
   for (let i = items.length - 1; i >= 0; i--) {
     const it = items[i];
@@ -274,6 +300,13 @@ export function updateItems(dt) {
 
     if (dist2(it.x, it.y, p.x, p.y) <= grab2) {
       const kind = KIND_KEYS[it.kind];
+      // A bag item the bag has no room for stays where it lies, and you are told how to swap.
+      if (PICKUP_KINDS[kind].bag) {
+        if (!itemEffects.bag || itemEffects.bag(it, kind) === false) { G.bagOver = it; continue; }
+        if (itemEffects.onCollect) itemEffects.onCollect(kind, PICKUP_KINDS[kind].label);
+        despawn('items', items, i);
+        continue;
+      }
       const fn = itemEffects[kind];
       if (fn) fn(it);
       if (itemEffects.onCollect) itemEffects.onCollect(kind, PICKUP_KINDS[kind].label);

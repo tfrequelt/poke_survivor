@@ -86,6 +86,22 @@ export const G = {
   secret: false,
   // Relics carried this run, by legendary id, in the order they were taken. See data/legends.js.
   relics: [],
+  // The Explorer's Bag (bag.js): one item id or null per slot, the timed buffs on you, whether a
+  // Luminous Orb has lit this floor, and the bag item you are standing on with no room for it.
+  bag: [null, null, null],
+  buffs: [],
+  lumFloor: false,
+  bagOver: null,
+  // Totems on this floor (totems.js), whether one is being woken (the crowd presses harder), the
+  // Fortune totem you are standing at, and the blessings already taken this run.
+  totems: [],
+  totemPressure: false,
+  fortuneNear: null,
+  blessings: [],
+  // Permanent perks from Expedition Records, read at the start of a run (save.js), and what this
+  // run has done toward the records (set up by startRun; see main.js recordWin and the hooks).
+  perks: {},
+  trk: null,
 
   // --- run configuration ---
   stage: null,      // stage definition
@@ -181,6 +197,14 @@ export function resetRunState() {
   G.portal.x = 0; G.portal.y = 0; G.portal.active = false; G.portal.near = false; G.portal.back = false;
   G.secret = false;
   G.relics.length = 0;
+  G.bag = [null, null, null];
+  G.buffs = [];
+  G.lumFloor = false;
+  G.bagOver = null;
+  G.totems = [];
+  G.totemPressure = false;
+  G.fortuneNear = null;
+  G.blessings = [];
   G.player = null;
   G.form = null;
   G.bounds = null;

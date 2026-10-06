@@ -129,6 +129,8 @@ export function updatePlayer(dt) {
   contactDamage(p, dt);
 
   if (p.hp <= 0 && !G.runOver) {
+    // A Reviver Seed in the bag goes first: it is the one you can see you are carrying.
+    if (bagRevive && bagRevive(p)) { clearStatuses(p); return; }
     // A revive bought from the Kecleon Shop spends itself here: back up at half health, with a
     // long mercy window so you are not immediately killed again by the crowd that did it.
     if (G.revivesLeft > 0) {
@@ -185,6 +187,10 @@ export function setLegendTouch(fn) { onLegendTouch = fn; }
 /** Set by main.js so getting up can shake the screen and say so, without importing upward. */
 export let onRevive = null;
 export function setReviveFx(fn) { onRevive = fn; }
+
+/** bag.js's Reviver Seed check, plugged in by main.js: (player) -> true if it saved you. */
+let bagRevive = null;
+export function setBagRevive(fn) { bagRevive = fn; }
 
 /**
  * Enemy -> player contact. One small grid query per tick rather than a scan of every enemy.

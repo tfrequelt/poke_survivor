@@ -15,6 +15,7 @@ import { damageOverTime } from './combat.js';
 import { dirFromAngle } from './assets.js';
 import { spriteBase, spriteInfo } from './sprites.js';
 import { waterAtWorld, nearestLand, pondsActive } from './terrain.js';
+import { typeTable, SPECIES_TYPES } from './data/types.js';
 import { updateFlow, flowClear, flowTarget, FLOW_STEER, FLOW_HOLD } from './paths.js';
 
 /** Does water stop this enemy? Flyers, the water species, scenery and legendaries ignore it. */
@@ -335,6 +336,8 @@ export function spawnEnemy(def, x, y, opts) {
   e.ai = def.aiIdx;
   e.aiT = 0; e.aiState = 0; e.aiX = 0; e.aiY = 0;
   e.detour = 0; e.losT = 0;
+  e.markT = 0; e.markMul = 0; e.confuseT = 0; e.dotKind = 0; e.sleep = false;
+  e.trial = opts && opts.trial !== undefined ? opts.trial : -1;
   e.flash = 0; e.knockX = 0; e.knockY = 0; e.contactCd = 0; e.decoyCd = 0;
   e.slow = 0; e.slowT = 0;
   e.animTime = 0; e.frame = 0; e.dir = 1;
@@ -445,6 +448,8 @@ export function updateEnemies(dt, separationOn) {
     if (e.flash > 0) e.flash -= dt;
     if (e.slowT > 0) { e.slowT -= dt; if (e.slowT <= 0) e.slow = 0; }
     if (e.weakenT > 0) e.weakenT -= dt;
+    if (e.markT > 0) { e.markT -= dt; if (e.markT <= 0) e.markMul = 0; }
+    if (e.confuseT > 0) e.confuseT -= dt;
 
     // Burn pays out in instalments on the same quarter-second cadence the ground zones use, so
     // a burning crowd and a crowd standing in a pool of fire cost the same to run. This can
@@ -480,7 +485,14 @@ export function updateEnemies(dt, separationOn) {
 
     if (e.stunT > 0) {
       e.stunT -= dt;
+      if (e.stunT <= 0) e.sleep = false;
       e.vx = 0; e.vy = 0;
+    } else if (e.confuseT > 0 && !e.boss && !e.legend) {
+      // Confused: it wanders, turning every so often, and neither chases nor attacks.
+      const step = (e.confuseT * 1.4) | 0;
+      const a = (((i * 2654435761) ^ (step * 40503)) >>> 0) % 6283 / 1000;
+      e.vx = Math.cos(a) * e.speed * 0.7;
+      e.vy = Math.sin(a) * e.speed * 0.7;
     } else if (updateAttack(e, dt, tx, ty)) {
       // Winding up: planted, so the telegraph is a real tell and not something that walks at
       // you while it charges.
@@ -580,6 +592,9 @@ export function updateEnemies(dt, separationOn) {
 export function initEnemyDefs() {
   for (const def of ENEMIES) {
     def.aiIdx = aiIndex(def.ai);
+    // What each attacking type does to this species. Scenery has no types and takes all evenly.
+    def.typeMul = SPECIES_TYPES[def.id] ? typeTable(def.id) : null;
+    if (!def.prop && !SPECIES_TYPES[def.id]) console.warn(`enemies: "${def.id}" has no types`);
     // Same string-key-to-index resolution the AI gets, and for the same reason: the hot loop
     // must never look a behaviour up by name. Throws at boot on a typo rather than at the
     // moment the enemy first tries to fire.
