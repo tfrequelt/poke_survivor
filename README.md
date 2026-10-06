@@ -1,5 +1,8 @@
 # Poke Dracula Edition
 
+![alt text](assets/miscellaneous/logo.png)
+
+
 ## Credits
 
 The Pokemon sprites and portraits in `assets/` come from the **[PMD Sprite Collab](https://sprites.pmdcollab.org)**,
