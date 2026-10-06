@@ -24,6 +24,8 @@ import { thrownItem, activeAbility, activeVisual } from './abilities.js';
 import { sampleDuration } from './audio.js';
 import { hash2 } from './util.js';
 import { liveTraps } from './traps.js';
+import { canSwim } from './player.js';
+import { waterAtWorld } from './terrain.js';
 import {
   drawPortal, drawLegendBoss, legendShadowScale, drawLegendGround, drawLegendAir, drawLegendShot,
   drawLegendWeather, drawPlayerStatus,
@@ -754,7 +756,25 @@ function drawShadows(ox, oy) {
     if (d.alive) drawShadow(ctx, d.x + ox, d.y + oy);
   }
   const p = G.player;
-  if (p) drawShadow(ctx, p.x + ox, p.y + oy);
+  if (p) {
+    if (canSwim() && waterAtWorld(p.x, p.y)) drawRipple(p.x + ox, p.y + oy);
+    else drawShadow(ctx, p.x + ox, p.y + oy);
+  }
+}
+
+/** Two rings spreading on the water around a swimmer, in place of the shadow it would cast. */
+function drawRipple(sx, sy) {
+  const t = (G.clock * 0.9) % 1;
+  ctx.strokeStyle = '#e8f8ff';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 2; i++) {
+    const k = (t + i * 0.5) % 1;
+    ctx.globalAlpha = 0.7 * (1 - k);
+    ctx.beginPath();
+    ctx.ellipse(sx, sy, 6 + k * 8, (6 + k * 8) * 0.45, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
 }
 
 /**

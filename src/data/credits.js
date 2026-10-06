@@ -15,7 +15,7 @@ const RIP_BASE = 'spriters-resource.com/game_boy_advance/pokemonmysterydungeonre
 
 /** [asset id, what it is, where it is used]. The full URL is RIP_BASE + '/asset/' + id. */
 const RIPS = [
-  ['5402', 'TINY WOODS MAP', 'grass stage tiles'],
+  ['5402', 'TINY WOODS MAP', 'bundled'],
   ['19788', 'MT THUNDER TILES', 'cave stage tiles'],
   ['75220', 'BEACH CAVE MAP', 'bundled'],
   ['5413', 'INTRO BACKGROUNDS', 'title screen'],
@@ -38,7 +38,7 @@ const RIPS = [
  */
 const EXPLORERS_RIPS = [
   ['pokemonmysterydungeonexplorersofsky', '131094', 'SUBSTITUTE', 'substitute weapon'],
-  ['pokemonmysterydungeonexplorersofsky', '59283', 'DUNGEON MAPS', 'bundled'],
+  ['pokemonmysterydungeonexplorersofsky', '59283', 'DUNGEON MAPS', 'stage select map'],
   ['pokemonmysterydungeonexplorersofsky', '84937', 'DUNGEON FONT', 'floor title card'],
   ['pokemonmysterydungeonexplorersofsky', '86310', 'ICE TILESET', 'bundled'],
   ['pokemonmysterydungeonexplorersoftimedarkness', '85996', 'MIRACLE SEA TILES', 'bundled'],
@@ -93,8 +93,9 @@ export const CREDITS = [
   { line: '' },
   { line: 'Intro backgrounds ripped by MEGA_LEO,', color: 'dim' },
   { line: 'who asks to be credited if used.', color: 'dim' },
-  { line: 'Mt Thunder tiles ripped and formatted', color: 'dim' },
-  { line: 'by SILVERDEOXUS563.', color: 'dim' },
+  { line: 'Mt Thunder, Forest Path and Beach Cave', color: 'dim' },
+  { line: 'tiles ripped and formatted by', color: 'dim' },
+  { line: 'SILVERDEOXYS563.', color: 'dim' },
   { line: '' },
 
   { heading: 'MYSTERY DUNGEON: EXPLORERS' },

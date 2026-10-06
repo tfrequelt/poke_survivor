@@ -12,6 +12,8 @@
 // has to ask ONE cell whether it contains a room, instead of asking all nine neighbours.
 
 import { hash2 } from './util.js';
+import { G } from './state.js';
+import { TILESETS } from './data/tilesets.js';
 
 /** What `terrainAt` returns. FLOOR and the ring pieces index into a tileset's `ring`. */
 export const T = {
@@ -121,3 +123,107 @@ export function terrainAt(tx, ty, seed, set) {
 export const RING_KEY = [
   null, null, null, 'north', 'south', 'west', 'east', 'nw', 'ne', 'sw', 'se',
 ];
+
+// --- Ponds -------------------------------------------------------------------------------------
+//
+// Water laid over an autotiled floor (the grass and beach stages). Derived, like the rooms: the
+// floor is cut into coarse cells, a cell holds a pond or not, and a pond is one or two ellipses
+// that fit inside their own cell -- so asking whether a tile is water asks one cell, a couple of
+// hashes, and no pond ever spills into the next cell's business.
+//
+// Never near the start (the run, every floor, and the way back from a secret floor all put you at
+// the origin) and never against the wall, so a pond cannot pin anyone into a corner.
+
+/**
+ * Is world tile (tx, ty) water? `P` is a tileset's `ponds` block; `b` the floor in tiles
+ * ({tx0, ty0, tx1, ty1}) or null for an unbounded floor.
+ */
+export function waterAt(tx, ty, seed, P, b) {
+  const m = P.wallMargin;
+  if (b && (tx < b.tx0 + m || tx > b.tx1 - m || ty < b.ty0 + m || ty > b.ty1 - m)) return false;
+  if (tx * tx + ty * ty < P.clearStart * P.clearStart) return false;
+  const cs = P.cell;
+  const cx = Math.floor(tx / cs), cy = Math.floor(ty / cs);
+  if (hash2(cx * 3 + seed, cy * 5 + 17) > P.chance) return false;
+  const n = hash2(cx + 401, cy + seed) < P.second ? 2 : 1;
+  for (let k = 0; k < n; k++) {
+    const rx = P.rMin + hash2(cx + 13 * k + 3, cy + 7) * (P.rMax - P.rMin);
+    const ry = P.rMin + hash2(cx + 5, cy + 11 * k + 9) * (P.rMax - P.rMin);
+    // The centre is placed so the whole ellipse stays a tile inside its cell.
+    const ex = cx * cs + 1 + rx + hash2(cx + 29 + k, cy + 31) * (cs - 2 - 2 * rx);
+    const ey = cy * cs + 1 + ry + hash2(cx + 37, cy + 41 + k) * (cs - 2 - 2 * ry);
+    const dx = (tx + 0.5 - ex) / rx, dy = (ty + 0.5 - ey) / ry;
+    if (dx * dx + dy * dy <= 1) return true;
+  }
+  return false;
+}
+
+/**
+ * Tilesets whose art actually loaded (filled by autotile.js). Water only blocks anyone when it can
+ * be SEEN: a missing sheet falls back to the drawn ground, and invisible ponds would be a bug.
+ */
+export const pondsReady = new Set();
+
+// The current stage's ponds and floor, recomputed only when the stage (or the secret floor) changes.
+let _stage = null, _secret = false, _P = null, _B = null, _S = 24;
+
+function pondsNow() {
+  const st = G.stage;
+  if (st !== _stage || G.secret !== _secret) {
+    _stage = st;
+    _secret = G.secret;
+    const set = st && TILESETS[st.tileset];
+    // The secret floor's room stays dry: it is an arena, not a stage.
+    _P = !G.secret && set && set.ponds && pondsReady.has(st.tileset) ? set.ponds : null;
+    _S = set ? set.size : 24;
+    const a = st && st.arena;
+    _B = a ? {
+      tx0: Math.ceil(-a.w / 2 / _S), ty0: Math.ceil(-a.h / 2 / _S),
+      tx1: Math.floor(a.w / 2 / _S) - 1, ty1: Math.floor(a.h / 2 / _S) - 1,
+    } : null;
+  }
+  return _P;
+}
+
+/** Does the current floor have water at all? Cheap; lets the hot loops skip every check. */
+export const pondsActive = () => pondsNow() !== null;
+
+/** Is the world point (x, y) on water, on the current floor? */
+export function waterAtWorld(x, y) {
+  const P = pondsNow();
+  if (!P) return false;
+  return waterAt(Math.floor(x / _S), Math.floor(y / _S), G.seed, P, _B);
+}
+
+/** The water grid's tile size on the current floor, in pixels. */
+export const pondTileSize = () => { pondsNow(); return _S; };
+
+/** Can a walker stand on world tile (tx, ty)? Not on water, and not outside the floor. */
+export function walkableTile(tx, ty) {
+  const P = pondsNow();
+  const b = _B;
+  if (b && (tx < b.tx0 || tx > b.tx1 || ty < b.ty0 || ty > b.ty1)) return false;
+  return !P || !waterAt(tx, ty, G.seed, P, b);
+}
+
+const _land = { x: 0, y: 0 };
+
+/**
+ * The nearest dry point to (x, y), searched outward in rings. Returns (x, y) itself when it is
+ * already dry. The result is a shared scratch object: copy it before the next call.
+ */
+export function nearestLand(x, y) {
+  _land.x = x; _land.y = y;
+  if (!waterAtWorld(x, y)) return _land;
+  const b = G.bounds;
+  for (let r = 12; r <= 360; r += 12) {
+    const n = Math.max(8, Math.round(r / 5));
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      const px = x + Math.cos(a) * r, py = y + Math.sin(a) * r;
+      if (b && (px < b.minX + 16 || px > b.maxX - 16 || py < b.minY + 16 || py > b.maxY - 16)) continue;
+      if (!waterAtWorld(px, py)) { _land.x = px; _land.y = py; return _land; }
+    }
+  }
+  return _land;
+}

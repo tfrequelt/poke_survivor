@@ -5,7 +5,8 @@ import { G } from './state.js';
 import { clamp, damp, hash2, TAU } from './util.js';
 import { getImage } from './assets.js';
 import { TILESETS } from './data/tilesets.js';
-import { T, RING_KEY, terrainAt, ringRow } from './terrain.js';
+import { T, RING_KEY, terrainAt, ringRow, waterAt } from './terrain.js';
+import { autotileFor, N, NE, E, SE, S, SW, W, NW } from './autotile.js';
 
 export const VW = 640;   // internal render width  -- world units ARE render pixels
 export const VH = 360;   // internal render height -- 640x360 * 3 = 1920x1080 exactly
@@ -287,6 +288,89 @@ function drawTiled(set, dx, dy, dw, dh, left, top, seed, stage) {
   }
 }
 
+// --- Autotiled ground -------------------------------------------------------------------------
+//
+// The forest and beach sheets (see autotile.js). Each frame the visible tiles, plus a ring of one
+// around them, are classed as wall, water or ground; then every tile picks its art from the shape
+// of its neighbours:
+//
+//   wall    the wall tile for which neighbours are wall. Outside the arena is wall, so the edge
+//           faces the floor and the deep outside is solid.
+//   ground  drawn everywhere that is not wall, under water too. Where it meets the wall it takes
+//           the edge tile for that shape; in the open it is any of the sheet's seamless ground
+//           tiles, picked by position -- the mix. Water counts as ground for this, as the sheet's
+//           own note says, so a shore does not put a wall's shadow on the grass.
+//   water   the shoreline tile for which neighbours are water, in the current palette frame, and
+//           the sparkle tile for the same shape on top of it, in its own.
+
+const K_GROUND = 0, K_WATER = 1, K_WALL = 2;
+let _kinds = new Uint8Array(40 * 24);
+
+/** Pick one of a mask's variant tiles, steadily for a given tile. */
+const pick = (list, tx, ty) => list[(hash2(tx * 7 + 3, ty * 13 + 5) * list.length) | 0];
+
+function drawAutotiled(at, set, dx, dy, dw, dh, left, top, seed, stage) {
+  const Z = at.size, sheet = at.sheet;
+  const b = floorTiles(stage, Z);
+  const P = stage.water === false ? null : set.ponds;
+
+  // Classify the visible tiles and a one-tile ring around them.
+  const tx0 = Math.floor(left / Z) - 1, ty0 = Math.floor(top / Z) - 1;
+  const tx1 = Math.floor((left + dw - 1) / Z) + 1, ty1 = Math.floor((top + dh - 1) / Z) + 1;
+  const gw = tx1 - tx0 + 1, gh = ty1 - ty0 + 1;
+  if (_kinds.length < gw * gh) _kinds = new Uint8Array(gw * gh);
+  const K = _kinds;
+  for (let ty = ty0; ty <= ty1; ty++) {
+    for (let tx = tx0; tx <= tx1; tx++) {
+      let k = K_GROUND;
+      if (b && (tx < b.tx0 || tx > b.tx1 || ty < b.ty0 || ty > b.ty1)) k = K_WALL;
+      else if (P && waterAt(tx, ty, seed, P, b)) k = K_WATER;
+      K[(ty - ty0) * gw + (tx - tx0)] = k;
+    }
+  }
+
+  // Palette frames run on wall-clock time, so the water keeps moving on menus and previews too.
+  const t = performance.now() * 0.06;
+  const wf = at.waterFrames[((t / at.waterEvery) | 0) % at.waterFrames.length];
+  const sf = at.sparkleFrames[((t / at.sparkleEvery) | 0) % at.sparkleFrames.length];
+
+  for (let ty = ty0 + 1; ty < ty1; ty++) {
+    const row = (ty - ty0) * gw;
+    const py = dy + ty * Z - top;
+    for (let tx = tx0 + 1; tx < tx1; tx++) {
+      const i = row + (tx - tx0);
+      const k = K[i];
+      const px = dx + tx * Z - left;
+      const up = i - gw, dn = i + gw;
+      if (k === K_WALL) {
+        const m = (K[up] === K_WALL ? N : 0) | (K[up + 1] === K_WALL ? NE : 0) | (K[i + 1] === K_WALL ? E : 0)
+          | (K[dn + 1] === K_WALL ? SE : 0) | (K[dn] === K_WALL ? S : 0) | (K[dn - 1] === K_WALL ? SW : 0)
+          | (K[i - 1] === K_WALL ? W : 0) | (K[up - 1] === K_WALL ? NW : 0);
+        const c = pick(at.walls[m], tx, ty);
+        ctx.drawImage(sheet, c[0], c[1], Z, Z, px, py, Z, Z);
+        continue;
+      }
+      // Ground: anything that is not wall counts as ground for its edges.
+      const gm = (K[up] !== K_WALL ? N : 0) | (K[up + 1] !== K_WALL ? NE : 0) | (K[i + 1] !== K_WALL ? E : 0)
+        | (K[dn + 1] !== K_WALL ? SE : 0) | (K[dn] !== K_WALL ? S : 0) | (K[dn - 1] !== K_WALL ? SW : 0)
+        | (K[i - 1] !== K_WALL ? W : 0) | (K[up - 1] !== K_WALL ? NW : 0);
+      const g = gm === 255 && at.seamless.length
+        ? at.seamless[(hash2(tx + 977, ty + 311) * at.seamless.length) | 0]
+        : pick(at.ground[gm], tx, ty);
+      ctx.drawImage(sheet, g[0], g[1], Z, Z, px, py, Z, Z);
+      if (k !== K_WATER) continue;
+
+      const wm = (K[up] === K_WATER ? N : 0) | (K[up + 1] === K_WATER ? NE : 0) | (K[i + 1] === K_WATER ? E : 0)
+        | (K[dn + 1] === K_WATER ? SE : 0) | (K[dn] === K_WATER ? S : 0) | (K[dn - 1] === K_WATER ? SW : 0)
+        | (K[i - 1] === K_WATER ? W : 0) | (K[up - 1] === K_WATER ? NW : 0);
+      const w = pick(at.water[wm], tx, ty);
+      ctx.drawImage(wf, w[0], w[1], Z, Z, px, py, Z, Z);
+      const s = pick(at.sparkle[wm], tx, ty);
+      ctx.drawImage(sf, s[0], s[1], Z, Z, px, py, Z, Z);
+    }
+  }
+}
+
 /**
  * The ground layers, into an arbitrary rectangle at an arbitrary world offset.
  *
@@ -306,8 +390,11 @@ export function drawGround(stage, dx, dy, dw, dh, left, top, seed = 1) {
   }
 
   const set = tilesetFor(stage);
-  if (set) {
-    drawTiled(set, dx, dy, dw, dh, left, top, seed, stage);
+  // An autotile sheet whose tiles could not be cut falls through to the drawn ground below.
+  const auto = set && set.autotile ? autotileFor(stage.tileset) : null;
+  if (set && (!set.autotile || auto)) {
+    if (auto) drawAutotiled(auto, set, dx, dy, dw, dh, left, top, seed, stage);
+    else drawTiled(set, dx, dy, dw, dh, left, top, seed, stage);
     if (windowed) ctx.restore();
     return;
   }

@@ -145,6 +145,34 @@ per tile from the run seed by `src/terrain.js` — nothing is stored, so walking
 finds it unchanged. `layout: null` means the stage is one open floor with no generated rooms. If
 the image is missing the stage falls back to its four procedural ground layers.
 
+### Autotile sheets: the grass and beach floors
+
+`forest_tiles.png` and `beach_cave_tiles.png` are SilverDeoxys563's formatted sheets, the same
+table as `mt_thunder.png`: 24px tiles on a 25px pitch from pixel (9, 163), columns in groups of
+three -- Legend, Walls, Ground, Water, Water Sparkle (the column of each group is in
+`src/data/tilesets.js`). They are drawn by `src/autotile.js`, which **reads the legend column** at
+boot: every legend cell is a 3x3 of 8px squares, centre white, and a neighbour square is black when
+that neighbour is the same terrain. That becomes the lookup from "which neighbours are wall/water"
+to the right tile, so shorelines of any shape and the square outer wall need no hand-written tables.
+
+- **Walls** frame the arena: everything outside it is wall, so the edge faces the floor and the deep
+  outside is solid canopy or rock.
+- **Ground** is mixed: in the open, any of the sheet's ground tiles whose edges match its centre
+  (all 47 in the forest, 29 on the beach, whose others carry a wall's shadow); along the wall, the
+  edge tile for that shape.
+- **Water** is laid over the floor in ponds (`waterAt` in `src/terrain.js`, about 8-10% of the
+  floor, never at the start or against the wall), with the **sparkle** tile for the same shape drawn
+  on top. Water's teal backdrop and the sparkles' magenta are keyed out.
+- **Animation** is the DS games' palette cycling: the water and sparkle palette tables beside the
+  grid (10px swatches, 11px pitch, a row per frame) recolour the tiles once per row at load, and
+  the frames run at the sheet's stated rates (forest every 17 / 13 frames, beach every 20 / 4).
+
+Water blocks walking. Water, flying and ghost-type players cross it (`canSwim` in
+`src/player.js`), and so do flying enemies and the species marked `swims` in
+`src/data/enemies.js`; every other enemy walks round (`src/paths.js`). A missing sheet falls back
+to the drawn ground, and its ponds then do not exist at all: water never blocks anyone unless it
+can be seen.
+
 ## Music
 
 `manifest.json` has a `music` section mapping a context key to a list of tracks. One is chosen at
@@ -434,7 +462,8 @@ the rips ask to be credited by name. Every one of them is listed on the in-game 
 it to `src/data/credits.js` at the same time.**
 
 The DS sheets — from **Explorers of Sky** and **Explorers of Time/Darkness** — have their own
-block on that screen. Four are in use: `substitute_sprite.png` (the Substitute weapon),
+block on that screen. Five are in use: `maps.png` (the stage select's world map, see below),
+`substitute_sprite.png` (the Substitute weapon),
 `dungeon_font.png` (the stage name and floor on the stairs title card; sliced by
 `src/data/dungeonfont.js`, white on black, each glyph cut to its inked width), `items_2.png`, and
 `dimensional_hole.png` (the secret floor's portal: its top-left four frames).
@@ -444,4 +473,17 @@ pickups: `relic_articuno` (a pale feather), `relic_moltres` (a flame feather), `
 golden feather), and gems or stones for the rest -- see the `sprites` section of the manifest and
 `RELICS` in `src/data/legends.js`.
 
-**Credited, not yet used:** `maps.png`, `ice_stage_tileset.png` and `miracle_sea_tileset.png`.
+**Credited, not yet used:** `ice_stage_tileset.png` and `miracle_sea_tileset.png`.
+
+### The world map: the stage select
+
+`maps.png` is twelve versions of the same world map, 504x336 each, in a 2x6 grid with 3px black
+lines between them; the later versions show more of the world and its location dots. The stage
+select draws **version 1** (top-left, `WORLD_MAP.rect` in `src/data/stages.js`) at 1:1, and puts
+`cursor.png` -- the 8x8 location dot -- on each stage's `mapAt`, the centre of its dot in that
+map's pixels. The three spots are the ones version 9 (first column, fifth row) gives those places:
+Grass Route on the right half of the left-most forest, Beach Cave on the grey cave above the sea,
+Damp Cave on the brown boulder mountain south of the village.
+
+A new stage needs only a `mapAt`. Another map version is a different `rect`, and its dots are on
+the sheet to copy from.

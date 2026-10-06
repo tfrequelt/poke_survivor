@@ -8,6 +8,24 @@ import { dist2, clamp } from './util.js';
 import { orbs, coins, items, spawn, despawn, CAP } from './world.js';
 import { spriteBase } from './sprites.js';
 import { ensureStats } from './stats.js';
+import { waterAtWorld, nearestLand } from './terrain.js';
+
+// A drop that would land in a pond lands on its shore -- a coin out in the water is a coin a
+// Pokemon that cannot swim can never collect. Reused, like every other scratch point.
+const _drop = { x: 0, y: 0 };
+function dryDrop(x, y) {
+  if (waterAtWorld(x, y)) { const l = nearestLand(x, y); _drop.x = l.x; _drop.y = l.y; }
+  else { _drop.x = x; _drop.y = y; }
+  return _drop;
+}
+
+// How far a drop's initial scatter carries it: v * dt / (1 - 0.88) at 60Hz.
+const DRIFT = 0.14;
+
+/** A drop on a shore whose little scatter would carry it into the water starts still instead. */
+function stillIfWet(o) {
+  if (waterAtWorld(o.x + o.vx * DRIFT, o.y + o.vy * DRIFT)) { o.vx = 0; o.vy = 0; }
+}
 
 // Tier thresholds, and the SIZE each tier draws at.
 //
@@ -71,9 +89,11 @@ export function dropXp(x, y, value) {
 
   const o = spawn('orbs');
   if (!o) return;
-  o.x = x; o.y = y;
+  const d = dryDrop(x, y);
+  o.x = d.x; o.y = d.y;
   o.vx = (G.rngFx() - 0.5) * 40;
   o.vy = (G.rngFx() - 0.5) * 40;
+  stillIfWet(o);
   o.value = value;
   o.tier = tierOf(value);
   o.sprId = TIER_SPR[o.tier];
@@ -84,9 +104,11 @@ export function dropXp(x, y, value) {
 export function dropCoin(x, y, value) {
   const c = spawn('coins');
   if (!c) return;
-  c.x = x; c.y = y;
+  const d = dryDrop(x, y);
+  c.x = d.x; c.y = d.y;
   c.vx = (G.rngFx() - 0.5) * 50;
   c.vy = (G.rngFx() - 0.5) * 50;
+  stillIfWet(c);
   c.value = value;
   c.sprId = COIN_SPR;
   c.age = 0;
@@ -217,9 +239,11 @@ export const itemEffects = {
 export function dropPickup(x, y, kind) {
   const it = spawn('items');
   if (!it) return null;
-  it.x = x; it.y = y;
+  const d = dryDrop(x, y);
+  it.x = d.x; it.y = d.y;
   it.vx = (G.rngFx() - 0.5) * 30;
   it.vy = (G.rngFx() - 0.5) * 30;
+  stillIfWet(it);
   it.kind = KIND_KEYS.indexOf(kind);
   it.sprId = KIND_SPR[kind];
   it.age = 0;

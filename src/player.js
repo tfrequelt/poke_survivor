@@ -10,6 +10,16 @@ import { damagePlayer, burnPlayer } from './combat.js';
 import { STATUS } from './data/legends.js';
 import { ensureStats } from './stats.js';
 import { dirFromAngle } from './assets.js';
+import { waterAtWorld, nearestLand, pondsActive } from './terrain.js';
+
+/**
+ * Can the current form cross water? Water types swim, flying types fly over it, and ghosts float
+ * -- the Gastly line levitates. Read from the form, so evolving into Vaporeon grants it at once.
+ */
+export function canSwim() {
+  const t = (G.form && G.form.types) || [];
+  return t.includes('water') || t.includes('flying') || t.includes('ghost');
+}
 
 /** Per-enemy contact cooldown. Separate from player i-frames so a crowd cannot instagib. */
 const CONTACT_CD = 0.5;
@@ -63,9 +73,21 @@ export function updatePlayer(dt) {
   const slowed = statusSlow(p);
   p.vx = rooted ? 0 : axis.x * s.moveSpeed * slowed;
   p.vy = rooted ? 0 : axis.y * s.moveSpeed * slowed;
+  // Water stops anyone who cannot cross it. Each axis is tried on its own, so walking into a pond
+  // at an angle slides you along its shore instead of sticking you to it.
+  const dry = pondsActive() && !canSwim();
+  const ox = p.x, oy = p.y;
   p.x += p.vx * dt;
+  if (dry && waterAtWorld(p.x, p.y)) p.x = ox;
   p.y += p.vy * dt;
+  if (dry && waterAtWorld(p.x, p.y)) p.y = oy;
   clampToBounds(p, G.bounds, p.r);
+  // However you got there -- a shove, a pull, an evolution that took the ability away -- a
+  // non-swimmer standing in water is put back on the nearest dry ground.
+  if (dry && waterAtWorld(p.x, p.y)) {
+    const l = nearestLand(p.x, p.y);
+    p.x = l.x; p.y = l.y;
+  }
 
   p.moving = !rooted && (axis.x !== 0 || axis.y !== 0);
   p.stillTime = p.moving ? 0 : p.stillTime + dt;

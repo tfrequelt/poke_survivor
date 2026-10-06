@@ -78,6 +78,8 @@ import { updateDirector, resetDirector, catchUpSchedule, stressSpawn } from './d
 import { updateProps, resetProps, clearProp } from './props.js';
 import { drawEntities, setStairsSprite, setHostileSprite, setTrapSprites } from './entities.js';
 import { drawHud, debugLines } from './hud.js';
+import { buildAutotiles } from './autotile.js';
+import { waterAtWorld, nearestLand } from './terrain.js';
 import {
   ui, drawLevelUp, drawPause, drawTitle, drawSelect, drawStageSelect, drawEvolution, drawEvolutionChoice,
   EVO_TOTAL, setBallSprite, drawCredits, creditsMax, drawSettings, settingsRows,
@@ -142,6 +144,8 @@ async function boot() {
   // Supplied images must finish decoding before the atlas is rasterised. This never throws:
   // a missing manifest is the normal case and every sprite falls back to its drawn version.
   assetStats = await loadAssets();
+  // Cut the autotile sheets (forest, beach) now that their images are in.
+  buildAutotiles();
   // Supplied samples override the synthesised sounds of the same id. Handed over before the
   // context exists; audio.js decodes them the moment one does.
   setSfxFiles(sfxFiles, sfxGains);
@@ -588,7 +592,8 @@ const arenaBounds = (a) => (a ? { minX: -a.w / 2, minY: -a.h / 2, maxX: a.w / 2,
 /** The stage as the secret floor draws it: the same ground, in the secret floor's small room. */
 let _secretStage = null;
 function secretStage() {
-  if (!_secretStage || _secretStage.id !== G.stage.id) _secretStage = { ...G.stage, arena: SECRET_ARENA };
+  // `water: false`: the secret room is an arena, and stays dry.
+  if (!_secretStage || _secretStage.id !== G.stage.id) _secretStage = { ...G.stage, arena: SECRET_ARENA, water: false };
   return _secretStage;
 }
 
@@ -650,6 +655,7 @@ function placeAway(o, avoid) {
     const y = b.minY + 64 + G.rngRun() * (b.maxY - b.minY - 128);
     if (Math.abs(x - p.x) < padX && Math.abs(y - p.y) < padY) continue;
     if (avoid && Math.abs(x - avoid.x) < 96 && Math.abs(y - avoid.y) < 96) continue;
+    if (waterAtWorld(x, y)) continue;                  // stairs in a pond would be unreachable
     o.x = x; o.y = y;
     o.active = true;
     o.near = false;
@@ -658,7 +664,8 @@ function placeAway(o, avoid) {
   // Cornered in a small arena: fall back to a point on the despawn ring, which is already off
   // screen in every direction.
   const pt = ringPoint(p.x, p.y, G.rngRun() * Math.PI * 2, 520, G.rngRun);
-  o.x = pt.x; o.y = pt.y;
+  const land = nearestLand(pt.x, pt.y);
+  o.x = land.x; o.y = land.y;
   o.active = true;
   o.near = false;
 }
@@ -1359,8 +1366,10 @@ function stageKey(code) {
   code = menuCode(code);
   const n = STAGES.length;
   switch (code) {
-    case 'ArrowLeft': ui.cursor = (ui.cursor + n - 1) % n; break;
-    case 'ArrowRight': ui.cursor = (ui.cursor + 1) % n; break;
+    // The list runs down the side of the map, so up and down are the natural keys; left and
+    // right still step through it for anyone who learned the old row of cards.
+    case 'ArrowUp': case 'ArrowLeft': ui.cursor = (ui.cursor + n - 1) % n; sfx('select'); break;
+    case 'ArrowDown': case 'ArrowRight': ui.cursor = (ui.cursor + 1) % n; sfx('select'); break;
     case 'Digit1': case 'Digit2': case 'Digit3': case 'Digit4': {
       const i = Number(code.slice(5)) - 1;
       if (i < n) startRun(pendingCharacter, bootParams, STAGES[i].id);

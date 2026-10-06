@@ -21,6 +21,7 @@ import { G } from './state.js';
 import { hash2, dist2 } from './util.js';
 import { spawnEnemy } from './enemies.js';
 import { ENEMY_BY_ID } from './data/enemies.js';
+import { waterAtWorld } from './terrain.js';
 
 const CELL = 96;                  // one prop candidate per 96x96 world cell
 const RELEASE_RADIUS = 760;       // release well past the despawn ring, so nothing pops in view
@@ -86,6 +87,7 @@ export function updateProps() {
       if (dist2(x, y, p.x, p.y) > RELEASE_RADIUS * RELEASE_RADIUS) continue;
       if (x > vx0 && x < vx1 && y > vy0 && y < vy1) continue;
       if (b && (x < b.minX + 24 || x > b.maxX - 24 || y < b.minY + 24 || y > b.maxY - 24)) continue;
+      if (waterAtWorld(x, y)) continue;                              // no bushes in the ponds
 
       const def = ENEMY_BY_ID[pickProp(stage, hash2(gx + 71, gy + 71))];
       if (!def) continue;

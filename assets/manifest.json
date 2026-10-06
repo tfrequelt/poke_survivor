@@ -411,7 +411,11 @@
       "src": "assets/pmd/explosion.png",
       "key": "#4b7d7d",
       "tolerance": 12
-    }
+    },
+    "forest": "assets/pmd/forest_tiles.png",
+    "beachcave": "assets/pmd/beach_cave_tiles.png",
+    "worldmap": "assets/pmd/maps.png",
+    "mapcursor": "assets/pmd/cursor.png"
   },
   "attacks": [
     "wooper",

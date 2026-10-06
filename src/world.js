@@ -41,6 +41,10 @@ const newEnemy = () => ({
   // next to the PLAYER, so sharing it would let a doll be hit every frame. Reset in spawnEnemy.
   decoyCd: 0,
   ai: 0, aiT: 0, aiState: 0, aiX: 0, aiY: 0,
+  // Going round a pond (see paths.js): `detour` is set while the straight line to the player
+  // crosses water, and `losT` counts down to the next time that line is checked. Reset in
+  // spawnEnemy.
+  detour: 0, losT: 0,
   // Attacking. `atkCd` counts down to the next attempt and `atkWind` is the telegraph: while it
   // is positive the enemy is standing still, visibly about to fire. Zero on anything whose
   // definition carries no `attack` block, which is most of the roster.

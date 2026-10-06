@@ -13,6 +13,9 @@
 // four procedural layers stay as its fallback, so a missing image costs the stage its artwork
 // and nothing else.
 //
+// `mapAt` is where the stage sits on the stage select's world map (WORLD_MAP below): the centre
+// of its location dot, in that map's pixels.
+//
 // `arena` is the playable floor, in pixels, centred on the origin. The stage wall is drawn just
 // outside it and stops the player, the enemies and the camera. 3456 is 144 tiles of 24px --
 // about five screens across and nine tall, which is enough to keep running for twenty minutes
@@ -28,9 +31,12 @@ export const STAGES = [
     // Tiny Woods goes UP a hillside: 1F, 2F, 3F, 4F.
     descend: false,
     arena: { w: 3456, h: 3456 },
-    // Drawn from the ripped Tiny Woods map (see data/tilesets.js). The `ground` block below is
-    // still the fallback if assets/pmd/woods.png is missing.
-    tileset: 'woods',
+    // Drawn from SilverDeoxys563's forest sheet, with ponds (see data/tilesets.js). The `ground`
+    // block below is still the fallback if assets/pmd/forest_tiles.png is missing.
+    tileset: 'forest',
+    // The left-most forest, the one with the little lake: on its right half, where the map's
+    // later versions put that forest's dot.
+    mapAt: [243, 131],
     color: '#5fd35f',
     blurb: 'Open fields and a worn path. The gentlest start.',
     hpMult: 1.00, spsMult: 1.00, coinMult: 1.00,
@@ -63,6 +69,8 @@ export const STAGES = [
     descend: true,
     arena: { w: 2880, h: 2880 },
     tileset: 'mtthunder',
+    // The brown boulder mountain south of the village.
+    mapAt: [211, 195],
     color: '#9f8fe8',
     blurb: 'Crystal dark. Tougher swarms, richer pockets.',
     hpMult: 1.10, spsMult: 1.10, coinMult: 1.15,
@@ -85,7 +93,7 @@ export const STAGES = [
     propDensity: 0.16,
   },
   {
-    id: 'beach', name: 'Sunset Beach',
+    id: 'beach', name: 'Beach Cave',
     // The four the director calls for at 5, 10, 15 and 20 minutes. Per stage, because
     // the roster is stage-exclusive -- a global list had the beach fighting a Graveler.
     // No mini-boss doubles as a late spawn here; all four are ordinary beach residents.
@@ -93,8 +101,12 @@ export const STAGES = [
     // Beach Cave goes down too -- it is a cave, whatever the sand suggests.
     descend: true,
     arena: { w: 3840, h: 3456 },
+    // Beach Cave's sheet, with tide pools. The `ground` block is the fallback without it.
+    tileset: 'beachcave',
+    // The grey cave with the dark mouth, on the coast above the sea at the far left.
+    mapAt: [195, 155],
     color: '#f0c070',
-    blurb: 'Wide open sand. Nothing slows the tide down.',
+    blurb: 'Sea caves and tide pools. The tide never slows.',
     hpMult: 1.20, spsMult: 1.20, coinMult: 1.30,
     ground: {
       base: '#d8c48a',
@@ -107,8 +119,8 @@ export const STAGES = [
         { color: '#7ac8d8', shape: 'shell', density: 0.012 },
       ],
       path: { color: '#6fbcd8', width: 40, spacing: 900 },
-      // Sunset Beach has no PMD tileset, so its arena edge is drawn: the sand simply runs out
-      // into the sea. `edge` is the wet band at the waterline.
+      // Without its tileset the arena edge is drawn too: the sand simply runs out into the
+      // sea. `edge` is the wet band at the waterline.
       outside: '#1b5f88',
       edge: '#6fbcd8',
     },
@@ -122,6 +134,13 @@ export const STAGES = [
 ];
 
 export const STAGE_BY_ID = Object.fromEntries(STAGES.map((s) => [s.id, s]));
+
+/**
+ * The stage select's world map. maps.png holds twelve versions of it (504x336 each, a 2x6 grid
+ * with 3px black lines between); the first, top-left, is the one drawn. `cursor` is the location
+ * dot put on each stage's `mapAt`.
+ */
+export const WORLD_MAP = { image: 'worldmap', cursor: 'mapcursor', rect: [0, 0, 504, 336] };
 
 /**
  * The sprites destructible scenery needs in the atlas.

@@ -24,6 +24,7 @@ import { G } from './state.js';
 import { hash2, dist2 } from './util.js';
 import { enemies, cellRange, cellStart, cellItems, GW, nextHitId, setDamageSource } from './world.js';
 import { damagePlayer, damageEnemy, damageCircle, damageOverTime, damageSourceId } from './combat.js';
+import { waterAtWorld } from './terrain.js';
 
 const CELL = 150;                 // one candidate per 150x150 world cell -- sparser than scenery
 const RELEASE_RADIUS = 760;       // matches props: release well past the despawn ring
@@ -233,6 +234,7 @@ function place(p) {
       if (dist2(x, y, p.x, p.y) > RELEASE_RADIUS * RELEASE_RADIUS) continue;
       if (x > vx0 && x < vx1 && y > vy0 && y < vy1) continue;       // never seen arriving
       if (b && (x < b.minX + 32 || x > b.maxX - 32 || y < b.minY + 32 || y > b.maxY - 32)) continue;
+      if (waterAtWorld(x, y)) continue;                              // no traps under the water
 
       const roll = hash2(gx + 977, gy + 977);
       const kind = TRAP_KEYS[Math.min(TRAP_KEYS.length - 1, (roll * TRAP_KEYS.length) | 0)];

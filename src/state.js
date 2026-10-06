@@ -145,6 +145,7 @@ export const G = {
     showHitboxes: false,
     showGrid: false,
     timescale: 1,
+    noPaths: false, // walkers ignore the flow field and walk straight (A/B for paths.js)
     ms: {},         // per-system millisecond timings
     counts: {},     // per-pool entity counts
   },

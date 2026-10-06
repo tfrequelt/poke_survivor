@@ -8,13 +8,14 @@
 // layout, which at this size is a handful of constants.
 
 import { G, MODES } from './state.js';
-import { ctx, VW, VH, drawGround } from './render.js';
+import { ctx, VW, VH } from './render.js';
 import {
   drawText, drawTextCentered, textWidth, drawSprite, drawSpriteScaled, drawShadow, drawLogo,
 } from './sprites.js';
 import { clamp, hash2, formatTime, formatNum } from './util.js';
-import { getPortrait, getImage, getAnim, dungeonFont } from './assets.js';
+import { getPortrait, getImage, getAnim, dungeonFont, dirFromAngle } from './assets.js';
 import { CREDITS } from './data/credits.js';
+import { WORLD_MAP } from './data/stages.js';
 import { panel, wrap, WIN_SELECTED, messageWindow, slider , drawDamagePanel, shortNum} from './win.js';
 import { BINDABLE, bindings, keyLabel } from './input.js';
 import { settings as audioSettings } from './audio.js';
@@ -725,76 +726,185 @@ export function drawSelect(starters, t) {
 }
 
 // --- Stage select -----------------------------------------------------------
+//
+// The stages are places on the world map: the first version of maps.png, drawn 1:1 in the middle
+// of the screen, with the location dot on each stage's `mapAt`. A window over the empty cloud on
+// the map's left lists them, and the pointer and your partner travel to whichever is selected.
 
-const STAGE_W = 176;
-const STAGE_H = 232;
-const STAGE_Y = 56;
-
-// Shared maxima, so the three difficulty bars compare across cards instead of self-normalising.
+// Shared maxima, so the three difficulty bars compare across stages instead of self-normalising.
 const STAGE_ROWS = [
   { key: 'hpMult', label: 'HP', max: 1.4 },
   { key: 'spsMult', label: 'RATE', max: 1.4 },
   { key: 'coinMult', label: 'GOLD', max: 1.4 },
 ];
 
+// Where the map's top-left lands on screen: centred across, and high enough to leave a line
+// under it for the key hint.
+const MAP_X = 68, MAP_Y = 5;
+// The list window. The land on this map starts some 70px in from its left edge, so a window this
+// wide covers nothing but cloud.
+const LIST_X = 10, LIST_W = 128, LIST_ROW = 12;
+// The partner's pace across the map, px/s, and where it stands relative to the dot.
+const WALK_SPEED = 80, BESIDE_X = 17, BESIDE_Y = 5;
+
+/**
+ * The pointer and the partner between draws. Both run on the menu clock: the pointer eases to the
+ * new dot, the partner walks there at a steady pace, so a quick scroll leaves the partner a step
+ * behind -- which is what makes it read as walking rather than teleporting.
+ */
+const travel = { t: -1, px: 0, py: 0, wx: 0, wy: 0, ang: 0, walking: false };
+
+/**
+ * The pointer over the selected dot. Bigger than the menus' chevron and white-topped: the
+ * chevron's pale gold all but vanishes against the sepia map. The tip ends at y.
+ */
+function drawMapPointer(cx, y) {
+  const bob = Math.round(Math.abs(Math.sin(performance.now() * 0.004)) * 3);
+  const x = Math.round(cx), top = Math.round(y) - 7 - bob;
+  ctx.fillStyle = '#0d0d18';
+  ctx.fillRect(x - 8, top - 1, 16, 1);
+  for (let i = 0; i < 7; i++) ctx.fillRect(x - (7 - i) - 1, top + i, (7 - i) * 2 + 2, 1);
+  ctx.fillRect(x - 1, top + 7, 2, 1);
+  for (let i = 0; i < 7; i++) {
+    ctx.fillStyle = i < 2 ? '#ffffff' : i < 5 ? '#ffd166' : '#e09a2a';
+    ctx.fillRect(x - (7 - i), top + i, (7 - i) * 2, 1);
+  }
+}
+
+/** A small right-pointing marker for the selected row, nudging with the cursor's bob. */
+function drawRowPointer(x, y) {
+  const nudge = Math.round(Math.abs(Math.sin(performance.now() * 0.003)) * 2);
+  ctx.fillStyle = '#ffd166';
+  ctx.fillRect(x + nudge, y, 1, 7);
+  ctx.fillRect(x + nudge + 1, y + 1, 1, 5);
+  ctx.fillRect(x + nudge + 2, y + 2, 1, 3);
+  ctx.fillRect(x + nudge + 3, y + 3, 1, 1);
+}
+
 export function drawStageSelect(stages, partner, t) {
   ctx.fillStyle = '#12202a';
   ctx.fillRect(0, 0, VW, VH);
 
-  drawTextCentered(ctx, 'CHOOSE YOUR STAGE', VW / 2, 20, 'gold');
+  // The map, in a thin frame.
+  const [mx0, my0, mw, mh] = WORLD_MAP.rect;
+  ctx.fillStyle = '#0d0d18';
+  ctx.fillRect(MAP_X - 2, MAP_Y - 2, mw + 4, mh + 4);
+  ctx.fillStyle = '#a07840';
+  ctx.fillRect(MAP_X - 1, MAP_Y - 1, mw + 2, mh + 2);
+  const map = getImage(WORLD_MAP.image);
+  if (map) ctx.drawImage(map.canvas, mx0, my0, mw, mh, MAP_X, MAP_Y, mw, mh);
+  else { ctx.fillStyle = '#e8c890'; ctx.fillRect(MAP_X, MAP_Y, mw, mh); }
+
+  // A dot on every stage, and a ring pulsing out of the selected one.
+  const dot = getImage(WORLD_MAP.cursor);
+  for (const st of stages) {
+    const x = MAP_X + st.mapAt[0], y = MAP_Y + st.mapAt[1];
+    if (dot) ctx.drawImage(dot.canvas, x - (dot.w >> 1), y - (dot.h >> 1));
+    else { ctx.fillStyle = '#ffc70f'; ctx.fillRect(x - 3, y - 3, 6, 6); }
+  }
+  // The cursor is shared with every other menu; clamped, so a stale one cannot select nothing.
+  const cur = clamp(ui.cursor, 0, stages.length - 1);
+  const sel = stages[cur];
+  const sx = MAP_X + sel.mapAt[0], sy = MAP_Y + sel.mapAt[1];
+  const ph = (t * 1.2) % 1;
+  ctx.globalAlpha = 0.9 * (1 - ph);
+  ctx.strokeStyle = '#fff6c0';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(sx, sy, 5 + ph * 7, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  // Move the pointer and the partner toward the selected dot. A long gap since the last draw
+  // means the screen has just opened: start them there rather than walking in from wherever the
+  // last visit left them.
+  const gx = sx + BESIDE_X, gy = sy + BESIDE_Y;
+  const dt = t - travel.t;
+  travel.t = t;
+  if (!(dt >= 0 && dt < 0.25)) {
+    travel.px = sx; travel.py = sy;
+    travel.wx = gx; travel.wy = gy;
+    travel.walking = false;
+  } else {
+    const k = 1 - Math.exp(-dt * 12);
+    travel.px += (sx - travel.px) * k;
+    travel.py += (sy - travel.py) * k;
+    const dx = gx - travel.wx, dy = gy - travel.wy, d = Math.hypot(dx, dy);
+    const stride = WALK_SPEED * dt;
+    if (d <= stride) {
+      travel.wx = gx; travel.wy = gy;
+      travel.walking = false;
+    } else {
+      travel.wx += (dx / d) * stride;
+      travel.wy += (dy / d) * stride;
+      travel.ang = Math.atan2(dy, dx);
+      travel.walking = true;
+    }
+  }
+
+  if (partner && partner.sprId !== undefined) {
+    const nd = partner.sprDirs || 2, nf = partner.sprFrames || 2;
+    const face = partner.sprFace !== undefined ? partner.sprFace : (nd === 8 ? 0 : 1);
+    // Facing the way it walks, and back to the camera once it is there.
+    const dir = !travel.walking ? face
+      : nd === 8 ? dirFromAngle(travel.ang) : (Math.cos(travel.ang) >= 0 ? 1 : 0);
+    const frame = ((t * (travel.walking ? 8 : 3)) | 0) % nf;
+    drawShadow(ctx, travel.wx, travel.wy);
+    drawSprite(ctx, partner.sprId + frame * nd + dir, travel.wx, travel.wy);
+  }
+  drawMapPointer(travel.px, travel.py - 6);
+
+  // The list window. Its height is fixed by the longest description, so it does not resize as
+  // the selection moves.
+  const chars = Math.floor((LIST_W - 20) / 6);
+  let blurbRows = 0;
+  for (const st of stages) blurbRows = Math.max(blurbRows, wrap(st.blurb || '', chars).length);
+  const h = 8 + 10 + (partner ? 10 : 0) + 6 + stages.length * LIST_ROW + 11
+    + STAGE_ROWS.length * 10 + 4 + blurbRows * 9 + 6;
+  const x0 = LIST_X, y0 = Math.round(MAP_Y + mh / 2 - h / 2), cx = x0 + LIST_W / 2;
+  panel(x0, y0, LIST_W, h, {});
+  let y = y0 + 8;
+  drawTextCentered(ctx, 'CHOOSE YOUR STAGE', cx, y, 'gold');
+  y += 10;
   if (partner) {
-    drawTextCentered(ctx, `WITH ${partner.name.toUpperCase()}`, VW / 2, 34, 'dim');
+    drawTextCentered(ctx, `WITH ${partner.name.toUpperCase()}`, cx, y, 'dim');
+    y += 10;
   }
-
-  const L = cardLayout(stages.length, STAGE_W, GAP);
-
+  y += 6;
   for (let i = 0; i < stages.length; i++) {
-    const st = stages[i];
-    const x = L.startX + i * (L.w + L.gap);
-    const selected = i === ui.cursor;
-    const color = st.color || '#7ac8ff';
-    panel(x, STAGE_Y, L.w, STAGE_H, selected ? { accent: '#ffffff', ...WIN_SELECTED } : { accent: color });
-
-    // The preview is the real ground renderer in a small window, so it can never drift from what
-    // the stage actually looks like. It pans slowly, and only the selected card pans fast enough
-    // to notice, which keeps the eye where the cursor is.
-    const pvX = x + 8, pvY = STAGE_Y + 8, pvW = L.w - 16, pvH = 76;
-    ctx.fillStyle = '#0d0d18';
-    ctx.fillRect(pvX - 1, pvY - 1, pvW + 2, pvH + 2);
-    drawGround(st, pvX, pvY, pvW, pvH, 1200 + i * 977 + t * (selected ? 14 : 4), 800 + i * 613);
-
-    // A partner sprite standing in the preview sells it as a place you will play.
-    if (partner && partner.sprId !== undefined) {
-      const bob = Math.sin(t * 3 + i) * 1.5;
-      drawShadow(ctx, pvX + pvW / 2, pvY + pvH - 12, 1.2);
-      drawSprite(ctx, partner.sprId + walkFrame(partner, t * 5), pvX + pvW / 2, pvY + pvH - 14 + bob);
+    const selected = i === cur;
+    if (selected) {
+      ctx.fillStyle = WIN_SELECTED.fillTop;
+      ctx.fillRect(x0 + 5, y - 3, LIST_W - 10, LIST_ROW);
+      drawRowPointer(x0 + 8, y);
     }
-
-    drawTextCentered(ctx, st.name.toUpperCase(), x + L.w / 2, STAGE_Y + 92, 'white');
-
-    let y = STAGE_Y + 108;
-    for (const row of STAGE_ROWS) {
-      const v = st[row.key] || 1;
-      drawText(ctx, row.label, x + 10, y, 'dim');
-      const bx = x + 44, bw = L.w - 54;
-      ctx.fillStyle = '#2a2a40';
-      ctx.fillRect(bx, y + 1, bw, 4);
-      ctx.fillStyle = color;
-      ctx.fillRect(bx, y + 1, Math.round(bw * clamp(v / row.max, 0, 1)), 4);
-      y += 10;
-    }
-
-    y += 6;
-    for (const line of wrap(st.blurb || '', Math.floor((L.w - 20) / 6)).slice(0, 3)) {
-      drawText(ctx, line, x + 10, y, 'dim');
-      y += 9;
-    }
-
-    drawTextCentered(ctx, `${i + 1}`, x + L.w / 2, STAGE_Y + STAGE_H - 13, selected ? 'gold' : 'dim');
-    if (selected) drawCursorArrow(x + L.w / 2, STAGE_Y - 11);
+    drawText(ctx, `${i + 1} ${stages[i].name.toUpperCase()}`, x0 + 16, y, selected ? 'white' : 'dim');
+    y += LIST_ROW;
   }
 
-  drawTextCentered(ctx, `1-${stages.length} / ARROWS + ENTER      BACKSPACE BACK`, VW / 2, VH - 18, 'dim');
+  y += 2;
+  ctx.fillStyle = '#3a3a58';
+  ctx.fillRect(x0 + 8, y, LIST_W - 16, 1);
+  y += 9;
+
+  const color = sel.color || '#7ac8ff';
+  for (const row of STAGE_ROWS) {
+    const v = sel[row.key] || 1;
+    drawText(ctx, row.label, x0 + 10, y, 'dim');
+    const bx = x0 + 42, bw = LIST_W - 52;
+    ctx.fillStyle = '#2a2a40';
+    ctx.fillRect(bx, y + 1, bw, 4);
+    ctx.fillStyle = color;
+    ctx.fillRect(bx, y + 1, Math.round(bw * clamp(v / row.max, 0, 1)), 4);
+    y += 10;
+  }
+  y += 4;
+  for (const line of wrap(sel.blurb || '', chars)) {
+    drawText(ctx, line, x0 + 10, y, 'white');
+    y += 9;
+  }
+
+  drawTextCentered(ctx, `1-${stages.length} / ARROWS + ENTER      BACKSPACE BACK`, VW / 2, VH - 13, 'dim');
 }
 
 // --- Settings ---------------------------------------------------------------

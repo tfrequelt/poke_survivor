@@ -168,16 +168,25 @@ warns at boot if two weapons ever end up with the same `behavior` + `motion` pai
 Every stage is a **bounded square**. Walls stop the player, the enemies and the camera, and the
 spawn director keeps everything inside — the arena size is `arena` in `src/data/stages.js`.
 
+You pick one on the **world map**: each stage is a dot on Mystery Dungeon's map, and the list
+beside it shows its difficulty and what to expect. Arrows (or W/S) move through the list, `Enter`
+or `1`-`3` sets off, and your partner walks across the map to whichever is selected.
+
 | Stage | Arena | Ground |
 |---|---|---|
-| Grass Route | 3456² | Tiny Woods — meadow, grass clearings, sand rooms inside their cliff borders |
+| Grass Route | 3456² | Forest Path — mixed forest floor with ponds, walled by the canopy |
 | Damp Cave | 2880² | Mt. Thunder — one open floor of rock, walled all the way round |
-| Sunset Beach | 3840×3456 | drawn procedurally; the sand runs out into the sea |
+| Beach Cave | 3840×3456 | Beach Cave — sand floor with tide pools, inside the cave wall |
 
-The first two are drawn from ripped PMD art, 24px tiles at a time. The interior layout — where
-the rooms are, how big, where the clearings fall — is generated from the run seed per tile by
+All three are drawn from ripped PMD art, 24px tiles at a time, and everything on them — where the
+ponds lie, which ground tile goes where — is generated from the run seed per tile by
 `src/terrain.js` and never stored, so walking back over ground finds it exactly as you left it.
 Each stage keeps its procedural layers as a fallback if the image is missing.
+
+**Water** stops anyone who walks. Water, Flying and Ghost-type partners cross it, and so do the
+flying and water species among the enemies; the rest **path round it** (`src/paths.js`: one flow
+field toward you, rebuilt as you move, that every walker reads), so a pond is cover from a crowd
+but never a wall it gets stuck on. Swim out into one and the walkers wait on the nearest shore.
 
 ## Floors
 
@@ -198,7 +207,7 @@ director curve multiplied:
 
 Reward outruns risk on purpose: the bottom floor is 2.05× as dangerous and 2.5× as generous.
 
-A cave counts **downward** — Damp Cave and Sunset Beach run `1F, -1F, -2F, -3F` and draw the
+A cave counts **downward** — Damp Cave and Beach Cave run `1F, -1F, -2F, -3F` and draw the
 descending flight — while Grass Route climbs a hillside and runs `1F, 2F, 3F, 4F`. The current
 floor sits next to the timer from the first minute.
 

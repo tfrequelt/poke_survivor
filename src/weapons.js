@@ -14,6 +14,7 @@ import {
   decoys, decoyState, decoyTargetable, damageDecoy, DECOY_MAX, DECOY_R,
 } from './world.js';
 import { dirFromAngle } from './assets.js';
+import { waterAtWorld, nearestLand } from './terrain.js';
 import {
   damageEnemy, damageCircle, damageLine, applyBurn, applyChill, damagePlayer, damageSourceId,
   statusPlayer,
@@ -808,6 +809,7 @@ const BEHAVIOR = {
     free.x = p.x + Math.cos(a) * dist;
     free.y = p.y + Math.sin(a) * dist;
     clampToBounds(free, G.bounds, DECOY_R + 4);
+    if (waterAtWorld(free.x, free.y)) { const l = nearestLand(free.x, free.y); free.x = l.x; free.y = l.y; }
     free.maxHp = free.hp = Math.max(1, Math.round(((G.stats && G.stats.maxHp) || p.maxHp) / 3));
     free.dir = 0; free.t = 0; free.dyingT = 0; free.flash = 0;
     free.alive = true;

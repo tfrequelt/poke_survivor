@@ -338,7 +338,7 @@ export const LEGENDS = [
   },
 
   // =========================================================================
-  // SUNSET BEACH -- the legendary beasts. Fast, restless, and never where you left them.
+  // BEACH CAVE -- the legendary beasts. Fast, restless, and never where you left them.
   // =========================================================================
   {
     id: 'entei', name: 'Entei', type: 'fire', stage: 'beach',

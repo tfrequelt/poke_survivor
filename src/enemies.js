@@ -14,6 +14,11 @@ import { ENEMIES, ENEMY_BY_ID } from './data/enemies.js';
 import { damageOverTime } from './combat.js';
 import { dirFromAngle } from './assets.js';
 import { spriteBase, spriteInfo } from './sprites.js';
+import { waterAtWorld, nearestLand, pondsActive } from './terrain.js';
+import { updateFlow, flowClear, flowTarget, FLOW_STEER, FLOW_HOLD } from './paths.js';
+
+/** Does water stop this enemy? Flyers, the water species, scenery and legendaries ignore it. */
+const walks = (e) => !e.flying && !e.prop && !e.legend && !(e.def && e.def.swims);
 
 // World units. The content pass was authored for a 1280x720 space; everything spatial is halved
 // for the 640x360 render space (see the conversion rule in the plan).
@@ -292,6 +297,12 @@ export function spawnEnemy(def, x, y, opts) {
 
   e.def = def;
   e.x = x; e.y = y; e.vx = 0; e.vy = 0;
+  // A walker that would appear in a pond appears on its shore instead. Every spawn comes through
+  // here -- the ring, formations, pincers, mini-bosses -- so this one check covers them all.
+  if (!def.flying && !def.prop && !def.legend && !def.swims && waterAtWorld(x, y)) {
+    const l = nearestLand(x, y);
+    e.x = l.x; e.y = l.y;
+  }
   e.maxHp = Math.max(1, Math.round(def.hp * hpMul * (elite ? 6 : 1)));
   e.hp = e.maxHp;
   e.r = def.r * (elite ? 1.35 : 1);
@@ -323,6 +334,7 @@ export function spawnEnemy(def, x, y, opts) {
   }
   e.ai = def.aiIdx;
   e.aiT = 0; e.aiState = 0; e.aiX = 0; e.aiY = 0;
+  e.detour = 0; e.losT = 0;
   e.flash = 0; e.knockX = 0; e.knockY = 0; e.contactCd = 0; e.decoyCd = 0;
   e.slow = 0; e.slowT = 0;
   e.animTime = 0; e.frame = 0; e.dir = 1;
@@ -392,6 +404,13 @@ const DECOY_CONTACT_CD = 0.5;
 // it does not need. Fixed-size: there are never more than DECOY_MAX.
 const _decoyLive = new Array(DECOY_MAX).fill(null);
 
+/**
+ * How often a walker looks at the straight line to the player for water. Spread a little per
+ * enemy, so a wave that spawned together does not look all at once.
+ */
+const LOS_EVERY = 0.3;
+const _way = { x: 0, y: 0 };
+
 export function updateEnemies(dt, separationOn) {
   const p = G.player;
   if (!p) return;
@@ -399,6 +418,10 @@ export function updateEnemies(dt, separationOn) {
 
   let nDecoys = 0;
   for (let k = 0; k < decoys.length; k++) if (decoyTargetable(decoys[k])) _decoyLive[nDecoys++] = decoys[k];
+  // Checked once per tick: on a floor with no ponds, no enemy pays for a single water lookup.
+  const wet = pondsActive();
+  const paths = wet && !G.debug.noPaths;
+  if (paths) updateFlow(px, py, dt);
 
   for (let i = enemies.length - 1; i >= 0; i--) {
     const e = enemies[i];
@@ -442,6 +465,19 @@ export function updateEnemies(dt, separationOn) {
 
     // A stunned enemy keeps its velocity for knockback but stops steering and stops advancing,
     // so Earthquake and Thunderbolt actually buy the player breathing room.
+    // A walker with a pond between it and you goes round it instead of pressing into the shore.
+    // Only on its way to you: the field leads to the player, not to a doll. And not mid-charge,
+    // which is a committed dash and not a walk.
+    if (paths && !doll && walks(e)) {
+      e.losT -= dt;
+      if (e.losT <= 0) {
+        e.losT = LOS_EVERY * (0.8 + 0.4 * ((i * 0.618) % 1));
+        e.detour = flowClear(e.x, e.y, px, py) ? 0 : 1;
+      }
+    } else {
+      e.detour = 0;
+    }
+
     if (e.stunT > 0) {
       e.stunT -= dt;
       e.vx = 0; e.vy = 0;
@@ -450,7 +486,21 @@ export function updateEnemies(dt, separationOn) {
       // you while it charges.
       e.vx = 0; e.vy = 0;
     } else {
-      AI_FNS[e.ai](e, dt, tx, ty);
+      const way = e.detour && e.aiState === 0 ? flowTarget(e.x, e.y, _way) : 0;
+      if (way === FLOW_STEER) {
+        const dx = _way.x - e.x, dy = _way.y - e.y;
+        const d = Math.hypot(dx, dy) || 1;
+        e.vx = (dx / d) * e.speed;
+        e.vy = (dy / d) * e.speed;
+      } else if (way === FLOW_HOLD) {
+        // On the shore nearest a swimming player: wait there, facing them, rather than walk
+        // into the water and be put back over and over.
+        e.vx = 0; e.vy = 0;
+        if (e.nd === 8) e.dir = dirFromAngle(Math.atan2(py - e.y, px - e.x));
+        else e.dir = px > e.x ? 1 : 0;
+      } else {
+        AI_FNS[e.ai](e, dt, tx, ty);
+      }
     }
 
     // Touching the doll it is going for. Only that one: a doll is not a wall, and an enemy
@@ -464,6 +514,7 @@ export function updateEnemies(dt, separationOn) {
     }
 
     const slowK = 1 - e.slow;
+    const ox = e.x, oy = e.y;
     e.x += e.vx * slowK * dt;
     e.y += e.vy * slowK * dt;
 
@@ -481,6 +532,19 @@ export function updateEnemies(dt, separationOn) {
     // against it -- so the clamp goes after both the steering and the impulse.
     if (clampToBounds(e, G.bounds, e.r)) { e.knockX = 0; e.knockY = 0; }
 
+    // A walker that has stepped (or been knocked) into water goes back the way it came, one axis
+    // at a time so it slides along the shore. One already in it (shoved there by the crowd) is
+    // put back on land. Either way it has met a pond, so it starts going round at once rather
+    // than at its next look down the line.
+    if (wet && walks(e) && waterAtWorld(e.x, e.y)) {
+      if (waterAtWorld(ox, oy)) { const l = nearestLand(e.x, e.y); e.x = l.x; e.y = l.y; }
+      else if (!waterAtWorld(ox, e.y)) e.x = ox;
+      else if (!waterAtWorld(e.x, oy)) e.y = oy;
+      else { e.x = ox; e.y = oy; }
+      e.knockX = 0; e.knockY = 0;
+      if (paths && !doll) e.detour = 1;
+    }
+
     if (e.nd === 8) {
       if (e.vx || e.vy) e.dir = dirFromAngle(Math.atan2(e.vy, e.vx));
     } else if (e.vx > 1) e.dir = 1;
@@ -495,7 +559,18 @@ export function updateEnemies(dt, separationOn) {
 
   if (separationOn) {
     const push = 0.5;
-    for (let i = 0; i < enemies.length; i++) if (enemies[i].alive) separate(enemies[i], i, push);
+    for (let i = 0; i < enemies.length; i++) {
+      const e = enemies[i];
+      if (!e.alive) continue;
+      // The crowd's shoving must not push a walker into a pond either: undo a push that would.
+      if (wet && walks(e)) {
+        const sx = e.x, sy = e.y;
+        separate(e, i, push);
+        if (waterAtWorld(e.x, e.y)) { e.x = sx; e.y = sy; }
+      } else {
+        separate(e, i, push);
+      }
+    }
   }
 }
 

@@ -99,6 +99,46 @@ export const TILESETS = {
     },
   },
 
+  // --- Autotile sheets ----------------------------------------------------------------------
+  //
+  // Two more of SilverDeoxys563's formatted sheets, laid out exactly like Mt. Thunder: 24px tiles on
+  // a 25px pitch from (9, 163), columns in groups of three. Unlike Mt. Thunder these are drawn by
+  // src/autotile.js, which READS the legend column -- each legend cell is a 3x3 of 8px squares, its
+  // neighbours black where they are the same terrain -- and so knows the right tile for every
+  // shape of wall edge and shoreline without a table written by hand.
+  //
+  // `cols` is the first column of each group. `palettes` are the colour-cycling tables beside the
+  // grid: water and sparkle animate by swapping colours, row by row, the way the DS games do.
+  // `ponds` shapes the water laid over the floor (see waterAt in terrain.js).
+  forest: {
+    image: 'forest',
+    autotile: true,
+    size: 24,
+    pitch: 25,
+    origin: [9, 163],
+    cols: { legend: 0, walls: 3, ground: 12, water: 24, sparkle: 27 },
+    palettes: {
+      // [x, y, columns, rows] of the swatch grid, 10px swatches on an 11px pitch.
+      water: [767, 168, 16, 16], waterEvery: 17,
+      sparkle: [767, 368, 16, 4], sparkleEvery: 13,
+    },
+    ponds: { cell: 12, chance: 0.36, rMin: 2, rMax: 4.5, second: 0.55, clearStart: 7, wallMargin: 3 },
+  },
+
+  beachcave: {
+    image: 'beachcave',
+    autotile: true,
+    size: 24,
+    pitch: 25,
+    origin: [9, 163],
+    cols: { legend: 0, walls: 3, ground: 12, water: 27, sparkle: 30 },
+    palettes: {
+      water: [842, 168, 16, 14], waterEvery: 20,
+      sparkle: [842, 346, 16, 3], sparkleEvery: 4,
+    },
+    ponds: { cell: 12, chance: 0.36, rMin: 2, rMax: 4.5, second: 0.55, clearStart: 7, wallMargin: 3 },
+  },
+
   cave: {
     image: 'cave',
     size: 24,

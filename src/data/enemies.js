@@ -233,14 +233,14 @@ export const ENEMIES = [
     id: 'poliwag', name: 'Poliwag', dex: 28,
     shape: 'poliwag', fallback: 'round_big', palette: 'water',
     hp: 15, dmg: 5, speed: 32, r: 4, mass: 0.9, xp: 1,
-    ai: 'chase',
+    swims: true, ai: 'chase',
     stages: ['beach'], from: 0, to: 9, weight: 10,
   },
   {
     id: 'marill', name: 'Marill', dex: 29,
     shape: 'marill', fallback: 'round_big', palette: 'water',
     hp: 16, dmg: 6, speed: 40, r: 4, mass: 0.9, xp: 2,
-    ai: 'sine', coinChance: 0.07,
+    swims: true, ai: 'sine', coinChance: 0.07,
     stages: ['beach'], from: 0, to: 10, weight: 9,
   },
   {
@@ -270,7 +270,7 @@ export const ENEMIES = [
     id: 'poliwhirl', name: 'Poliwhirl', dex: 33,
     shape: 'poliwhirl', fallback: 'round_big', palette: 'water',
     hp: 58, dmg: 12, speed: 34, r: 5, mass: 1.6, xp: 4,
-    ai: 'chase',
+    swims: true, ai: 'chase',
     stages: ['beach'], from: 6, to: 18, weight: 7,
   },
   {
@@ -286,7 +286,7 @@ export const ENEMIES = [
     shape: 'azumarill', fallback: 'round_big', palette: 'water',
     // The board's paymaster: slow, tough, and worth going out of your way for.
     hp: 120, dmg: 15, speed: 30, r: 6, mass: 3.2, xp: 6,
-    ai: 'charge', coinChance: 0.45, armor: 2, knockResist: 0.6,
+    swims: true, ai: 'charge', coinChance: 0.45, armor: 2, knockResist: 0.6,
     stages: ['beach'], from: 9, to: 20, weight: 5,
   },
   {
@@ -300,7 +300,7 @@ export const ENEMIES = [
     id: 'poliwrath', name: 'Poliwrath', dex: 37,
     shape: 'poliwrath', fallback: 'round_big', palette: 'water',
     hp: 175, dmg: 19, speed: 28, r: 6.5, mass: 4, xp: 8,
-    ai: 'charge',
+    swims: true, ai: 'charge',
     attack: { kind: 'burst', count: 6, spread: 1.4, range: 230, cooldown: 3.6, windup: 0.6, damage: 11, speed: 140 }, coinChance: 0.16, armor: 3, knockResist: 0.75,
     stages: ['beach'], from: 12, to: 20, weight: 4,
   },
