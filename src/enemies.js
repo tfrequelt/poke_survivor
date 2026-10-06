@@ -337,6 +337,7 @@ export function spawnEnemy(def, x, y, opts) {
   e.aiT = 0; e.aiState = 0; e.aiX = 0; e.aiY = 0;
   e.detour = 0; e.losT = 0;
   e.markT = 0; e.markMul = 0; e.confuseT = 0; e.dotKind = 0; e.sleep = false;
+  e.wanderA = 0; e.wanderT = 0;
   e.trial = opts && opts.trial !== undefined ? opts.trial : -1;
   e.flash = 0; e.knockX = 0; e.knockY = 0; e.contactCd = 0; e.decoyCd = 0;
   e.slow = 0; e.slowT = 0;
@@ -487,12 +488,16 @@ export function updateEnemies(dt, separationOn) {
       e.stunT -= dt;
       if (e.stunT <= 0) e.sleep = false;
       e.vx = 0; e.vy = 0;
-    } else if (e.confuseT > 0 && !e.boss && !e.legend) {
-      // Confused: it wanders, turning every so often, and neither chases nor attacks.
-      const step = (e.confuseT * 1.4) | 0;
-      const a = (((i * 2654435761) ^ (step * 40503)) >>> 0) % 6283 / 1000;
-      e.vx = Math.cos(a) * e.speed * 0.7;
-      e.vy = Math.sin(a) * e.speed * 0.7;
+    } else if (e.confuseT > 0 && !e.legend) {
+      // Confused: it stumbles about at full tilt, lurching off somewhere new every fraction of a
+      // second and now and then stopping dead to totter on the spot. It neither chases nor attacks.
+      e.wanderT -= dt;
+      if (e.wanderT <= 0) {
+        e.wanderT = 0.3 + G.rngRun() * 0.4;
+        e.wanderA = G.rngRun() < 0.2 ? -1 : G.rngRun() * TAU;
+      }
+      if (e.wanderA < 0) { e.vx = 0; e.vy = 0; }
+      else { e.vx = Math.cos(e.wanderA) * e.speed; e.vy = Math.sin(e.wanderA) * e.speed; }
     } else if (updateAttack(e, dt, tx, ty)) {
       // Winding up: planted, so the telegraph is a real tell and not something that walks at
       // you while it charges.
@@ -530,7 +535,9 @@ export function updateEnemies(dt, separationOn) {
     e.x += e.vx * slowK * dt;
     e.y += e.vy * slowK * dt;
 
-    // Knockback decays fast; it is impact feedback, not a physics system.
+    // Knockback decays fast; it is impact feedback, not a physics system. A sleeper takes none:
+    // it is asleep, and stays exactly where it lay down.
+    if (e.sleep) { e.knockX = 0; e.knockY = 0; }
     if (e.knockX !== 0 || e.knockY !== 0) {
       e.x += e.knockX * dt;
       e.y += e.knockY * dt;
@@ -573,7 +580,8 @@ export function updateEnemies(dt, separationOn) {
     const push = 0.5;
     for (let i = 0; i < enemies.length; i++) {
       const e = enemies[i];
-      if (!e.alive) continue;
+      // A sleeper is not shoved about by the crowd either.
+      if (!e.alive || e.sleep) continue;
       // The crowd's shoving must not push a walker into a pond either: undo a push that would.
       if (wet && walks(e)) {
         const sx = e.x, sy = e.y;

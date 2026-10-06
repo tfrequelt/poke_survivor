@@ -21,7 +21,7 @@ import {
 import {
   damageEnemy, damageCircle, applyBurn, applyChill, killEnemy, damageSourceId, srcOvl, setSrcType,
 } from './combat.js';
-import { OVERLOADS } from './data/overloads.js';
+import { OVERLOADS, ovlColor } from './data/overloads.js';
 import { ZONE, ROLE } from './fx.js';
 import { unlockIf } from './successes.js';
 
@@ -108,6 +108,7 @@ export function overloadHit(e, dealt, rec) {
   if (h.burn) { applyBurn(e, base * h.burn, h.burnT || 3); if (h.toxic) e.dotKind = 1; }
   if (h.slow) applyChill(e, h.slow, h.slowT || 1.5);
   if (h.stun && G.rngRun() < h.stun.chance) e.stunT = Math.max(e.stunT, h.stun.t);
+  if (h.sleep && !e.boss && !e.legend && G.rngRun() < h.sleep.chance) { e.stunT = Math.max(e.stunT, h.sleep.t); e.sleep = true; }
   if (h.weaken) e.weakenT = Math.max(e.weakenT, h.weaken);
   if (h.mark) { e.markT = Math.max(e.markT, h.mark.t); e.markMul = Math.max(e.markMul, h.mark.mul); }
   if (h.confuse && !e.boss && !e.legend) e.confuseT = Math.max(e.confuseT, h.confuse);
@@ -122,7 +123,7 @@ export function overloadHit(e, dealt, rec) {
   }
   if (h.leech && G.rngRun() < h.leech.chance) heal(h.leech.hp);
   if (h.execute && e.alive && !e.boss && !e.legend && e.hp > 0 && e.hp <= e.maxHp * h.execute) {
-    if (ovlFx.burst) ovlFx.burst(e.x, e.y, 10, rec.color);
+    if (ovlFx.burst) ovlFx.burst(e.x, e.y, 10, col(rec));
     killEnemy(e);
     return;
   }
@@ -141,18 +142,21 @@ export function overloadHit(e, dealt, rec) {
   setDamageSource(rec.proc);
   if (bonus && e.alive) {
     damageEnemy(e, dealt * bonus, 0, 0, false);
-    if (ovlFx.burst) ovlFx.burst(e.x, e.y, 5, rec.color);
+    if (ovlFx.burst) ovlFx.burst(e.x, e.y, 5, col(rec));
   }
   if (splash) {
     const r = h.splash.r;
     damageCircle(e.x, e.y, r, base * h.splash.dmg, nextHitId(), _quiet);
-    if (ovlFx.ring) ovlFx.ring(e.x, e.y, r, rec.color, 0.2);
+    if (ovlFx.ring) ovlFx.ring(e.x, e.y, r, col(rec), 0.2);
   }
-  if (chain) chainFrom(e, h.chain.n, base * h.chain.dmg, h.chain.range || 90, rec.color);
+  if (chain) chainFrom(e, h.chain.n, base * h.chain.dmg, h.chain.range || 90, col(rec));
   setDamageSource(prev);
 }
 
 const _quiet = { canCrit: false };
+
+/** An overload's colour of the moment, for its effects. */
+const col = (rec) => ovlColor(rec.def, G.clock);
 
 // --- On kill ------------------------------------------------------------------
 
@@ -169,13 +173,13 @@ export function overloadKill(e, rec) {
   if (k.explode) {
     const r = k.explode.r;
     damageCircle(e.x, e.y, r, base * k.explode.dmg, nextHitId(), { knockback: k.explode.knock || 60, canCrit: false });
-    if (ovlFx.ring) ovlFx.ring(e.x, e.y, r, rec.color, 0.3);
-    if (ovlFx.burst) ovlFx.burst(e.x, e.y, 10, rec.color);
+    if (ovlFx.ring) ovlFx.ring(e.x, e.y, r, col(rec), 0.3);
+    if (ovlFx.burst) ovlFx.burst(e.x, e.y, 10, col(rec));
   }
   if (k.zone) dropZone(e.x, e.y, k.zone, base, rec);
   if (k.shards) burstShots(e.x, e.y, k.shards.n, base * k.shards.dmg, rec, false, G.rngFx() * TAU);
   if (k.wisps) burstShots(e.x, e.y, k.wisps.n, base * k.wisps.dmg, rec, true, G.rngFx() * TAU);
-  if (k.chain) chainFrom(e, k.chain.n, base * k.chain.dmg, k.chain.range || 100, rec.color);
+  if (k.chain) chainFrom(e, k.chain.n, base * k.chain.dmg, k.chain.range || 100, col(rec));
   setDamageSource(prev);
 }
 
@@ -193,8 +197,8 @@ export function overloadExpire(pr, rec) {
   if (x.blast) {
     const r = x.blast.r * (pr.area || 1);
     damageCircle(pr.x, pr.y, r, base * x.blast.dmg, nextHitId(), { knockback: x.blast.knock || 50, canCrit: false });
-    if (ovlFx.ring) ovlFx.ring(pr.x, pr.y, r, rec.color, 0.28);
-    if (ovlFx.burst) ovlFx.burst(pr.x, pr.y, 8, rec.color);
+    if (ovlFx.ring) ovlFx.ring(pr.x, pr.y, r, col(rec), 0.28);
+    if (ovlFx.burst) ovlFx.burst(pr.x, pr.y, 8, col(rec));
   }
   if (x.zone) dropZone(pr.x, pr.y, x.zone, base, rec);
   if (x.split) burstShots(pr.x, pr.y, x.split.n, base * x.split.dmg, rec, !!x.split.homing, Math.atan2(pr.vy, pr.vx));
@@ -221,7 +225,7 @@ export function overloadEvery(w, st, p) {
       z.tick = 0;
       z.slow = n.slow || 0;
       z.kind = ZONE.NOVA;
-      z.color = n.color || rec.color;
+      z.color = n.color || col(rec);
       z.hitId = nextHitId();
       z.burn = n.burn ? st.damage * n.burn : 0;
       z.pull = n.r;
@@ -255,11 +259,11 @@ function strikes(p, s, dmg, rec) {
       stun: s.stun || 0, burn: s.burn ? dmg * s.burn : 0, burnT: 3, knockback: 40, canCrit: true,
     });
     if (s.kind === 'meteor') {
-      if (ovlFx.ring) ovlFx.ring(e.x, e.y, r, s.color || rec.color, 0.35);
-      if (ovlFx.burst) ovlFx.burst(e.x, e.y, 14, s.color || rec.color);
+      if (ovlFx.ring) ovlFx.ring(e.x, e.y, r, s.color || col(rec), 0.35);
+      if (ovlFx.burst) ovlFx.burst(e.x, e.y, 14, s.color || col(rec));
     } else if (ovlFx.bolt) {
       ovlFx.bolt(e.x, e.y, 130, 0.22);
-      if (ovlFx.ring) ovlFx.ring(e.x, e.y, r, s.color || rec.color, 0.2);
+      if (ovlFx.ring) ovlFx.ring(e.x, e.y, r, s.color || col(rec), 0.2);
     }
   }
   if (ovlFx.shake && n > 0) ovlFx.shake(0.12);
@@ -276,8 +280,8 @@ export function overloadDollDown(d, rec) {
   const power = G.stats ? G.stats.power : 1;
   if (k.explode) {
     damageCircle(d.x, d.y, k.explode.r, k.explode.dmg * power, nextHitId(), { knockback: 130, canCrit: true });
-    if (ovlFx.ring) ovlFx.ring(d.x, d.y, k.explode.r, rec.color, 0.4);
-    if (ovlFx.burst) ovlFx.burst(d.x, d.y, 18, rec.color);
+    if (ovlFx.ring) ovlFx.ring(d.x, d.y, k.explode.r, col(rec), 0.4);
+    if (ovlFx.burst) ovlFx.burst(d.x, d.y, 18, col(rec));
     if (ovlFx.shake) ovlFx.shake(0.3);
   }
   if (k.heal && G.stats) heal(Math.round(G.stats.maxHp * k.heal));
@@ -296,7 +300,7 @@ export function overloadDollTick(d, rec, dt) {
   if (k.taunt) {
     d.tick = 0.5;
     damageCircle(d.x, d.y, k.taunt.r, k.taunt.dps * 0.5 * power, nextHitId(), { canCrit: false, slow: k.taunt.slow || 0, slowT: 0.8 });
-    if (ovlFx.ring) ovlFx.ring(d.x, d.y, k.taunt.r, rec.color, 0.25);
+    if (ovlFx.ring) ovlFx.ring(d.x, d.y, k.taunt.r, col(rec), 0.25);
   }
   if (k.shoot) {
     d.tick = k.shoot.gap;
@@ -392,7 +396,7 @@ function dropZone(x, y, zd, base, rec) {
   z.tick = 0;
   z.slow = zd.slow || 0;
   z.kind = zd.vortex ? ZONE.VORTEX : zd.burn ? ZONE.BURN : (zd.dark ? ZONE.DARK : ZONE.PLAIN);
-  z.color = zd.color || rec.color;
+  z.color = zd.color || col(rec);
   z.hitId = 0;
   z.burn = zd.burn ? base * zd.burn : 0;
   z.pull = zd.vortex || 0;
@@ -406,7 +410,7 @@ function dropZone(x, y, zd, base, rec) {
 function burstShots(x, y, n, dmg, rec, homing, a0) {
   const def = rec.w.def;
   const hitId = nextHitId();
-  const color = (rec.def.fx && rec.def.fx.trail) || rec.color;
+  const color = (rec.def.fx && rec.def.fx.trail) || col(rec);
   for (let i = 0; i < n; i++) {
     const pr = spawn('projectiles');
     if (!pr) return;
@@ -426,7 +430,7 @@ function burstShots(x, y, n, dmg, rec, homing, a0) {
     pr.sprBase = def.sprBase; pr.nd = def.sprDirs;
     pr.knockback = 10; pr.weapon = -1; pr.area = 1; pr.hitId = hitId;
     pr.trail = 14; pr.trailColor = color; pr.pulse = 0;
-    pr.impact = 4; pr.impactColor = rec.color;
+    pr.impact = 4; pr.impactColor = col(rec);
     pr.spin = 6; pr.amp = 0; pr.freq = 0; pr.returning = false; pr.crit = false;
     pr.orbitA = 0; pr.orbitR = 0; pr.z = 0;
     pr.bounces = 0; pr.fuse = 0; pr.emitT = 0; pr.gen = ROLE.SHARD; pr.payload = 0; pr.t = 0;
@@ -477,6 +481,7 @@ export function chipsFor(ov) {
   if (h.burn) c.push(h.toxic ? 'TOXIC' : 'BURN');
   if (h.slow) c.push('SLOW');
   if (h.stun) c.push('STUN');
+  if (h.sleep) c.push('SLEEP');
   if (h.mark) c.push('MARK');
   if (h.weaken) c.push('WEAKEN');
   if (h.confuse) c.push('CONFUSE');

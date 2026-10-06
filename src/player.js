@@ -216,7 +216,8 @@ function contactDamage(p, dt) {
       const end = cellStart[c + 1];
       for (let k = cellStart[c]; k < end; k++) {
         const e = enemies[cellItems[k]];
-        if (!e.alive || e.harmless) continue;
+        // Something asleep does not bite.
+        if (!e.alive || e.harmless || e.sleep) continue;
         const rr = p.r + e.r;
         const near = dist2(p.x, p.y, e.x, e.y) <= rr * rr;
         if (near) touching = true;

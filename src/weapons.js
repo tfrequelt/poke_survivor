@@ -20,7 +20,7 @@ import {
   statusPlayer, srcOvl, setSrcType,
 } from './combat.js';
 import { WEAPONS, WEAPON_BY_ID } from './data/weapons.js';
-import { OVL_PARTICLES } from './data/overloads.js';
+import { OVL_PARTICLES, ovlColor } from './data/overloads.js';
 import { spriteBase, spriteDirs, angleSlot } from './sprites.js';
 import { ZONE, ROLE } from './fx.js';
 
@@ -638,7 +638,7 @@ const BEHAVIOR = {
     const opts = _lineOpts;
     opts.knockback = (def.knockback || 0) * st.knock;
     opts.slow = def.slow || 0; opts.slowT = 1.0; opts.weaken = 0;
-    const color = w.ovl ? w.ovl.color : (def.arcColor || '#ffffff');
+    const color = w.ovl ? ovlColor(w.ovl, G.clock) : (def.arcColor || '#ffffff');
     damageLine(p.x, p.y, a, len, def.r * st.area, st.damage, nextHitId(), opts);
     if (arcFx) arcFx(p.x, p.y, t.x, t.y, color);
     // An overload can split the cable onto more than one enemy at once.
@@ -726,7 +726,7 @@ const BEHAVIOR = {
     const opts = _lineOpts;
     opts.knockback = (def.knockback || 0) * st.knock;
     opts.slow = 0; opts.slowT = 0; opts.weaken = def.weaken || 0;
-    const color = w.ovl ? w.ovl.color : (def.arcColor || '#d0b0ff');
+    const color = w.ovl ? ovlColor(w.ovl, G.clock) : (def.arcColor || '#d0b0ff');
     const extra = w.ovl && w.ovl.link ? w.ovl.link.targets || 0 : 0;
     const used = _chainUsed;
     used.length = 0;
@@ -836,7 +836,7 @@ const BEHAVIOR = {
     const def = w.def;
     const used = _chainUsed;
     used.length = 0;
-    const color = w.ovl ? w.ovl.color : (def.arcColor || '#f8e038');
+    const color = w.ovl ? ovlColor(w.ovl, G.clock) : (def.arcColor || '#f8e038');
     // An overload's fork runs extra chains from the player, each starting on a different enemy.
     const chains = 1 + (w.ovl && w.ovl.chainFork ? w.ovl.chainFork : 0);
     for (let c = 0; c < chains; c++) {
@@ -968,8 +968,8 @@ function zoneKnobs(w, st, z, nova) {
   if (k.knock !== undefined && nova) z.knock = k.knock;
 }
 
-/** Leave one particle of an overload's kind at (x, y). */
-function ovlParticle(kind, x, y) {
+/** Leave one particle of an overload's kind at (x, y), in `color` if it has a cycling one. */
+function ovlParticle(kind, x, y, color) {
   const P = OVL_PARTICLES[kind];
   if (!P || ovlParticles >= OVL_PARTICLE_BUDGET) return;
   const q = spawn('particles');
@@ -981,7 +981,7 @@ function ovlParticle(kind, x, y) {
   q.vy = P.vy + (G.rngFx() - 0.5) * P.spread * 0.5;
   q.maxLife = q.life = P.life * (0.7 + G.rngFx() * 0.6);
   q.size = P.size;
-  q.color = P.colors[(G.rngFx() * P.colors.length) | 0];
+  q.color = color || P.colors[(G.rngFx() * P.colors.length) | 0];
   q.grav = P.grav;
   q.sprId = -1;
 }
@@ -1359,9 +1359,15 @@ export function updateProjectiles(dt) {
     // And its particles, a few a second per shot, drawn from one shared per-frame budget.
     if (!pr.hostile) {
       const ov = srcOvl[pr.src];
-      if (ov !== undefined && ov.def.fx && ov.def.fx.particles) {
-        pr.pt -= dt;
-        if (pr.pt <= 0) { pr.pt = 0.07; ovlParticle(ov.def.fx.particles, pr.x, pr.y - pr.z); }
+      if (ov !== undefined && ov.def.fx) {
+        const fx = ov.def.fx;
+        // A cycling overload's trail and impact follow its colour of the moment.
+        const c = fx.cycle ? ovlColor(ov.def, G.clock) : null;
+        if (c) { pr.trailColor = c; pr.impactColor = c; }
+        if (fx.particles) {
+          pr.pt -= dt;
+          if (pr.pt <= 0) { pr.pt = 0.07; ovlParticle(fx.particles, pr.x, pr.y - pr.z, c); }
+        }
       }
     }
 

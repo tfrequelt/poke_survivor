@@ -3047,5 +3047,45 @@
     "dungeon": {
       "src": "assets/pmd/dungeon_font.png"
     }
-  }
+  },
+  "sleep": [
+    "zubat",
+    "roggenrola",
+    "diglett",
+    "aron",
+    "geodude",
+    "lairon",
+    "boldore",
+    "crobat",
+    "dugtrio",
+    "graveler",
+    "gigalith",
+    "aggron",
+    "skarmory",
+    "rattata",
+    "caterpie",
+    "applin",
+    "pidgey",
+    "spearow",
+    "metapod",
+    "raticate",
+    "pidgeotto",
+    "appletun",
+    "butterfree",
+    "fearow",
+    "flapple",
+    "pidgeot",
+    "tauros",
+    "poliwag",
+    "marill",
+    "zigzagoon",
+    "poochyena",
+    "sandygast",
+    "poliwhirl",
+    "linoone",
+    "azumarill",
+    "mightyena",
+    "poliwrath",
+    "palossand"
+  ]
 }

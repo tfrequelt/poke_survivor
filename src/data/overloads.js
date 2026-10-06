@@ -21,7 +21,8 @@
 //   homing     turn rate: a straight or accelerating shot steers after its target
 //
 //   hit        every hit: burn (share of damage per second, burnT, toxic), slow + slowT,
-//              stun {chance, t}, weaken (s), mark {mul, t} (+mul damage taken), confuse (s),
+//              stun {chance, t}, sleep {chance, t} (a stun that also looks and acts like sleep),
+//              weaken (s), mark {mul, t} (+mul damage taken), confuse (s),
 //              knock / pull (impulse), execute (HP share), leech {chance, hp},
 //              shatter (bonus share vs slowed or stunned), vsBurn (bonus share vs burning),
 //              splash {r, dmg, chance}, chain {chance, n, dmg, range}
@@ -41,7 +42,9 @@
 //   sweepFull  the swing goes all the way round
 //   decoy      Substitute: hp (multiplier), explode {r, dmg}, taunt {r, dps, slow}, heal (max HP
 //              share on its fall), shoot {gap, dmg}
-//   fx         { trail: colour, particles: OVL_PARTICLES key, impact: colour }
+//   fx         { trail: colour, particles: OVL_PARTICLES key, impact: colour,
+//                cycle: [colours] -- the glow, trail, particles, arcs and ground fade through
+//                these in a loop, cycleSecs (one whole loop; default 0.9s a colour) }
 //
 // A zone `{...}` is { r, life, dps, slow, burn, vortex (pull), boom, color, dark }, with damage
 // as shares of the weapon's current damage.
@@ -101,7 +104,7 @@ export const OVERLOADS = {
     { id: 'aqua_ring', tag: T, name: 'Aqua Ring', color: '#5ab6ef',
       desc: 'The spiral opens from every side of you at once: a full ring of bubbles winding outward, so nothing approaches untouched.',
       pattern: 'ring', stats: { amount: 2, damage: 0.95 },
-      fx: { trail: '#9adcff', particles: 'bubbles' } },
+      fx: { cycle: ['#5ab6ef', '#7af0e8', '#ffffff'], trail: '#9adcff', particles: 'bubbles' } },
     { id: 'soak', tag: W, name: 'Soak', color: '#4aa8e8',
       desc: 'Bubbles drench what they touch: slowed by 35% and soaked to take 20% more damage. Every enemy popped bursts into three droplets.',
       hit: { slow: 0.35, slowT: 2, mark: { mul: 0.2, t: 2.5 } },
@@ -272,7 +275,7 @@ export const OVERLOADS = {
     { id: 'wish_star', tag: W, name: 'Wish Star', color: '#ffd166',
       desc: 'Lucky stars: they finish off anything below 10% health, and one kill in twelve restores 3 HP.',
       hit: { execute: 0.1 }, kill: { heal: { chance: 0.08, hp: 3 } },
-      fx: { trail: '#ffd166', particles: 'stars' } },
+      fx: { cycle: ['#ff6b6b', '#ffd166', '#7fe08a', '#7ac8ff', '#c49aff'], trail: '#ffd166', particles: 'stars' } },
   ],
   comet_punch: [
     { id: 'mach_punch', tag: A, name: 'Mach Punch', color: '#ffffff',
@@ -301,7 +304,7 @@ export const OVERLOADS = {
     { id: 'tri_element', tag: W, name: 'Tri Element', color: '#ffb0a0',
       desc: 'The real Tri Attack: every hit burns, chills, and may paralyse (12%), all at once.',
       hit: { burn: 0.4, burnT: 3, slow: 0.35, slowT: 1.5, stun: { chance: 0.12, t: 0.8 } },
-      fx: { trail: '#ffb0a0', particles: 'embers' } },
+      fx: { cycle: ['#ff7a1a', '#9ad8f4', '#f8e038'], trail: '#ffb0a0', particles: 'embers' } },
   ],
   hyper_fang: [
     { id: 'super_fang', tag: A, name: 'Super Fang', color: '#ffffff',
@@ -358,7 +361,7 @@ export const OVERLOADS = {
     { id: 'forked_lightning', tag: T, name: 'Forked Lightning', color: '#fff6a0',
       desc: 'Three chains at once, each starting on a different enemy, at 80% strength.',
       chainFork: 2, stats: { damage: 0.8 },
-      fx: { particles: 'sparks' } },
+      fx: { cycle: ['#fff6a0', '#7ac8ff', '#ffffff'], particles: 'sparks' } },
     { id: 'paralysis_arc', tag: W, name: 'Paralysis Arc', color: '#ffffff',
       desc: 'Every arc may paralyse its target (25%), locking it in place for a full second.',
       hit: { stun: { chance: 0.25, t: 1 } },
@@ -579,11 +582,11 @@ export const OVERLOADS = {
     { id: 'petal_vortex', tag: T, name: 'Petal Vortex', color: '#ffc8e8',
       desc: 'Petals spin out 50% longer and grow as they turn, ending twice the size they started.',
       stats: { duration: 1.5 }, grow: 0.6,
-      fx: { trail: '#ff9ad8', particles: 'petals' } },
+      fx: { cycle: ['#ff9ad8', '#ffc8e8', '#ffd166'], trail: '#ff9ad8', particles: 'petals' } },
     { id: 'aromatherapy', tag: W, name: 'Aromatherapy', color: '#ff6bb0',
       desc: 'A sweet scent: everything brushed is slowed by 25%, and one kill in ten heals you 2 HP.',
       hit: { slow: 0.25, slowT: 1.5 }, kill: { heal: { chance: 0.1, hp: 2 } },
-      fx: { trail: '#ff6bb0', particles: 'petals' } },
+      fx: { cycle: ['#ff6bb0', '#7fe08a', '#ffc8e8'], trail: '#ff6bb0', particles: 'petals' } },
   ],
   spore_pod: [
     { id: 'spore_cannon', tag: A, name: 'Spore Cannon', color: '#6cc840',
@@ -595,8 +598,8 @@ export const OVERLOADS = {
       turret: { gap: 0.22, dmg: 0.75, range: 1.25 },
       fx: { trail: '#c4f29a', particles: 'leaves' } },
     { id: 'sleep_powder', tag: W, name: 'Sleep Powder', color: '#a8e4ff',
-      desc: 'Spores may put their target to sleep (25%), holding it still for 1.5s.',
-      hit: { stun: { chance: 0.25, t: 1.5 } },
+      desc: 'Spores may put their target to sleep (25%) for 1.5s: fast asleep, harmless and going nowhere.',
+      hit: { sleep: { chance: 0.25, t: 1.5 } },
       fx: { trail: '#a8e4ff', particles: 'leaves' } },
   ],
   grassy_terrain: [
@@ -733,7 +736,7 @@ export const OVERLOADS = {
     { id: 'spectral_burst', tag: W, name: 'Spectral Burst', color: '#9af0d8',
       desc: 'Every soul it claims comes back for more: KOs release two homing spirits for 50% damage.',
       kill: { wisps: { n: 2, dmg: 0.5 } },
-      fx: { trail: '#9af0d8', particles: 'spirit' } },
+      fx: { cycle: ['#9af0d8', '#c8bcf0', '#7ac8ff'], trail: '#9af0d8', particles: 'spirit' } },
   ],
   hex_lantern: [
     { id: 'lantern_parade', tag: A, name: 'Lantern Parade', color: '#9af0d8',
@@ -747,7 +750,7 @@ export const OVERLOADS = {
     { id: 'hex', tag: W, name: 'Hex', color: '#d0b0ff',
       desc: 'Lantern fire is cursed: it burns for 30% a second and marks the target to take 30% more damage.',
       hit: { burn: 0.3, burnT: 3, mark: { mul: 0.3, t: 3 } },
-      fx: { particles: 'spirit' } },
+      fx: { cycle: ['#d0b0ff', '#ff6bb0', '#8a72b8'], particles: 'spirit' } },
   ],
   phantom_force: [
     { id: 'shadow_force', tag: A, name: 'Shadow Force', color: '#9af0d8',
@@ -901,7 +904,7 @@ export const OVERLOADS = {
     { id: 'inferno', tag: W, name: 'Inferno', color: '#ff5a1a',
       desc: 'Embers set a fiercer fire, burning for 60% of their damage a second, and every KO goes up in a fireball.',
       hit: { burn: 0.6, burnT: 3 }, kill: { explode: { r: 30, dmg: 0.5 } },
-      fx: { trail: '#ff5a1a', particles: 'embers' } },
+      fx: { cycle: ['#ff5a1a', '#ffd870', '#ff9040'], trail: '#ff5a1a', particles: 'embers' } },
   ],
   will_o_wisp: [
     { id: 'wisp_cloud', tag: A, name: 'Wisp Cloud', color: '#f08828',
@@ -915,7 +918,7 @@ export const OVERLOADS = {
     { id: 'mystical_fire', tag: W, name: 'Mystical Fire', color: '#ff6bb0',
       desc: 'A spellbound flame: it burns 50% harder and marks its victim to take 25% more damage for 3s.',
       hit: { burn: 0.5, burnT: 3.5, mark: { mul: 0.25, t: 3 } },
-      fx: { particles: 'embers' } },
+      fx: { cycle: ['#ff6bb0', '#c49aff', '#ff9ad8'], particles: 'embers' } },
   ],
   heat_wave: [
     { id: 'eruption', tag: A, name: 'Eruption', color: '#f08828',
@@ -957,7 +960,7 @@ export const OVERLOADS = {
     { id: 'supernova', tag: W, name: 'Supernova', color: '#fff0a0',
       desc: 'A moment after each impact the crater erupts again in a huge burst of flame for 70% damage.',
       expire: { zone: { r: 90, life: 0.45, dps: 0, boom: 0.7, color: '#ffd870' } },
-      fx: { particles: 'embers' } },
+      fx: { cycle: ['#fff0a0', '#ff9040', '#ff5a1a'], particles: 'embers' } },
   ],
   blaze_trail: [
     { id: 'inferno_trail', tag: A, name: 'Inferno Trail', color: '#f08828',
@@ -1046,7 +1049,7 @@ export const OVERLOADS = {
     { id: 'absolute_zero', tag: W, name: 'Absolute Zero', color: '#4a9fd0',
       desc: 'Anything inside may freeze solid (8% a pulse) for 1.5s, and the slowed take 60% bonus damage.',
       hit: { stun: { chance: 0.08, t: 1.5 }, shatter: 0.6 },
-      fx: { particles: 'frost' } },
+      fx: { cycle: ['#4a9fd0', '#eaffff', '#9ad8f4'], particles: 'frost' } },
   ],
   frost_chain: [
     { id: 'glacier_chain', tag: A, name: 'Glacier Chain', color: '#9ad8f4',
@@ -1056,7 +1059,7 @@ export const OVERLOADS = {
     { id: 'crystal_web', tag: T, name: 'Crystal Web', color: '#eaffff',
       desc: 'Three chains at once, each starting on a different enemy, at 80% strength.',
       chainFork: 2, stats: { damage: 0.8 },
-      fx: { particles: 'frost' } },
+      fx: { cycle: ['#eaffff', '#9ad8f4', '#c49aff'], particles: 'frost' } },
     { id: 'freeze_chain', tag: W, name: 'Freeze Chain', color: '#4a9fd0',
       desc: 'Every link may freeze its target (25%), locking it in ice for a second.',
       hit: { stun: { chance: 0.25, t: 1 } },
@@ -1086,15 +1089,15 @@ export const OVERLOADS = {
     { id: 'galaxy_barrage', tag: A, name: 'Galaxy Barrage', color: '#ffffff',
       desc: 'Three more stars in the stream, each 15% brighter and piercing one more.',
       stats: { amount: 3, damage: 1.15, pierce: 1 },
-      fx: { trail: '#ffe9a0', particles: 'stars' } },
+      fx: { cycle: ['#c49aff', '#7ac8ff', '#ffffff', '#ff9ad8'], trail: '#ffe9a0', particles: 'stars' } },
     { id: 'supernova_stars', tag: T, name: 'Starfall Spiral', color: '#ffe9a0',
       desc: 'The stream becomes a galaxy: a turning spiral of stars that fills every direction around you.',
       pattern: 'spiral', stats: { amount: 3, damage: 0.85 },
-      fx: { trail: '#ffffff', particles: 'stars' } },
+      fx: { cycle: ['#ffd166', '#ff9ad8', '#c49aff', '#7ac8ff'], trail: '#ffffff', particles: 'stars' } },
     { id: 'wish_upon_a_star', tag: W, name: 'Wish Upon a Star', color: '#ffd166',
       desc: 'Stars grant wishes: they finish anything below 15% health, and one KO in ten restores 3 HP.',
       hit: { execute: 0.15 }, kill: { heal: { chance: 0.1, hp: 3 } },
-      fx: { trail: '#ffd166', particles: 'stars' } },
+      fx: { cycle: ['#ff6b6b', '#ffd166', '#7fe08a', '#7ac8ff', '#c49aff'], trail: '#ffd166', particles: 'stars' } },
   ],
   spirit_shackle: [
     { id: 'soul_spear', tag: A, name: 'Soul Spear', color: '#a0f0d0',
@@ -1122,7 +1125,7 @@ export const OVERLOADS = {
     { id: 'sacred_fire', tag: W, name: 'Sacred Fire', color: '#ff5a1a',
       desc: 'Sacred flame burns for 80% of the damage a second, and every KO erupts in a fireball for 60%.',
       hit: { burn: 0.8, burnT: 3 }, kill: { explode: { r: 34, dmg: 0.6 } },
-      fx: { trail: '#ff5a1a', particles: 'embers' } },
+      fx: { cycle: ['#ff5a1a', '#ffd166', '#7fe08a', '#7ac8ff', '#ff9ad8'], trail: '#ff5a1a', particles: 'embers' } },
   ],
   sheer_cold: [
     { id: 'glaciate', tag: A, name: 'Glaciate', color: '#ffffff',
@@ -1150,7 +1153,7 @@ export const OVERLOADS = {
     { id: 'noxious', tag: W, name: 'Noxious', color: '#7fe08a',
       desc: 'Gunk that poisons for 60% a second and marks its victims to take 30% more damage.',
       hit: { burn: 0.6, burnT: 4, toxic: true, mark: { mul: 0.3, t: 3 } },
-      fx: { trail: '#7fe08a', particles: 'toxic' } },
+      fx: { cycle: ['#7fe08a', '#c070e0', '#e8b0f8'], trail: '#7fe08a', particles: 'toxic' } },
   ],
   hydro_cannon: [
     { id: 'hydro_vortex', tag: A, name: 'Hydro Vortex', color: '#e0f6ff',
@@ -1160,7 +1163,7 @@ export const OVERLOADS = {
     { id: 'origin_pulse', tag: T, name: 'Origin Pulse', color: '#7ac8ff',
       desc: 'The spiral winds out of every side of you at once: a full ring of heavy water.',
       pattern: 'ring', stats: { damage: 0.9 },
-      fx: { trail: '#9adcff', particles: 'bubbles' } },
+      fx: { cycle: ['#2276bd', '#7af0e8', '#ffffff'], trail: '#9adcff', particles: 'bubbles' } },
     { id: 'waterfall', tag: W, name: 'Waterfall', color: '#2276bd',
       desc: 'Water that crashes down: hits throw their target back, and one in five is left flinching for 0.7s.',
       hit: { knock: 70, stun: { chance: 0.2, t: 0.7 } },
@@ -1174,7 +1177,7 @@ export const OVERLOADS = {
     { id: 'storm_fork', tag: T, name: 'Storm Fork', color: '#fff6a0',
       desc: 'Three storms at once, each starting on a different enemy, at 80% strength.',
       chainFork: 2, stats: { damage: 0.8 },
-      fx: { particles: 'sparks' } },
+      fx: { cycle: ['#fff6a0', '#c49aff', '#ffffff'], particles: 'sparks' } },
     { id: 'zap_cannon', tag: W, name: 'Zap Cannon', color: '#f8e038',
       desc: 'A third of the arcs paralyse their target for a full second, and every third strike calls a bolt down from the sky.',
       hit: { stun: { chance: 0.33, t: 1 } },
@@ -1203,7 +1206,7 @@ export const OVERLOADS = {
     { id: 'dragon_ascent', tag: T, name: 'Dragon Ascent', color: '#7af0e8',
       desc: 'The flight takes off in a turning spiral around you, every talon curving back onto its prey.',
       pattern: 'spiral', stats: { amount: 3, damage: 0.95 },
-      fx: { trail: '#7af0e8', particles: 'wind' } },
+      fx: { cycle: ['#7af0e8', '#7fe08a', '#ffd166'], trail: '#7af0e8', particles: 'wind' } },
     { id: 'hurricane_talons', tag: W, name: 'Hurricane Talons', color: '#b8cde0',
       desc: 'Talons fling their prey far back, and every KO bursts into four feathers that keep cutting.',
       hit: { knock: 60 }, kill: { shards: { n: 4, dmg: 0.45 } },
@@ -1221,7 +1224,7 @@ export const OVERLOADS = {
     { id: 'phantom_eruption', tag: W, name: 'Phantom Eruption', color: '#9af0d8',
       desc: 'Every soul it takes rises again: KOs release three spirits that hunt for 50% damage.',
       kill: { wisps: { n: 3, dmg: 0.5 } },
-      fx: { trail: '#9af0d8', particles: 'spirit' } },
+      fx: { cycle: ['#9af0d8', '#c8bcf0', '#7ac8ff'], trail: '#9af0d8', particles: 'spirit' } },
   ],
 
   // ============================================================================================
@@ -1242,6 +1245,46 @@ export const OVERLOADS = {
       fx: { particles: 'spirit' } },
   ],
 };
+
+// --- Colours that change -------------------------------------------------------------------
+//
+// An overload with `fx.cycle` fades through its colours in a loop. The blends are precomputed
+// once per overload, STEPS of them between each pair, so asking for the colour of the moment is a
+// lookup and never builds a string. The cards keep the static `color`.
+
+const STEPS = 10;
+const palettes = new Map();
+
+const hex2 = (n) => (n < 16 ? '0' : '') + n.toString(16);
+function blend(a, b, k) {
+  const x = parseInt(a.slice(1), 16), y = parseInt(b.slice(1), 16);
+  const ch = (s) => Math.round(((x >> s) & 255) * (1 - k) + ((y >> s) & 255) * k);
+  return `#${hex2(ch(16))}${hex2(ch(8))}${hex2(ch(0))}`;
+}
+
+function paletteOf(ov) {
+  let p = palettes.get(ov);
+  if (p !== undefined) return p;
+  const c = ov.fx && ov.fx.cycle;
+  if (!c || c.length < 2) { palettes.set(ov, null); return null; }
+  p = [];
+  for (let i = 0; i < c.length; i++) for (let s = 0; s < STEPS; s++) p.push(blend(c[i], c[(i + 1) % c.length], s / STEPS));
+  palettes.set(ov, p);
+  return p;
+}
+
+/** An overload's colour at time `t` (seconds): its cycle's blend of the moment, or its colour. */
+export function ovlColor(ov, t) {
+  if (!ov) return '#ffffff';
+  const p = paletteOf(ov);
+  if (!p) return ov.color;
+  const secs = ov.fx.cycleSecs || 0.9 * ov.fx.cycle.length;
+  const k = (((t / secs) % 1) + 1) % 1;
+  return p[(k * p.length) | 0];
+}
+
+/** Whether an overload's colours change at all. */
+export const ovlCycles = (ov) => !!(ov && ov.fx && ov.fx.cycle);
 
 /** Every overload by its own id, for the probes and the pause screen. */
 export const OVERLOAD_BY_ID = Object.fromEntries(Object.values(OVERLOADS).flat().map((o) => [o.id, o]));

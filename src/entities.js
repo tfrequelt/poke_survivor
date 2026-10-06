@@ -22,7 +22,8 @@ import { TOTEM_KINDS, RING_R } from './data/totems.js';
 import { wakeSecs } from './totems.js';
 import { tierScale, TIER_COUNT } from './pickups.js';
 import { FX, ZONE, fxSprites } from './fx.js';
-import { getImage, getAttack, getSequence } from './assets.js';
+import { getImage, getAttack, getSequence, getAnim } from './assets.js';
+import { ovlColor } from './data/overloads.js';
 import { thrownItem, activeAbility, activeVisual } from './abilities.js';
 import { sampleDuration } from './audio.js';
 import { hash2 } from './util.js';
@@ -63,6 +64,8 @@ export function drawEntities() {
   const camOffY = toScreenY(0);
   burnMarksDrawn = 0;
   statusMarksDrawn = 0;
+  glowsDrawn = 0;
+  iconsDrawn = 0;
 
   drawZones(camOffX, camOffY);
   drawTraps(camOffX, camOffY);
@@ -568,6 +571,9 @@ function drawZones(ox, oy) {
   for (let i = 0; i < zones.length; i++) {
     const z = zones[i];
     const sx = z.x + ox, sy = z.y + oy;
+    // An overloaded weapon's ground, in its overload's colour of the moment.
+    const zrec = srcOvl[z.src];
+    const zc = zrec !== undefined ? ovlColor(zrec.def, G.clock) : z.color;
     if (sx < -z.r || sy < -z.r || sx > VW + z.r || sy > VH + z.r) continue;
     const fade = Math.min(1, z.life / 0.4);
     const pulse = 1 + Math.sin(G.tick * 0.08 + z.x) * 0.04;
@@ -580,7 +586,7 @@ function drawZones(ox, oy) {
     if (z.kind === ZONE.DARK) {
       // A soft outer haze, a much darker core, and a rim that breathes.
       ctx.globalAlpha = 0.34 * fade;
-      ctx.fillStyle = z.color;
+      ctx.fillStyle = zc;
       ctx.beginPath();
       ctx.ellipse(sx, sy, z.r * pulse, z.r * 0.6 * pulse, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -598,13 +604,13 @@ function drawZones(ox, oy) {
     } else if (z.kind === ZONE.NOVA || z.kind === ZONE.NOVA_STATIC) {
       // An expanding front: a bright leading edge with a fading wash inside it.
       ctx.globalAlpha = 0.18 * fade;
-      ctx.fillStyle = z.color;
+      ctx.fillStyle = zc;
       ctx.beginPath();
       ctx.ellipse(sx, sy, z.r, z.r * 0.6, 0, 0, Math.PI * 2);
       ctx.fill();
       for (let pass = 0; pass < 2; pass++) {
         ctx.globalAlpha = (pass ? 0.9 : 0.4) * fade;
-        ctx.strokeStyle = pass ? '#ffffff' : z.color;
+        ctx.strokeStyle = pass ? '#ffffff' : zc;
         ctx.lineWidth = pass ? 1 : 3;
         ctx.beginPath();
         ctx.ellipse(sx, sy, z.r, z.r * 0.6, 0, 0, Math.PI * 2);
@@ -614,7 +620,7 @@ function drawZones(ox, oy) {
       // Three arms winding inward, turning -- the only way a still image of a vortex spins.
       const spin = G.tick * 0.09;
       ctx.globalAlpha = 0.3 * fade;
-      ctx.fillStyle = z.color;
+      ctx.fillStyle = zc;
       ctx.beginPath();
       ctx.ellipse(sx, sy, z.r, z.r * 0.6, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -635,7 +641,7 @@ function drawZones(ox, oy) {
     } else if (z.kind === ZONE.STATIC) {
       // Charged ground: faint, because bright yellow at any real opacity blinds the stage.
       ctx.globalAlpha = 0.16 * fade;
-      ctx.fillStyle = z.color;
+      ctx.fillStyle = zc;
       ctx.beginPath();
       ctx.ellipse(sx, sy, z.r, z.r * 0.6, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -647,7 +653,7 @@ function drawZones(ox, oy) {
       ctx.stroke();
     } else {
       ctx.globalAlpha = 0.35 * fade;
-      ctx.fillStyle = z.color;
+      ctx.fillStyle = zc;
       ctx.beginPath();
       ctx.ellipse(sx, sy, z.r, z.r * 0.6, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -962,6 +968,18 @@ function drawEnemy(e, ox, oy) {
   // id = base + flash*(nf*nd) + frame*nd + dir. The flash variant is pre-baked white.
   const id = e.sprBase + (e.flash > 0 ? e.nf * e.nd : 0) + e.frame * e.nd + e.dir;
 
+  // Asleep: its own Sleep animation from its sprite folder, with the Z's rising over it.
+  if (e.sleep) {
+    const top = drawSleeping(e, sx, sy);
+    if (top !== null) {
+      if (e.burnT > 0) { if (e.dotKind === 1) drawToxicMark(e, sx, sy); else drawBurnMark(e, sx, sy); }
+      drawStatusIcon(e, sx, top, SLEEP_MARK, 6);
+      if (e.markT > 0) drawStatusMarks(e, sx, sy);
+      if (e.boss || e.elite) drawHealthBar(e, sx, sy);
+      return;
+    }
+  }
+
   // The ordinary case is the whole point of this branch: six hundred of these run every frame,
   // and touching ctx.globalAlpha even to set it back to 1 is a canvas state change per enemy.
   // Doing that unconditionally cost several milliseconds a frame, so the common path touches
@@ -991,14 +1009,16 @@ function drawEnemy(e, ox, oy) {
   }
 
   if (e.burnT > 0) { if (e.dotKind === 1) drawToxicMark(e, sx, sy); else drawBurnMark(e, sx, sy); }
-  if (e.markT > 0 || e.stunT > 0 || e.confuseT > 0 || (e.slowT > 0 && e.slow >= 0.3)) drawStatusMarks(e, sx, sy);
+  if (e.sleep) drawStatusIcon(e, sx, enemyTop(e, sy), SLEEP_MARK, 6);
+  else if (e.confuseT > 0) drawStatusIcon(e, sx, enemyTop(e, sy), CONFUSE_MARK, 3);
+  if (e.markT > 0 || (e.stunT > 0 && !e.sleep) || (e.slowT > 0 && e.slow >= 0.3)) drawStatusMarks(e, sx, sy);
   if (e.boss || e.elite) drawHealthBar(e, sx, sy);
 }
 
 // --- Status marks ----------------------------------------------------------------
 //
-// What an overload has done to an enemy, drawn over it: a reticle for a mark, stars for a stun, a
-// swirl for confusion, frost for a heavy chill, bubbles for poison. All of them are a few
+// What an overload has done to an enemy, drawn over it: a reticle for a mark, stars for a stun,
+// frost for a heavy chill, bubbles for poison. (Sleep and confusion are status.png icons, below.) All of them are a few
 // fillRects, and capped per frame like the burn marks, so a crowd of 300 marked enemies cannot
 // cost more than the cap does.
 
@@ -1027,21 +1047,13 @@ function drawStatusMarks(e, sx, sy) {
     ctx.fillRect(x - r, cy + h, 3, 1); ctx.fillRect(x - r, cy + h - 2, 1, 3);
     ctx.fillRect(x + r - 2, cy + h, 3, 1); ctx.fillRect(x + r, cy + h - 2, 1, 3);
   }
-  if (e.stunT > 0) {
+  if (e.stunT > 0 && !e.sleep && !(e.confuseT > 0)) {
     // Three stars wheeling over its head.
     ctx.fillStyle = '#ffe14a';
     for (let k = 0; k < 3; k++) {
       const a = t * 5 + (k / 3) * Math.PI * 2;
       const px = Math.round(x + Math.cos(a) * 7), py = Math.round(top - 3 + Math.sin(a) * 2);
       ctx.fillRect(px - 1, py, 3, 1); ctx.fillRect(px, py - 1, 1, 3);
-    }
-  } else if (e.confuseT > 0) {
-    // A purple swirl: dots chasing each other round a small circle.
-    ctx.fillStyle = '#c49aff';
-    for (let k = 0; k < 4; k++) {
-      const a = -t * 7 + k * 1.2;
-      const rr = 2 + k;
-      ctx.fillRect(Math.round(x + Math.cos(a) * rr), Math.round(top - 4 + Math.sin(a) * rr * 0.6), 1, 1);
     }
   }
   if (e.slowT > 0 && e.slow >= 0.3) {
@@ -1053,6 +1065,47 @@ function drawStatusMarks(e, sx, sy) {
       ctx.fillRect(Math.round(x - e.r + ((seed + k * 37 + ph * 5) % (e.r * 2 + 1))), Math.round(cy - 4 + ((k * 13 + ph * 3) % 9)), 1, 1);
     }
   }
+}
+
+// Status icons from status.png, on its 16px grid: the Z's of sleep and the birds of confusion.
+// Drawn like the burn flame -- one frame of a strip over the head -- and capped per frame the same
+// way, so a field of three hundred sleepers costs no more than the cap.
+// The Z strip is ten frames: a small z grows and drifts up to the top right while the last one
+// breaks apart, so it loops seamlessly. The skulls start at y 248, directly under it.
+const SLEEP_MARK = { x: 104, y: 232, w: 16, h: 16, frames: 10 };
+const CONFUSE_MARK = { x: 104, y: 128, w: 16, h: 16, frames: 8 };
+const ICON_CAP = 72;
+let iconsDrawn = 0;
+
+function drawStatusIcon(e, sx, top, M, ticksPerFrame) {
+  if (iconsDrawn >= ICON_CAP) return;
+  const img = getImage('status');
+  if (!img) return;
+  iconsDrawn++;
+  const phase = ((e.x | 0) + (e.y | 0)) & 0xffff;
+  const frame = (((G.tick / ticksPerFrame) | 0) + phase) % M.frames;
+  ctx.drawImage(img.canvas, M.x + frame * M.w, M.y, M.w, M.h,
+    Math.round(sx - M.w / 2), Math.round(top - M.h + 3), M.w, M.h);
+}
+
+/**
+ * An enemy asleep: its own Sleep animation (or its Idle, for a folder with none), facing the
+ * camera, anchored at its feet like the title-screen idles. Returns the top of the drawn frame,
+ * for the Z's, or null when there is no animation to draw and the caller should use the walk
+ * frame instead.
+ */
+function drawSleeping(e, sx, sy) {
+  const a = getAnim(e.def.shape, 'Sleep');
+  if (!a) return null;
+  // The sheet's own timings, offset per enemy so a sleeping crowd does not breathe in step.
+  let ticks = ((G.clock + ((e.x | 0) & 63) * 0.05) % Math.max(0.2, a.total)) * 60;
+  let f = 0;
+  while (f < a.cols - 1 && ticks >= a.durs[f]) { ticks -= a.durs[f]; f++; }
+  const k = e.elite ? ELITE_SCALE : 1;
+  const ax = a.anchors[f * 2], ay = a.anchors[f * 2 + 1];
+  ctx.drawImage(a.canvas, f * a.w, 0, a.w, a.h,
+    Math.round(sx - ax * k), Math.round(sy - ay * k), Math.round(a.w * k), Math.round(a.h * k));
+  return sy - ay * k + 6;
 }
 
 /** Poison instead of fire: green bubbles rising off the target. */
@@ -1231,18 +1284,27 @@ function drawProjectiles(ox, oy) {
  * additive pass before the sprites -- so the blend mode is switched twice a frame, not twice a
  * shot. A shot with no overload costs one array read here.
  */
+// A glow is a small halo, never a floodlight: capped in size, skipped on anything large (an aura
+// or a grown blob already shows its colour), faint, fainter still in a crowd of them, and capped
+// in number. Additive light piles up fast, and forty overlapping glows used to wash out the
+// whole screen.
+const GLOW_MAX_R = 11, GLOW_SKIP_R = 16, GLOW_CAP = 120, GLOW_BUSY = 60;
+let glowsDrawn = 0;
+
 function drawOverloadGlows(ox, oy) {
   let on = false;
-  for (let i = 0; i < projectiles.length; i++) {
+  for (let i = 0; i < projectiles.length && glowsDrawn < GLOW_CAP; i++) {
     const pr = projectiles[i];
-    if (pr.hostile) continue;
+    if (pr.hostile || pr.r > GLOW_SKIP_R) continue;
     const rec = srcOvl[pr.src];
     if (rec === undefined) continue;
     const sx = pr.x + ox, sy = pr.y + oy - pr.z;
-    if (sx < -32 || sy < -32 || sx > VW + 32 || sy > VH + 32) continue;
-    if (!on) { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.55; on = true; }
-    const r = Math.max(7, pr.r * 1.9 + 4) * (pr.r > 0 ? 1 : 0.7);
-    ctx.drawImage(glowCanvas(rec.color), sx - r, sy - r, r * 2, r * 2);
+    if (sx < -16 || sy < -16 || sx > VW + 16 || sy > VH + 16) continue;
+    if (!on) { ctx.globalCompositeOperation = 'lighter'; on = true; }
+    glowsDrawn++;
+    ctx.globalAlpha = glowsDrawn > GLOW_BUSY ? 0.18 : 0.3;
+    const r = Math.min(GLOW_MAX_R, Math.max(5, pr.r * 1.2 + 4));
+    ctx.drawImage(glowCanvas(ovlColor(rec.def, G.clock)), sx - r, sy - r, r * 2, r * 2);
   }
   if (on) { ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; }
 }

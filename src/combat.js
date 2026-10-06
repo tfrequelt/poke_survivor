@@ -119,8 +119,6 @@ export function damageEnemy(e, amount, knockX = 0, knockY = 0, canCrit = true) {
   e.flash = 0.09;
   G.damageDealt += dealt;
   credit(e, before);
-  // A Sleep Seed's sleep breaks on the first hit (a stun of any other kind does not).
-  if (e.sleep) { e.sleep = false; if (e.stunT > 0.3) e.stunT = 0.3; }
 
   if (knockX !== 0 || knockY !== 0) {
     const resist = 1 - e.knockResist;

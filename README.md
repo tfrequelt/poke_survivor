@@ -182,8 +182,10 @@ in all, the eleven evolutions and Substitute included:
 - **WILD** — an elemental or status twist: burns, freezes, paralysis, confusion, marks that make a
   target take more from everything, chains of lightning, explosions and homing spirits on a kill.
 
-An overloaded weapon glows in its overload's colour, sheds particles, tints the ground it lays,
-and marks what it does on the enemies — a reticle, stars, a swirl, frost, poison bubbles. Its
+An overloaded weapon glows softly in its overload's colour, sheds particles, tints the ground it
+lays, and marks what it does on the enemies — a reticle, stars, circling birds, Z's, frost, poison
+bubbles. About twenty overloads (Tri Element, Sacred Fire, the Wish Stars, Galaxy Barrage, Aqua
+Ring, Inferno, Absolute Zero and more) fade from colour to colour as they fire. Its
 procs have their own line in the damage breakdown, under the overload's name. Reroll and banish do
 not apply to an overload draft; skip puts it off to the next level-up. An overloaded weapon keeps
 its overload when it evolves; one that evolves first offers its evolved form's own three.
@@ -320,10 +322,10 @@ totems give them too. Walk over one with a full bag and the game tells you how t
 | Item | Use |
 |---|---|
 | Oran Berry | Restores half your health |
-| Sleep Seed | Everything within 240px sleeps for 6s — a hit wakes it |
+| Sleep Seed | Everything within 240px falls asleep for 6s (a boss for 1.5s): it stays put, takes hits without waking, and cannot bite |
 | Gravelerock | Sixteen rocks hurled out in every direction |
 | Warp Seed | Warps you somewhere safe, well away |
-| Totter Seed | Everything on screen totters about, confused, for 6s |
+| Totter Seed | Everything on screen is confused for 6s, staggering about at random instead of chasing you |
 | Petrify Orb | Everything on screen turns to stone for 5s and takes 50% more damage |
 | All-Power Orb | 20s of +40% power, +30% attack speed, +15% speed |
 | Max Elixir | Both abilities ready at once, then 15s of -30% ability cooldown |

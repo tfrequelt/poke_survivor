@@ -47,6 +47,21 @@ much larger than walk frames — Wooper walks in 32×40 and attacks in 72×72 �
 canvases rather than put in the sprite atlas, which twelve of them would not fit in. They need
 `Attack-Shadow.png` for the same reason the walk sheets do.
 
+### Sleep animations
+
+`sleep` lists the enemy species whose `Sleep-Anim.png` is loaded, for when a Sleep Seed, a Slumber
+trap or the Sleep Powder overload puts them to sleep:
+
+```json
+{ "sleep": ["rattata", "caterpie", "zubat"] }
+```
+
+A folder with no `Sleep-Anim.png` loads its `Idle-Anim.png` in its place, under the same key. Only
+the first row is drawn: Mystery Dungeon sleeps face the camera. A species missing from the list
+sleeps in its walk frame. The **Z's** over a sleeper are `status.png`'s row at y 232 (10 frames,
+16px), and a confused enemy's **circling birds** are its row at y 128 (8 frames), directly under
+the burn flames at y 112 — both cut by `src/entities.js`, not the manifest.
+
 ### Title screen animations
 
 `anims` gives each starter one animation to play on the title screen, by name:

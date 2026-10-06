@@ -62,7 +62,8 @@ const TRAPS = {
     // The player is rooted, not damaged. Standing still for most of a second with a crowd on
     // you is already the punishment, and stacking damage on top would just be a spike trap.
     onPlayer: () => { const p = G.player; if (p) p.rootT = Math.max(p.rootT, 0.9); },
-    onEnemy: (e) => { e.stunT = Math.max(e.stunT, 2.4); },
+    // An enemy that walks onto it falls asleep, the real thing: Sleep animation and all.
+    onEnemy: (e) => { e.stunT = Math.max(e.stunT, 2.4); e.sleep = true; },
   },
   poison: {
     label: 'POISON TRAP', weight: 8,

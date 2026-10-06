@@ -44,6 +44,8 @@ export function initBag(motionOf) {
 /** A fresh, empty bag for a new run. */
 export function resetBag(slots = BAG_SLOTS) {
   G.bag = new Array(slots).fill(null);
+  // Take back what the buffs still running added, or dropping them would strand their stats.
+  for (const b of G.buffs || []) removeMods(b.source);
   G.buffs = [];
   G.lumFloor = false;
 }
@@ -157,7 +159,8 @@ const EFFECT = {
 
   sleep_seed(p) {
     eachNear(p, 240, (e) => {
-      if (e.boss) { e.stunT = Math.max(e.stunT, 1.5); return; }
+      // A boss only nods off for a moment; a legendary just shrugs it off as a stun.
+      if (e.boss) { e.stunT = Math.max(e.stunT, 1.5); if (!e.legend) e.sleep = true; return; }
       e.stunT = Math.max(e.stunT, 6);
       e.sleep = true;
     });

@@ -648,17 +648,20 @@ export function drawTitle(starters, t, cursor = 0, claimable = 0) {
 function drawRankBadge() {
   const r = explorerRank();
   const id = spriteBase(`rank_${r.index}`, 'gold');
+  // Sized to its widest line, "EXPLORER RANK", with the same margin either side of the badge.
+  const w = 44 + textWidth('EXPLORER RANK') + 10;
   ctx.fillStyle = 'rgba(6,10,26,0.62)';
-  ctx.fillRect(4, 4, 112, 34);
+  ctx.fillRect(4, 4, w, 34);
   if (id >= 0) drawSprite(ctx, id, 24, 21);
   drawText(ctx, 'EXPLORER RANK', 44, 9, 'dim');
   drawText(ctx, r.name, 44, 19, 'gold');
   if (r.next !== null) {
+    const bw = w - 44 - 6;
     const k = clamp((r.points - r.at) / (r.next - r.at), 0, 1);
     ctx.fillStyle = '#2a2f4a';
-    ctx.fillRect(44, 29, 64, 3);
+    ctx.fillRect(44, 29, bw, 3);
     ctx.fillStyle = '#ffd166';
-    ctx.fillRect(44, 29, Math.round(64 * k), 3);
+    ctx.fillRect(44, 29, Math.round(bw * k), 3);
   }
 }
 

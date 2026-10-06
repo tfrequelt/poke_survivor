@@ -45,8 +45,10 @@ const newEnemy = () => ({
   // wanders instead of chasing. `dotKind`: how its burn is drawn (0 fire, 1 toxic). Reset in
   // spawnEnemy.
   markT: 0, markMul: 0, confuseT: 0, dotKind: 0,
-  // Put to sleep by a Sleep Seed: held still like a stun, but the next hit wakes it.
-  sleep: false,
+  // Asleep (a Sleep Seed, a Slumber trap, Sleep Powder): held perfectly still for as long as its
+  // stun lasts, drawn with its Sleep animation, and harmless to touch. `wanderA`/`wanderT` are a
+  // confused enemy's current heading (-1 for a stagger on the spot) and how long it keeps it.
+  sleep: false, wanderA: 0, wanderT: 0,
   // Which totem's trial this enemy belongs to (its index on the floor), or -1.
   trial: -1,
   // Going round a pond (see paths.js): `detour` is set while the straight line to the player

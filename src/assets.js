@@ -427,13 +427,17 @@ export async function loadAttacks(manifest) {
   for (const [name, anim] of Object.entries((manifest && manifest.anims) || {})) {
     wanted.push([name, anim]);
   }
+  // `sleep`: the enemies, for when a Sleep Seed puts them out. A folder without a Sleep animation
+  // lends its Idle instead, stored under the same key so the renderer asks for one thing.
+  for (const name of (manifest && manifest.sleep) || []) wanted.push([name, 'Sleep', 'Idle']);
   if (!wanted.length) return 0;
 
-  const jobs = wanted.map(([name, animName]) => {
+  const jobs = wanted.map(([name, animName, fallback]) => {
     const entry = sheets[name];
     const dir = typeof entry === 'string' ? entry : entry && entry.dir;
     if (!dir) return Promise.reject(new Error(`anims: "${name}" has no sheets entry`));
-    return loadNamed(dir, animName).then((a) => [`${name}:${animName}`, a]);
+    const load = fallback ? loadNamed(dir, animName).catch(() => loadNamed(dir, fallback)) : loadNamed(dir, animName);
+    return load.then((a) => [`${name}:${animName}`, a]);
   });
 
   let n = 0;

@@ -11,7 +11,7 @@ export const BAG_ITEMS = [
   { id: 'oran_berry', kind: 'bag_oran', name: 'Oran Berry', weight: 16, color: '#7ac8ff',
     desc: 'Restores half of your health.' },
   { id: 'sleep_seed', kind: 'bag_sleep', name: 'Sleep Seed', weight: 12, color: '#9a9aff',
-    desc: 'Everything within 240px falls asleep for 6s. A hit wakes it.' },
+    desc: 'Everything within 240px falls fast asleep for 6s: it stays put and cannot bite.' },
   { id: 'gravelerock', kind: 'bag_gravelerock', name: 'Gravelerock', weight: 12, color: '#c8c0ad',
     desc: 'Hurls sixteen rocks out in every direction.' },
   { id: 'warp_seed', kind: 'bag_warp', name: 'Warp Seed', weight: 10, color: '#7af0e8',
