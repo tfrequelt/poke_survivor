@@ -580,7 +580,7 @@ function iconLick() {
 
 // --- The Gastly line --------------------------------------------------------
 //
-// These are FALLBACKS. The real art is the PMD sheets in assets/sprites/gastly|haunter|gengar,
+// These are FALLBACKS. The real art is the PMD sheets in assets/sprites/pokemon_base/gastly|haunter|gengar,
 // and these only ever appear if one of those folders is missing. They still have to be three
 // visibly different creatures: a line whose fallbacks all look the same reintroduces exactly the
 // "evolved into itself" confusion the evolution cutscene exists to avoid.

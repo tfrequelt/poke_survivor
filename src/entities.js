@@ -1133,8 +1133,32 @@ function drawPlayer(p, ox, oy) {
     // id = base + flash*(nf*nd) + frame*nd + dir
     drawSprite(ctx, p.sprBase + p.frame * p.nd + p.dir, sx, sy);
   }
+  if (G.shiny) drawShinyTwinkle(p, sx, sy);
   drawPlayerStatus(p, sx, sy);
   drawLowHealthMark(p, sx, sy);
+}
+
+/**
+ * A shiny's tell, as in the games: every few seconds a quick burst of white stars around it,
+ * which grow, then shrink away. Three fillRect crosses; nothing at all the rest of the time.
+ */
+function drawShinyTwinkle(p, sx, sy) {
+  const t = G.clock % 3.2;
+  if (t > 0.6) return;
+  const f = FRAMES[p.sprBase + p.frame * p.nd + p.dir];
+  const top = sy - (f ? f.oy : 16);
+  const cy = (top + sy) / 2;
+  ctx.fillStyle = '#ffffff';
+  for (let k = 0; k < 3; k++) {
+    const lt = t - k * 0.12;
+    if (lt < 0 || lt > 0.35) continue;
+    const a = k * 2.1 + 0.6;
+    const x = Math.round(sx + Math.cos(a) * 11), y = Math.round(cy + Math.sin(a) * 9);
+    const s = lt < 0.17 ? (lt < 0.08 ? 1 : 2) : (lt < 0.27 ? 2 : 1);
+    ctx.fillRect(x - s, y, s * 2 + 1, 1);
+    ctx.fillRect(x, y - s, 1, s * 2 + 1);
+    if (s > 1) { ctx.fillStyle = '#fff6a0'; ctx.fillRect(x, y, 1, 1); ctx.fillStyle = '#ffffff'; }
+  }
 }
 
 /**
@@ -1147,7 +1171,7 @@ function drawPlayer(p, ox, oy) {
  */
 function drawAttackFrame(p, sx, sy) {
   if (p.actDur <= 0) return false;
-  const shape = G.form && G.form.shape;
+  const shape = p.sprShape || (G.form && G.form.shape);
   const a = shape ? getAttack(shape) : null;
   if (!a) return false;
 

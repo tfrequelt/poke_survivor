@@ -334,7 +334,7 @@ export const BOSS_TIERS = ['raticate', 'graveler', 'pidgeot', 'butterfree'];
 // rolling them -- they are placed by the prop system instead.
 //
 // `drops` is what breaking one leaves behind: the chance of any XP at all and how many orbs, the
-// same for coins, and the chance of a single power-up. A crate is the jackpot and a bush is
+// same for coins, and the chance of a single power-up. A crate (drawn as a pot) is the jackpot and a bush is
 // pocket change, which is what makes choosing a target worth a moment's thought.
 for (const [id, shape, palette, hp, r, drops] of [
   ['prop_bush', 'prop_bush', 'grass', 14, 8,

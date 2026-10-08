@@ -28,6 +28,8 @@ export const SUCCESSES = [
     desc: 'Kill 30 or more enemies with a single ability use.', reward: { gold: 600 } },
   { id: 'punching_the_screen', title: 'Punching the Screen', tier: 'bronze',
     desc: 'Die between 19:30 and 20:00.', reward: { gold: 10 } },
+  { id: 'one_in_512', title: '1 in 512', tier: 'gold',
+    desc: 'Start a run with a shiny Pokemon (one run in 512 is).', reward: { gold: 512 } },
   { id: 'legendary', title: 'Legendary', tier: 'platinum',
     desc: 'Defeat all nine legendary Pokemon of the secret floors.', reward: { gold: 3000 },
     progress: { save: 'legends', of: 9 } },

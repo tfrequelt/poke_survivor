@@ -7,7 +7,7 @@
 // second coordinate system to keep in sync with the integer canvas scale. The cost is manual
 // layout, which at this size is a handful of constants.
 
-import { G, MODES } from './state.js';
+import { G, MODES, endLocked } from './state.js';
 import { ctx, VW, VH } from './render.js';
 import {
   drawText, drawTextCentered, textWidth, drawSprite, drawSpriteScaled, drawShadow, drawLogo,
@@ -1280,7 +1280,7 @@ export function drawSummary() {
     drawTextCentered(ctx, msg, VW / 2, 82, 'gold');
     if (rid >= 0) { drawSprite(ctx, rid, VW / 2 - textWidth(msg) / 2 - 12, 85); drawSprite(ctx, rid, VW / 2 + textWidth(msg) / 2 + 12, 85); }
   }
-  drawTextCentered(ctx, 'PRESS ANY KEY', VW / 2, VH - 26, 'dim');
+  if (!endLocked()) drawTextCentered(ctx, 'PRESS ANY KEY', VW / 2, VH - 26, 'dim');
 }
 
 /**
@@ -1301,8 +1301,8 @@ export function drawVictoryChoice() {
     'THE BOSS IS DOWN. THE WIN IS YOURS',
     'WHATEVER YOU DO NEXT.',
     '',
-    '1 / ENTER   TAKE THE WIN',
-    '2 / E       KEEP GOING',
+    endLocked() ? '' : '1 / ENTER   TAKE THE WIN',
+    endLocked() ? '' : '2 / E       KEEP GOING',
     '',
     'ENDLESS SENDS A BOSS EVERY TWO',
     'MINUTES AND PAYS FOR EACH ONE.',

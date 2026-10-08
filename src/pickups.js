@@ -201,7 +201,7 @@ export const PICKUP_KINDS = {
   bomb:    { shape: 'item_voltorb', fallback: 'orb', palette: 'fire', label: 'BLAST SEED' },
   // Was "chest" and drawn as a gold crate. It is the only pickup that grants a level-up, so it
   // now looks like what it does.
-  elixir:  { shape: 'item_elixir', fallback: 'orb', palette: 'gold', label: 'ELIXIR' },
+  elixir:  { shape: 'item_elixir', fallback: 'orb', palette: 'gold', label: 'RARE CANDY' },
   present: { shape: 'icon_gift', fallback: 'orb', palette: 'gift', label: 'PRESENT' },
   // A legendary's relic. Which one is carried by the item's sprite, set when it is dropped --
   // the pool's item shape has no other field to put it in, and nine kinds for nine relics would

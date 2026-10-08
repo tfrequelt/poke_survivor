@@ -65,6 +65,9 @@ const OTHER_RIPS = [
   ['mobile', 'graalonlineera', '147250', 'GRAAL ONLINE ERA', 'water particles'],
   ['game_boy_advance', 'pokemonfireredleafgreen', '28883', 'POKEMON FIRERED/LEAFGREEN', 'R/S moves'],
   ['pc_computer', 'soulsaveronlineghostonline', '578741', 'SOULSAVER ONLINE / GHOST ONLINE', "Spectral Arrow's arrow"],
+  ['game_boy_advance', 'pokemonfireredleafgreen', '3870', 'POKEMON FIRERED/LEAFGREEN', 'rock prop'],
+  ['game_boy_advance', 'pokemonrubysapphire', '8190', 'POKEMON RUBY/SAPPHIRE', 'bush and pot props'],
+  ['ds_dsi', 'pokemonheartgoldsoulsilver', '28036', 'POKEMON HEARTGOLD/SOULSILVER', 'Rare Candy'],
 ];
 
 export const CREDITS = [

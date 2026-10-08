@@ -3,7 +3,7 @@
 // The in-canvas run HUD, drawn in the pixel font so it matches the art. Menus are DOM
 // (screens.js); anything that must sit inside the game's pixel grid lives here.
 
-import { G } from './state.js';
+import { G, endLocked } from './state.js';
 import { ctx, VW, VH } from './render.js';
 import { drawText, drawTextCentered, textWidth, drawSprite } from './sprites.js';
 import { formatTime, formatNum, clamp } from './util.js';
@@ -391,7 +391,8 @@ function drawRunOver() {
     `LEVEL ${G.level}   ${formatNum(G.kills)} KO`,
     `+${formatNum(G.coins + (G.won ? floorBonus() + endlessBonus() : 0))} GOLD   BANK ${formatNum(bankTotal())}`,
     '',
-    'R RESTART    Q CHANGE PARTNER',
+    // Blank while the screen is still ignoring keys, so it never offers what it will not do.
+    endLocked() ? '' : 'R RESTART    Q CHANGE PARTNER',
   ], { center: true, accent: G.won ? '#ffd166' : '#ff9f9f', lineHeight: 11 });
 
   // What did the work, under the result. Five rows: the death screen shares the view with the

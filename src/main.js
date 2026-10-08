@@ -2,7 +2,7 @@
 // Cross-system effects travel through world.js queues and combat.js hooks, drained here in a
 // fixed order, which is what keeps the module graph acyclic without a build step to enforce it.
 
-import { G, MODES, SIM_MODES, setMode, resetRunState, winFrozen } from './state.js';
+import { G, MODES, SIM_MODES, setMode, resetRunState, winFrozen, lockEndScreen, endLocked } from './state.js';
 import { mulberry32, formatTime, clamp } from './util.js';
 import {
   initInput, endFrame, onKey, isAction, bindAction, resetBindings, BINDABLE, bindings,
@@ -168,7 +168,12 @@ async function boot() {
   setSfxFiles(sfxFiles, sfxGains);
 
   // Register every sprite pair the data asks for, then compile the atlas once.
-  for (const [shape, pal, fb] of characterSpritePairs()) registerSprite(shape, pal, 0, fb);
+  for (const [shape, pal, fb] of characterSpritePairs()) {
+    registerSprite(shape, pal, 0, fb);
+    // Its shiny twin, when assets/sprites/shiny has one. Its sheet always wins; the fallback is
+    // only there because registerSprite wants a drawn shape behind every pair.
+    if (getSheet('shiny_' + shape)) registerSprite('shiny_' + shape, pal, 0, fb || shape);
+  }
   for (const [shape, pal, fallback] of enemySpritePairs()) {
     // Skip the gold elite recolour of a sheet-backed enemy: it would rasterise a second, pixel
     // for pixel identical copy of a large sheet and eat atlas space for nothing.
@@ -711,8 +716,12 @@ function startRun(character, q, stageId) {
   applyShopMods();
   ensureStats();
 
+  // One run in 512 is shiny, as in the games, when the starter has shiny art. It is rolled on the
+  // cosmetic stream so a seeded run plays out the same either way; ?shiny=1 forces it.
+  G.shiny = !!getSheet('shiny_' + character.shape) &&
+    (q && q.has('shiny') ? q.get('shiny') !== '0' : G.rngFx() < 1 / SHINY_ODDS);
+
   G.player = createPlayer(0, 0);
-  G.player.sprBase = spriteBase(character.shape, character.palette);
   applyPlayerSprite(character.shape, character.palette);
   G.player.hp = G.player.maxHp = G.stats.maxHp;
   // Read once, at the start: the run counts these down rather than recomputing them, so picking
@@ -747,7 +756,15 @@ function startRun(character, q, stageId) {
   resetAccumulator();
   setIntensity(0);
   startMusic(G.stage.id, ROUTE);
+  if (G.shiny) {
+    showBanner(`A SHINY ${character.name.toUpperCase()}!`, '1 in 512');
+    sfx('levelup');
+    unlockSuccess('one_in_512');
+  }
 }
+
+/** One run in this many starts shiny. */
+const SHINY_ODDS = 512;
 
 /** A centred arena's bounds, or null for an open stage. */
 const arenaBounds = (a) => (a ? { minX: -a.w / 2, minY: -a.h / 2, maxX: a.w / 2, maxY: a.h / 2 } : null);
@@ -1171,7 +1188,7 @@ function beginPortal() {
     secretOverride = null;
     if (!secretDef) return;
     // Its sheets load in the dark: they are big, and most runs never need them at all.
-    loadLegendAnims(secretDef.id, `assets/sprites/${secretDef.id}`, ['Walk', ...secretDef.anims]);
+    loadLegendAnims(secretDef.id, `assets/sprites/pokemon_base/${secretDef.id}`, ['Walk', ...secretDef.anims]);
     // The floor's music stops at the threshold. The boss brings its own.
     stopMusicFile(0.6);
   }
@@ -1276,7 +1293,7 @@ function leaveLegendBehind() {
 
 /**
  * The legendary is down. Its theme fades, everything it had in the air goes with it, and it pays
- * out like nothing else in the game: three Elixirs, a Sitrus Berry, a flood of experience and a
+ * out like nothing else in the game: three Rare Candies, a Sitrus Berry, a flood of experience and a
  * pile of gold. Then the portal reopens where it fell.
  */
 function legendDefeated(e) {
@@ -1380,6 +1397,9 @@ function handleKey(code) {
 
   if (isAction(code, 'mute')) { toggleMute(); saveSettings(); return; }
   if (isAction(code, 'fullscreen')) return toggleFullscreen();
+
+  // A key held over from the fight must not skip the result: see lockEndScreen.
+  if ((G.mode === MODES.SUMMARY || G.mode === MODES.VICTORY || G.runOver) && endLocked()) return;
 
   if (G.mode === MODES.SUMMARY) {
     // The run is over and banked; there is nothing here to read twice.
@@ -1674,7 +1694,7 @@ function castAbility(slot) {
   // cast restarts it rather than queueing, so mashing Q never desyncs the animation from the
   // cooldown.
   const p = G.player;
-  const atk = p && G.form ? getAttack(G.form.shape) : null;
+  const atk = p && G.form ? getAttack(p.sprShape || G.form.shape) : null;
   if (atk) { p.actT = 0; p.actDur = atk.total; }
   sfx(abilitySound(a.def));
   return true;
@@ -1708,9 +1728,17 @@ function abilitySound(def) {
 }
 
 /** Point the player at a form's sprite and adopt its direction/frame counts. */
+/** The shape a form is drawn with: its shiny sheet on a shiny run, if there is one. */
+function drawnShape(shape) {
+  return G.shiny && getSheet('shiny_' + shape) ? 'shiny_' + shape : shape;
+}
+
 function applyPlayerSprite(shape, palette) {
   const p = G.player;
   if (!p) return;
+  // Every form change comes through here, so a shiny run's evolutions are shiny too.
+  shape = drawnShape(shape);
+  p.sprShape = shape;
   p.sprBase = spriteBase(shape, palette);
   const info = spriteInfo(shape, palette);
   p.nd = info ? info.nd : 2;
@@ -1958,11 +1986,11 @@ function stepSim(dt) {
     // stop. Endless runs are already endless -- their bosses do not re-open this.
     if (G.victoryT <= 0) {
       if (G.endless) setMode(MODES.PLAYING);
-      else { setMode(MODES.VICTORY); playResult('mission_success'); }
+      else { setMode(MODES.VICTORY); lockEndScreen(); playResult('mission_success'); }
     }
   }
   // Death banks here rather than in player.js, so every way a run can end goes through one line.
-  if (G.runOver && !G.banked) { checkDeath(); bankRunGold(); playResult('mission_failed'); }
+  if (G.runOver && !G.banked) { checkDeath(); bankRunGold(); lockEndScreen(); playResult('mission_failed'); }
 }
 
 /**
@@ -2005,6 +2033,7 @@ function bankRunGold() {
 function openSummary() {
   bankRunGold();
   setMode(MODES.SUMMARY);
+  lockEndScreen();
   startMusic('menu', TITLE);
 }
 
@@ -2149,7 +2178,7 @@ function startEvolution() {
   if (ev.branch) {
     // Eevee's fork reuses the level-up modal's cursor and the already-written choice screen.
     ui.cursor = 0;
-    evo = { ev, branches: ev.branch.map((b) => ({ ...b, sprId: spriteBase(b.shape, b.palette) })) };
+    evo = { ev, branches: ev.branch.map((b) => ({ ...b, sprId: spriteBase(drawnShape(b.shape), b.palette) })) };
     setMode(MODES.EVOLVE_CHOICE);
     return true;
   }
@@ -2184,13 +2213,13 @@ function beginCutscene(ev, branch) {
   }
   const oldName = G.form.name;
   const oldBase = G.player.sprBase;
-  const oldInfo = spriteInfo(G.form.shape, G.form.palette);
+  const oldInfo = spriteInfo(G.player.sprShape || G.form.shape, G.form.palette);
   const oldFlash = oldInfo ? oldInfo.nf * oldInfo.nd : 4;
   const oldFace = oldInfo && oldInfo.nd === 8 ? 0 : 1;
 
   applyEvolution(ev, branch);
-  const newBase = spriteBase(G.form.shape, G.form.palette);
   applyPlayerSprite(G.form.shape, G.form.palette);
+  const newBase = G.player.sprBase;
 
   // The supplied evolution track, if there is one: it is roughly eleven seconds against a
   // 2.75s cutscene, so the stage music ducks for its whole length rather than just the cutscene.
@@ -2198,7 +2227,7 @@ function beginCutscene(ev, branch) {
   const jingle = sampleDuration('evolve');
   if (jingle > 0) duckMusic(jingle);
   else if (audioReady()) playOnce(FANFARE);
-  const newInfo = spriteInfo(G.form.shape, G.form.palette);
+  const newInfo = spriteInfo(G.player.sprShape, G.form.palette);
   evo = {
     t: 0, ev, oldBase, newBase,
     // Flash-variant offset and the "face the camera" direction differ per form, so they travel

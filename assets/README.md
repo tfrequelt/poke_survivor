@@ -9,7 +9,7 @@ drop an image here and it replaces the drawn art for that shape.
 `manifest.json` has a `sheets` section pointing at a folder in PMD Sprite Collab layout:
 
 ```json
-{ "sheets": { "wooper": "assets/sprites/wooper" } }
+{ "sheets": { "wooper": "assets/sprites/pokemon_base/wooper" } }
 ```
 
 The loader reads `AnimData.xml` from that folder for the real `FrameWidth`, `FrameHeight` and
@@ -32,6 +32,14 @@ the feet — anchor to the tail and the body floats. If a folder has no shadow s
 falls back to that estimate and logs a warning naming the folder.
 
 The `-Offsets` sheets are not used and can be deleted.
+
+### Shiny sheets
+
+The PMD folders live in `assets/sprites/pokemon_base/<name>`. Shiny versions of the starters and
+their evolutions are in `assets/sprites/shiny/shiny_<name>`, listed in `sheets` (and `attacks`)
+under the name `shiny_<name>`. A shiny run (one in 512) draws a form's `shiny_` sheet wherever one
+exists and its ordinary sheet otherwise, so a new evolution only needs its shiny folder added and
+listed to be shiny too.
 
 ### Attack animations
 
@@ -71,7 +79,7 @@ the burn flames at y 112 — both cut by `src/entities.js`, not the manifest.
 ```
 
 Change the word to change the animation. Anything in that Pokemon's folder works -- run
-`ls assets/sprites/<name>/*-Anim.png` to see the list. Six sensible ones every starter has are
+`ls assets/sprites/pokemon_base/<name>/*-Anim.png` to see the list. Six sensible ones every starter has are
 `Sleep`, `Hop`, `Idle`, `Charge`, `Shoot` and `Swing`; the more entertaining ones are per
 Pokemon, which is the point.
 
@@ -399,7 +407,7 @@ five to a row, drawn over the screen like the hail.
 
 ## Legendary sprites
 
-The nine legendaries (`assets/sprites/<id>/`, PMD collab folders like every other Pokemon) are NOT
+The nine legendaries (`assets/sprites/pokemon_base/<id>/`, PMD collab folders like every other Pokemon) are NOT
 in `manifest.json` and NOT in the sprite atlas. Their sheets are large -- Moltres attacks in 104x136
 cells -- and only one is ever on screen, so they load when a portal is entered (`loadLegendAnims`
 in `src/assets.js`), during the two seconds of black, and are freed on the way back out. Each entry
@@ -497,6 +505,19 @@ golden feather), and gems or stones for the rest -- see the `sprites` section of
 `RELICS` in `src/data/legends.js`.
 
 **Credited, not yet used:** `ice_stage_tileset.png` and `miracle_sea_tileset.png`.
+
+### Props and the Rare Candy
+
+The three breakable props and the level-up power-up are crops in the manifest's `sprites`, under
+the shapes they replace (the drawn ones in `shapes.js` are kept as fallbacks):
+
+- `prop_rock`: the first brown rock of the row in `props.png` (FireRed/LeafGreen,
+  spriters-resource.com/game_boy_advance/pokemonfireredleafgreen/asset/3870), keyed `#9933cc`.
+- `prop_bush` and `prop_crate`: the round bush (top right) and the round pot (bottom left) of
+  `props_small.png` (Ruby/Sapphire, spriters-resource.com/game_boy_advance/pokemonrubysapphire/asset/8190).
+- `item_elixir`, the level-up power-up, now shows as the Rare Candy from `maingame_items.png`
+  (HeartGold/SoulSilver, spriters-resource.com/ds_dsi/pokemonheartgoldsoulsilver/asset/28036);
+  the Elixir crop it used is the Max Elixir bag item's, `bag_maxelixir`.
 
 ### More from items_2.png
 

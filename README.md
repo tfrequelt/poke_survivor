@@ -373,7 +373,12 @@ Enter on the card banks the prize.
 | Maxed Out | Reach level 100 | 900 G |
 | Kaboom | Kill 30+ enemies with a single ability use | 600 G |
 | Punching the Screen | Die between 19:30 and 20:00 | 10 G |
+| 1 in 512 | Start a run with a shiny Pokémon | 512 G |
 | Legendary | Defeat all nine legendaries | 3000 G |
+
+**Shiny Pokémon:** one run in 512 starts shiny, with a "A SHINY …!" banner, the form's shiny
+sprites (its evolutions are shiny too) and a twinkle of stars every few seconds. `?shiny=1` forces
+one when testing.
 
 **Expedition Records** add twenty-two harder ones — each a bronze, silver, gold or platinum tier:
 

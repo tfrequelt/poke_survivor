@@ -56,6 +56,19 @@ async function decode(url, rect) {
   return { w: r.w, h: r.h, data: new Uint32Array(img.data.buffer.slice(0)) };
 }
 
+/** A packed image resized by `k`, nearest neighbour, sampling each target pixel's centre. */
+function scalePacked(img, k) {
+  const w = Math.max(1, Math.round(img.w * k)), h = Math.max(1, Math.round(img.h * k));
+  const data = new Uint32Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const sy = Math.min(img.h - 1, Math.floor((y + 0.5) / k));
+    for (let x = 0; x < w; x++) {
+      data[y * w + x] = img.data[sy * img.w + Math.min(img.w - 1, Math.floor((x + 0.5) / k))];
+    }
+  }
+  return { w, h, data };
+}
+
 /**
  * Zero the alpha of every pixel matching a flat background colour, in the packed 0xAABBGGRR
  * buffer the atlas compiler consumes.
@@ -193,6 +206,13 @@ export async function loadAssets() {
       // A recolour, for one sheet sprite standing in for several items: the sheet has two seeds
       // and one orb, and Mystery Dungeon tells its seeds and orbs apart by colour anyway.
       if (typeof e === 'object' && (e.hue || e.sat !== undefined)) recolorPacked(px, e.hue || 0, e.sat === undefined ? 1 : e.sat);
+      // `scale`, for a sprite from a sheet drawn at another size than ours (the HeartGold items
+      // are 21px against Mystery Dungeon's 12-16). Nearest neighbour, once, at load.
+      if (typeof e === 'object' && e.scale && e.scale !== 1) {
+        const s = scalePacked(px, e.scale);
+        s.anchor = px.anchor;
+        return [name, s];
+      }
       return [name, px];
     });
   }));

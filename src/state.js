@@ -4,6 +4,14 @@
 // not here, so that G stays cheap to reason about and dump. Persistent (cross-run) data lives
 // in G.save and is owned by save.js.
 
+/**
+ * The victory, summary and defeat screens ignore keys for a moment after they appear, so a key
+ * still held from the fight cannot skip them. Wall-clock ms, since the sim is stopped by then.
+ */
+export const END_LOCK_MS = 2000;
+export const lockEndScreen = () => { G.endLockUntil = performance.now() + END_LOCK_MS; };
+export const endLocked = () => performance.now() < (G.endLockUntil || 0);
+
 export const MODES = {
   BOOT: 'boot',
   TITLE: 'title',
@@ -207,6 +215,8 @@ export function resetRunState() {
   G.blessings = [];
   G.player = null;
   G.form = null;
+  G.shiny = false;
+  G.endLockUntil = 0;
   G.bounds = null;
   G.statsDirty = true;
   G.mods.length = 0;

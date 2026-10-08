@@ -38,6 +38,8 @@ export function createPlayer(x = 0, y = 0) {
     animTime: 0,
     frame: 0,
     sprBase: 0,
+    // The shape actually drawn: the form's, or its `shiny_` sheet on a shiny run.
+    sprShape: '',
     stillTime: 0,          // feeds Dartrix's "Tidy Feathers"
     regenAcc: 0,
     shieldT: 0,            // Protect Bubble -- blocks contact damage outright
