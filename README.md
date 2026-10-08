@@ -359,6 +359,14 @@ The win is locked in the moment the boss dies, and the floor bonus with it, so e
 ever add — dying in it still banks the victory, the floor bonus and every endless boss you took
 down.
 
+- **Bosses:** one every two minutes, and whenever none is alive a new one lands 1.5 seconds later.
+- **They escalate:** each endless boss has +35% health, +15% damage and two more shots in every
+  volley than the one before, and attacks a little faster (down to half its cooldown). From the
+  third on, it calls in the stage's own Pokémon, more of them and more often each time.
+- **Stairs and portals still work:** a staircase appears 20 seconds into endless and again three
+  minutes after each one you take (down to the last floor), and the legendary portal can still
+  open. No endless boss follows you onto a legendary's floor.
+
 ## Successes
 
 Achievements, in their own window from the main menu. A locked card shows `???` as its title and
@@ -377,8 +385,13 @@ Enter on the card banks the prize.
 | Legendary | Defeat all nine legendaries | 3000 G |
 
 **Shiny Pokémon:** one run in 512 starts shiny, with a "A SHINY …!" banner, the form's shiny
-sprites (its evolutions are shiny too) and a twinkle of stars every few seconds. `?shiny=1` forces
-one when testing.
+sprites (its evolutions are shiny too) and a twinkle of stars every few seconds. A shiny run is a
+lucky one: +20% luck (more drops, elites sooner, bigger chests, a kinder wheel and Fortune totems),
+a legendary portal twice as often, one more reroll, and level-up cards that lean toward upgrading
+what you already carry. `?shiny=1` forces one when testing.
+
+The victory screen shows your partner's face, one of its three happy portraits at random; the
+defeat screen one of its three sad ones.
 
 **Expedition Records** add twenty-two harder ones — each a bronze, silver, gold or platinum tier:
 

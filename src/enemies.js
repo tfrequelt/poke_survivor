@@ -152,7 +152,7 @@ const ATTACK = {
    * than a line, so backing straight off does not beat it.
    */
   burst(e, def) {
-    const n = e.boss ? (def.count || 8) : Math.min(def.count || 8, REGULAR_BURST_MAX);
+    const n = e.boss ? (def.count || 8) + e.extraShots : Math.min(def.count || 8, REGULAR_BURST_MAX);
     const base = Math.atan2(e.atkY, e.atkX);
     const spread = e.boss ? (def.spread || Math.PI * 2) : Math.min(def.spread || 9, REGULAR_BURST_SPREAD);
     for (let i = 0; i < n; i++) {
@@ -179,7 +179,7 @@ function fireHostile(e, nx, ny, def) {
   pr.x = e.x; pr.y = e.y;
   pr.vx = nx * sp; pr.vy = ny * sp;
   pr.r = def.r || HOSTILE_R;
-  pr.dmg = def.damage || 6;
+  pr.dmg = (def.damage || 6) * e.atkDmgMul;
   pr.hostile = true;
   pr.pierce = 0;
   pr.life = 0;
@@ -217,7 +217,7 @@ function updateAttack(e, dt, px, py) {
     e.atkWind -= dt;
     if (e.atkWind <= 0) {
       ATTACK_FNS[e.def.attackIdx](e, def);
-      e.atkCd = def.cooldown;
+      e.atkCd = def.cooldown * e.atkCdMul;
     }
     return true;                                 // held still, telegraphing
   }
@@ -338,6 +338,7 @@ export function spawnEnemy(def, x, y, opts) {
   e.detour = 0; e.losT = 0;
   e.markT = 0; e.markMul = 0; e.confuseT = 0; e.dotKind = 0; e.sleep = false;
   e.wanderA = 0; e.wanderT = 0;
+  e.endlessGen = 0; e.extraShots = 0; e.atkDmgMul = 1; e.atkCdMul = 1; e.summonT = 0;
   e.trial = opts && opts.trial !== undefined ? opts.trial : -1;
   e.flash = 0; e.knockX = 0; e.knockY = 0; e.contactCd = 0; e.decoyCd = 0;
   e.slow = 0; e.slowT = 0;

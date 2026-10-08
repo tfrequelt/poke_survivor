@@ -91,7 +91,7 @@ import {
   grantXp, grantCoins, initForm, xpToNext, rollOffers, takeOffer, grantBlessing,
   rerollOffers, banishOffer, skipOffer, resetPicks, pendingEvolution, applyEvolution,
 } from './progress.js';
-import { updateDirector, resetDirector, catchUpSchedule, stressSpawn, rollStageEnemy } from './director.js';
+import { updateDirector, resetDirector, catchUpSchedule, stressSpawn, rollStageEnemy, rollEnemyNow } from './director.js';
 import { updateProps, resetProps, clearProp } from './props.js';
 import { drawEntities, setStairsSprite, setHostileSprite, setTrapSprites, setTotemSprites } from './entities.js';
 import { drawHud, debugLines } from './hud.js';
@@ -108,7 +108,7 @@ import { enemySpritePairs } from './data/enemies.js';
 import { weaponSpritePairs } from './data/weapons.js';
 import { STAGE_BY_ID, STAGES, propSpritePairs } from './data/stages.js';
 import {
-  loadAssets, pickMusic, getSheet, sfxFiles, sfxGains, getAttack, loadLegendAnims, unloadLegendAnims,
+  loadAssets, pickMusic, getSheet, sfxFiles, sfxGains, getAttack, loadLegendAnims, unloadLegendAnims, getPortrait,
 } from './assets.js';
 import {
   initAudio, audioReady, sfx, playTrack, playOnce, setIntensity, stopTrack,
@@ -714,13 +714,14 @@ function startRun(character, q, stageId) {
   // resetRunState() emptied G.mods, so this is the one window in which a permanent modifier can
   // be added: after the stat block is rebuilt, before anything resolves it.
   applyShopMods();
-  ensureStats();
-
-  // One run in 512 is shiny, as in the games, when the starter has shiny art. It is rolled on the
-  // cosmetic stream so a seeded run plays out the same either way; ?shiny=1 forces it.
+  // The shiny roll has to come before the stats are first resolved, for its luck to count.
   G.shiny = !!getSheet('shiny_' + character.shape) &&
     (q && q.has('shiny') ? q.get('shiny') !== '0' : G.rngFx() < 1 / SHINY_ODDS);
+  if (G.shiny) addMods([{ stat: 'luck', op: 'flat', value: SHINY_LUCK }], 'shiny');
+  ensureStats();
 
+  // One run in 512 is shiny (rolled above), as in the games, when the starter has shiny art. It
+  // is rolled on the cosmetic stream; ?shiny=1 forces it.
   G.player = createPlayer(0, 0);
   applyPlayerSprite(character.shape, character.palette);
   G.player.hp = G.player.maxHp = G.stats.maxHp;
@@ -732,7 +733,7 @@ function startRun(character, q, stageId) {
   addWeapon(character.weapon);
   placeTotems();
 
-  G.rerolls = shopCharges('rerolls') + (G.perks.reroll1 ? 1 : 0);
+  G.rerolls = shopCharges('rerolls') + (G.perks.reroll1 ? 1 : 0) + (G.shiny ? 1 : 0);
   G.banishes = shopCharges('banishes');
   G.skips = shopCharges('skips');
 
@@ -757,14 +758,22 @@ function startRun(character, q, stageId) {
   setIntensity(0);
   startMusic(G.stage.id, ROUTE);
   if (G.shiny) {
-    showBanner(`A SHINY ${character.name.toUpperCase()}!`, '1 in 512');
+    showBanner(`A SHINY ${character.name.toUpperCase()}!`, '1 IN 512 -- LUCK IS ON YOUR SIDE');
     sfx('levelup');
     unlockSuccess('one_in_512');
   }
 }
 
-/** One run in this many starts shiny. */
+/**
+ * A shiny run is a lucky one, so it plays like one -- the "Shiny Charm":
+ *   +20% luck, under its own source (more drops, elites sooner, bigger chests, kinder wheel and
+ *   Fortune totems -- everything luck already feeds), a legendary portal twice as often, one
+ *   more reroll, and level-up cards that lean toward upgrading what you already carry
+ *   (progress.js, `SHINY_OWNED`).
+ */
 const SHINY_ODDS = 512;
+const SHINY_LUCK = 0.2;
+const SHINY_PORTAL = 2;
 
 /** A centred arena's bounds, or null for an open stage. */
 const arenaBounds = (a) => (a ? { minX: -a.w / 2, minY: -a.h / 2, maxX: a.w / 2, maxY: a.h / 2 } : null);
@@ -789,6 +798,10 @@ function startEndless() {
   G.endless = true;
   G.victoryT = 0;
   G.banner = { text: 'THE DUNGEON DOES NOT END', sub: 'BOSSES EVERY TWO MINUTES', t: 3 };
+  endlessStairsAt = G.runTime + 20;
+  nextEndlessBoss = G.runTime + ENDLESS_BOSS_GAP;
+  endlessGap = ENDLESS_FIRST;
+  rollPortal();
   setMode(MODES.PLAYING);
   resetAccumulator();
   startMusic(G.stage.id, ROUTE);
@@ -869,7 +882,14 @@ function updateStairs() {
   for (const t of STAIRS_AT) {
     if (G.runTime < t || stairsSpawned[t]) continue;
     stairsSpawned[t] = true;
-    if (!G.stairs.active && G.floor < MAX_FLOOR && !G.won && !G.runOver) placeStairs();
+    if (!G.stairs.active && G.floor < MAX_FLOOR && !winFrozen() && !G.runOver) placeStairs();
+  }
+  // Endless: the 5/10/15:00 marks are long spent, so the way down keeps reappearing on its own
+  // clock -- a staircase a little after endless starts, then three minutes after each one taken.
+  if (G.endless && !G.stairs.active && G.floor < MAX_FLOOR && !G.runOver && !G.secret &&
+      G.runTime >= endlessStairsAt) {
+    endlessStairsAt = G.runTime + ENDLESS_STAIRS_GAP;
+    placeStairs();
   }
   G.stairs.near = G.stairs.active &&
     Math.abs(p.x - G.stairs.x) < STAIRS_REACH && Math.abs(p.y - G.stairs.y) < STAIRS_REACH;
@@ -908,7 +928,7 @@ let stairsSpawned = {};
  * same fade and floor change as the stairs. False when there is nowhere to go.
  */
 function forceDescent() {
-  if (descent || G.won || G.runOver || G.secret || G.floor >= MAX_FLOOR) return false;
+  if (descent || winFrozen() || G.runOver || G.secret || G.floor >= MAX_FLOOR) return false;
   descent = { t: 0, swapped: false, kind: 'stairs' };
   G.stairs.active = false;
   G.stairs.near = false;
@@ -922,7 +942,7 @@ function beginDescent() {
   // Not once the run is decided. The mode is still PLAYING through the victory beat while the
   // boss's payout flies in, so a player who happened to be standing on a staircase when the boss
   // died could otherwise press Enter and wipe the reward they just earned.
-  if (G.won || G.runOver) return;
+  if (winFrozen() || G.runOver) return;
   descent = { t: 0, swapped: false, kind: 'stairs' };
   G.stairs.active = false;
   G.stairs.near = false;
@@ -1145,10 +1165,11 @@ function rollPortal() {
   G.portal.active = false;
   G.portal.near = false;
   G.portal.back = false;
-  if (!G.stage || G.won || !legendFor(G.stage.id, G.floor)) return;
+  if (!G.stage || winFrozen() || !legendFor(G.stage.id, G.floor)) return;
   // ?portal forces one, a few seconds in, so a portal can be tested without forty runs.
   const forced = bootParams && bootParams.has('portal');
-  if (!forced && G.rngRun() >= PORTAL_CHANCE) return;
+  // A shiny run is a lucky run: the legendaries come out twice as often.
+  if (!forced && G.rngRun() >= PORTAL_CHANCE * (G.shiny ? SHINY_PORTAL : 1)) return;
   const [a, b] = forced ? [3, 3] : PORTAL_WINDOW;
   portalAt = G.runTime + a + G.rngRun() * (b - a);
 }
@@ -1156,7 +1177,7 @@ function rollPortal() {
 function updatePortal() {
   const p = G.player;
   if (!p) return;
-  if (!G.secret && portalAt >= 0 && G.runTime >= portalAt && !G.won && !G.runOver) {
+  if (!G.secret && portalAt >= 0 && G.runTime >= portalAt && !winFrozen() && !G.runOver) {
     portalAt = -1;
     // A forced portal (?portal) is for testing, so it opens where you can see it.
     if (bootParams && bootParams.has('portal')) portalBeside();
@@ -1183,7 +1204,7 @@ function beginPortal() {
   if (descent || !G.portal.active || !G.portal.near || G.runOver) return;
   const back = G.portal.back;
   if (!back) {
-    if (G.won) return;
+    if (winFrozen()) return;
     secretDef = (secretOverride && LEGEND_BY_ID[secretOverride]) || testLegend();
     secretOverride = null;
     if (!secretDef) return;
@@ -1221,7 +1242,7 @@ function testLegend() {
 
 /** Debug key O: a portal right beside you, now, whatever the floor and the odds. */
 function debugPortal() {
-  if (G.secret || G.won || !G.player || descent) return;
+  if (G.secret || winFrozen() || !G.player || descent) return;
   portalAt = -1;
   portalBeside();
   G.portal.back = false;
@@ -1728,6 +1749,17 @@ function abilitySound(def) {
 }
 
 /** Point the player at a form's sprite and adopt its direction/frame counts. */
+/**
+ * The face on the victory or defeat screen: one of the current form's three happy or three sad
+ * portraits, picked once when the screen opens so it does not flicker between them. Empty when
+ * the form has none (the screen then simply goes without).
+ */
+function pickEndPortrait(mood) {
+  const form = (G.form && G.form.shape) || (G.character && G.character.shape) || '';
+  const k = 1 + ((Math.random() * 3) | 0);
+  G.endPortrait = getPortrait(`${form}_${mood}${k}`) ? `${form}_${mood}${k}` : '';
+}
+
 /** The shape a form is drawn with: its shiny sheet on a shiny run, if there is one. */
 function drawnShape(shape) {
   return G.shiny && getSheet('shiny_' + shape) ? 'shiny_' + shape : shape;
@@ -1916,6 +1948,7 @@ function stepSim(dt) {
     updateProps();
   }
   drainBossQueue();
+  updateEndless(dt);
   if (!G.secret) updateTotems(dt);
   drainSpawnRequests();
 
@@ -1986,11 +2019,11 @@ function stepSim(dt) {
     // stop. Endless runs are already endless -- their bosses do not re-open this.
     if (G.victoryT <= 0) {
       if (G.endless) setMode(MODES.PLAYING);
-      else { setMode(MODES.VICTORY); lockEndScreen(); playResult('mission_success'); }
+      else { setMode(MODES.VICTORY); lockEndScreen(); pickEndPortrait('happy'); playResult('mission_success'); }
     }
   }
   // Death banks here rather than in player.js, so every way a run can end goes through one line.
-  if (G.runOver && !G.banked) { checkDeath(); bankRunGold(); lockEndScreen(); playResult('mission_failed'); }
+  if (G.runOver && !G.banked) { checkDeath(); bankRunGold(); lockEndScreen(); pickEndPortrait('sad'); playResult('mission_failed'); }
 }
 
 /**
@@ -2277,6 +2310,73 @@ function finishEvolution() {
  * The director sets these and, until now, nothing read them -- so the 5/10/15 minute mini-bosses
  * and the 20:00 boss were scheduled and never actually appeared.
  */
+// --- Endless ---------------------------------------------------------------------------------
+//
+// A boss every two minutes -- and the moment none is alive, a new one (after a short beat, so the
+// last one's "BOSS N DOWN" can be read). Each is stronger than the last: more health and damage,
+// more shots in every volley, a faster cadence, and from the third on it calls in the stage's own
+// Pokemon, more of them and more often each time. On top of the curve, which already climbs
+// with the minutes and the floor.
+
+const ENDLESS_BOSS_GAP = 120;
+const ENDLESS_RESPAWN = 1.5;      // the beat between a boss falling and the next one landing
+const ENDLESS_FIRST = 0.5;        // ...and before the first, when endless begins
+const ENDLESS_STAIRS_GAP = 180;
+const ENDLESS_SUMMON_FROM = 3;    // the first boss that summons
+let nextEndlessBoss = 0;
+let endlessGap = -1;              // >= 0: counting down to a respawn because none is alive
+let endlessStairsAt = 0;
+
+function updateEndless(dt) {
+  if (!G.endless || G.secret || descent || G.runOver) return;
+  let alive = false;
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i];
+    if (e.alive && e.endlessGen > 0) { alive = true; if (e.endlessGen >= ENDLESS_SUMMON_FROM) endlessSummons(e, dt); }
+  }
+  if (!alive && endlessGap < 0) endlessGap = ENDLESS_RESPAWN;
+  if (endlessGap >= 0) endlessGap -= dt;
+  if ((!alive && endlessGap < 0) || G.runTime >= nextEndlessBoss) {
+    nextEndlessBoss = G.runTime + ENDLESS_BOSS_GAP;
+    endlessGap = -1;
+    spawnEndlessBoss();
+  }
+}
+
+function spawnEndlessBoss() {
+  G.endlessSpawned = (G.endlessSpawned || 0) + 1;
+  const e = spawnMiniboss(4);
+  if (!e) return;
+  const g = G.endlessSpawned;
+  e.endlessGen = g;
+  e.maxHp = e.hp = Math.round(e.maxHp * (1 + 0.35 * (g - 1)));
+  e.dmg *= 1 + 0.15 * (g - 1);
+  e.atkDmgMul = 1 + 0.15 * (g - 1);
+  e.extraShots = Math.min(16, 2 * (g - 1));
+  e.atkCdMul = Math.max(0.5, 1 - 0.06 * (g - 1));
+  e.summonT = 3;
+  G.banner.text = `ENDLESS BOSS ${g}`;
+  G.banner.sub = `${e.def.name.toUpperCase()}${g >= ENDLESS_SUMMON_FROM ? ' -- IT CALLS FOR HELP' : ''}`;
+}
+
+/** A summoning boss: every few seconds a ring of the stage's Pokemon bursts out around it. */
+function endlessSummons(e, dt) {
+  e.summonT -= dt;
+  if (e.summonT > 0) return;
+  const g = e.endlessGen;
+  e.summonT = Math.max(4, 11 - g);
+  const n = Math.min(12, 2 + g);
+  const def = rollEnemyNow();
+  if (!def) return;
+  const off = G.rngRun() * Math.PI * 2;
+  for (let i = 0; i < n; i++) {
+    const a = off + (i / n) * Math.PI * 2;
+    spawnEnemy(def, e.x + Math.cos(a) * (e.r + 22), e.y + Math.sin(a) * (e.r + 22));
+  }
+  burst(e.x, e.y, 14, '#c49aff');
+  sfx('move_ghost');
+}
+
 function drainBossQueue() {
   if (G.pendingMiniboss > 0) {
     const tier = G.pendingMiniboss;
@@ -2330,6 +2430,7 @@ function spawnMiniboss(tier) {
   G.banner.sub = def.name.toUpperCase();
   G.banner.t = 2.5;
   addShake(0.6);
+  return e;
 }
 
 function drainSpawnRequests() {

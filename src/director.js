@@ -44,9 +44,6 @@ const ELITE_GAP_MIN = 34;       // ...and at the luck cap
 
 const SPAWN_PAUSES = [[270, 300], [570, 600], [870, 900]];   // 4:30, 9:30, 14:30 -- the inhale
 const FINAL_SURGE = 19 * 60;
-// After the win, a boss every two minutes. The curve itself is already quadratic in elapsed
-// minutes, so endless needs no separate difficulty ramp -- only something to fight.
-const ENDLESS_BOSS_GAP = 120;
 const MINIBOSS_AT = [300, 600, 900];
 
 let spawnAcc = 0;
@@ -56,7 +53,6 @@ let nextFormation = 60;
 let nextPincer = 390;
 let minibossFired = [false, false, false];
 let bossFired = false;
-let nextEndlessBoss = 0;
 
 export function resetDirector() {
   spawnAcc = 0;
@@ -66,7 +62,6 @@ export function resetDirector() {
   nextPincer = 390;
   minibossFired = [false, false, false];
   bossFired = false;
-  nextEndlessBoss = 0;
   G.curve = { hp: 1, dmg: 1, spd: 1, sps: 0, cap: 0, m: 0 };
 }
 
@@ -95,8 +90,16 @@ export function catchUpSchedule() {
 export const rollStageEnemy = (rng) => rollEnemy(G.runTime / 60, rng);
 
 /** Enemies eligible for the current stage and minute, weighted by their `weight`. */
+/** One of the species the stage is fielding right now, for a boss that calls in its own help. */
+export const rollEnemyNow = () => rollEnemy(G.runTime / 60, G.rngRun);
+
+// The roster's tables stop at 20:00. Past it -- endless -- the late roster keeps coming: without
+// this clamp every roll after 20:00 matched nothing, and endless fielded no ordinary enemies.
+const ROSTER_END = 20;
+
 function rollEnemy(m, rng) {
   const stage = (G.stage && G.stage.id) || 'grass';
+  if (m > ROSTER_END) m = ROSTER_END;
   return pickWeighted(rng, ENEMIES, (d) =>
     (m >= d.from && m <= d.to && d.stages.includes(stage)) ? d.weight : 0);
 }
@@ -169,15 +172,7 @@ export function updateDirector(dt) {
       G.pendingMiniboss = i + 1;
     }
   }
-  // Endless: the schedule does not stop at 20:00, it just changes what it sends.
-  if (G.endless) {
-    if (nextEndlessBoss === 0) nextEndlessBoss = t + ENDLESS_BOSS_GAP;
-    if (t >= nextEndlessBoss) {
-      nextEndlessBoss = t + ENDLESS_BOSS_GAP;
-      // Tier 4 is the stage's own final boss, and it is the hardest thing the roster has.
-      G.pendingBoss = true;
-    }
-  }
+  // Endless bosses are scheduled by main.js (updateEndless), which can see whether one is alive.
 
   if (!bossFired && t >= RUN_LENGTH) {
     bossFired = true;

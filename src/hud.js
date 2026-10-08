@@ -11,7 +11,7 @@ import { enemies } from './world.js';
 import { panel, messageWindow, wrap, drawDamagePanel } from './win.js';
 import { damageBreakdown } from './combat.js';
 import { toast } from './successes.js';
-import { newSuccessLine } from './ui.js';
+import { newSuccessLine, drawEndPortrait } from './ui.js';
 import { WEAPON_BY_ID } from './data/weapons.js';
 import { bankTotal } from './save.js';
 import { floorLabel, floorBonus, endlessBonus } from './floors.js';
@@ -394,6 +394,8 @@ function drawRunOver() {
     // Blank while the screen is still ignoring keys, so it never offers what it will not do.
     endLocked() ? '' : 'R RESTART    Q CHANGE PARTNER',
   ], { center: true, accent: G.won ? '#ffd166' : '#ff9f9f', lineHeight: 11 });
+  // The partner's face beside the result: one of its sad portraits (picked when it fainted).
+  drawEndPortrait(x - 92, y + 2, G.won ? '#ffd166' : '#ff9f9f');
 
   // What did the work, under the result. Five rows: the death screen shares the view with the
   // field behind it, and the full list is on the victory screen.

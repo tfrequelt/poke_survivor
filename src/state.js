@@ -201,6 +201,7 @@ export function resetRunState() {
   G.floor = 1;
   G.endless = false;
   G.endlessBosses = 0;
+  G.endlessSpawned = 0;
   G.stairs.x = 0; G.stairs.y = 0; G.stairs.active = false; G.stairs.near = false;
   G.portal.x = 0; G.portal.y = 0; G.portal.active = false; G.portal.near = false; G.portal.back = false;
   G.secret = false;
@@ -217,6 +218,7 @@ export function resetRunState() {
   G.form = null;
   G.shiny = false;
   G.endLockUntil = 0;
+  G.endPortrait = '';
   G.bounds = null;
   G.statsDirty = true;
   G.mods.length = 0;

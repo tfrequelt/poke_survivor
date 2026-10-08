@@ -1284,6 +1284,23 @@ export function drawSummary() {
 }
 
 /**
+ * The partner's face on an end screen: the portrait G.endPortrait names, at 2x in a framed box
+ * whose top-left is (x, y), bordered in `accent`. Nothing when there is none.
+ */
+export function drawEndPortrait(x, y, accent) {
+  const port = G.endPortrait ? getPortrait(G.endPortrait) : null;
+  if (!port) return;
+  const k = 2, pw = port.w * k, ph = port.h * k;
+  ctx.fillStyle = '#0d0d18';
+  ctx.fillRect(x - 3, y - 3, pw + 6, ph + 6);
+  ctx.fillStyle = accent;
+  ctx.fillRect(x - 2, y - 2, pw + 4, ph + 4);
+  ctx.fillStyle = '#0d0d18';
+  ctx.fillRect(x - 1, y - 1, pw + 2, ph + 2);
+  ctx.drawImage(port.canvas, 0, 0, port.w, port.h, x, y, pw, ph);
+}
+
+/**
  * The fork at the end of a won run: bank it, or keep going.
  *
  * Deliberately not a card screen. The win is already secured by the time this appears, so there
@@ -1292,6 +1309,8 @@ export function drawSummary() {
 export function drawVictoryChoice() {
   ctx.fillStyle = 'rgba(8,8,18,0.82)';
   ctx.fillRect(0, 0, VW, VH);
+  // The partner, beaming, beside the question.
+  drawEndPortrait(Math.round((VW - 300) / 2) - 92, 112, '#ffd166');
 
   drawLogo(ctx, 'VICTORY', VW / 2, 52, 3, 'gold', 'dark');
   drawTextCentered(ctx, `${formatTime(G.runTime)}   FLOOR ${floorLabel()}`, VW / 2, 84, 'dim');

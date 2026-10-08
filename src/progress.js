@@ -244,6 +244,9 @@ function overloadOffers() {
 /** Is the open draft an overload choice? Reroll and banish do not apply to one. */
 export const overloadDraft = () => G.offers.length > 0 && G.offers[0].kind === 'overload';
 
+/** How much more often a shiny run offers an upgrade to something already owned. */
+const SHINY_OWNED = 1.6;
+
 /** Roll three distinct cards. Falls back to a heal if the pool is somehow exhausted. */
 export function rollOffers(count = 3) {
   const ovl = overloadOffers();
@@ -259,6 +262,10 @@ export function rollOffers(count = 3) {
     const i = pool.findIndex((c) => c.kind === 'ability' && c.id === forced.id);
     if (i >= 0) chosen.push(pool.splice(i, 1)[0]);
   }
+
+  // A shiny run's cards lean toward levelling what you already carry: more of the upgrades that
+  // reach level 10, evolutions and overloads, fewer of the scattered first picks.
+  if (G.shiny) for (const c of pool) if (c.level > 1 && c.kind !== 'stat') c.weight *= SHINY_OWNED;
 
   while (chosen.length < count && pool.length > 0) {
     let total = 0;

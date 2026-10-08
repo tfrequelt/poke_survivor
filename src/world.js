@@ -49,6 +49,9 @@ const newEnemy = () => ({
   // stun lasts, drawn with its Sleep animation, and harmless to touch. `wanderA`/`wanderT` are a
   // confused enemy's current heading (-1 for a stagger on the spot) and how long it keeps it.
   sleep: false, wanderA: 0, wanderT: 0,
+  // An endless boss's escalation: which one it is (0 for everything else), extra shots per
+  // volley, its shot damage and cooldown multipliers, and the countdown to its next summons.
+  endlessGen: 0, extraShots: 0, atkDmgMul: 1, atkCdMul: 1, summonT: 0,
   // Which totem's trial this enemy belongs to (its index on the floor), or -1.
   trial: -1,
   // Going round a pond (see paths.js): `detour` is set while the straight line to the player
