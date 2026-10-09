@@ -131,7 +131,7 @@ export function damageEnemy(e, amount, knockX = 0, knockY = 0, canCrit = true) {
   // Statuses and procs first, so an enemy this hit kills still takes them with it -- a kill is
   // what most on-kill effects are waiting for, and the hit effects of a lethal blow are harmless.
   const ov = srcOvl[src];
-  if (ov !== undefined && hooks.onHit) hooks.onHit(e, dealt, ov);
+  if (ov !== undefined && hooks.onHit) hooks.onHit(e, dealt, ov, crit);
 
   if (e.hp <= 0) {
     killEnemy(e);
@@ -235,7 +235,8 @@ export function damageCircle(x, y, r, dmg, hitId, opts = _opts) {
       const end = cellStart[c + 1];
       for (let k = cellStart[c]; k < end; k++) {
         const e = enemies[cellItems[k]];
-        if (!e.alive || e.lastHitId === hitId) continue;
+        // A charmed enemy is on your side: your own blasts pass it by.
+        if (!e.alive || e.lastHitId === hitId || e.charmT > 0) continue;
         // Ground moves miss flyers -- Earthquake should read like the real type chart.
         if (opts.noFly && e.flying) continue;
         const rr = r + e.r;

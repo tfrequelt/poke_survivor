@@ -60,6 +60,8 @@ export function createPlayer(x = 0, y = 0) {
     graceReady: true,
     noContactT: 0,
     barrier: false,
+    // An overload's Speed Boost: seconds left and how much faster.
+    hasteT: 0, hasteMul: 1,
   };
 }
 
@@ -73,8 +75,10 @@ export function updatePlayer(dt) {
   // freeze does the same from the outside.
   const rooted = p.rootT > 0 || p.freezeT > 0;
   const slowed = statusSlow(p);
-  p.vx = rooted ? 0 : axis.x * s.moveSpeed * slowed;
-  p.vy = rooted ? 0 : axis.y * s.moveSpeed * slowed;
+  if (p.hasteT > 0) p.hasteT -= dt;
+  const haste = p.hasteT > 0 ? p.hasteMul : 1;
+  p.vx = rooted ? 0 : axis.x * s.moveSpeed * slowed * haste;
+  p.vy = rooted ? 0 : axis.y * s.moveSpeed * slowed * haste;
   // Water stops anyone who cannot cross it. Each axis is tried on its own, so walking into a pond
   // at an angle slides you along its shore instead of sticking you to it.
   const dry = pondsActive() && !canSwim();
@@ -218,8 +222,8 @@ function contactDamage(p, dt) {
       const end = cellStart[c + 1];
       for (let k = cellStart[c]; k < end; k++) {
         const e = enemies[cellItems[k]];
-        // Something asleep does not bite.
-        if (!e.alive || e.harmless || e.sleep) continue;
+        // Something asleep does not bite, and nor does something charmed onto your side.
+        if (!e.alive || e.harmless || e.sleep || e.charmT > 0) continue;
         const rr = p.r + e.r;
         const near = dist2(p.x, p.y, e.x, e.y) <= rr * rr;
         if (near) touching = true;

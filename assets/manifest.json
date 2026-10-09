@@ -68,7 +68,13 @@
     "shiny_umbreon": "assets/sprites/shiny/shiny_umbreon",
     "shiny_vaporeon": "assets/sprites/shiny/shiny_vaporeon",
     "shiny_vulpix": "assets/sprites/shiny/shiny_vulpix",
-    "shiny_wooper": "assets/sprites/shiny/shiny_wooper"
+    "shiny_wooper": "assets/sprites/shiny/shiny_wooper",
+    "clauncher": "assets/sprites/pokemon_base/clauncher",
+    "clawitzer": "assets/sprites/pokemon_base/clawitzer",
+    "swablu": "assets/sprites/pokemon_base/swablu",
+    "altaria": "assets/sprites/pokemon_base/altaria",
+    "tyrunt": "assets/sprites/pokemon_base/tyrunt",
+    "tyrantrum": "assets/sprites/pokemon_base/tyrantrum"
   },
   "portraits": {
     "dartrix": "assets/portraits/dartrix_portrait.png",
@@ -971,7 +977,8 @@
     "forest": "assets/pmd/forest_tiles.png",
     "beachcave": "assets/pmd/beach_cave_tiles.png",
     "worldmap": "assets/pmd/maps.png",
-    "mapcursor": "assets/pmd/cursor.png"
+    "mapcursor": "assets/pmd/cursor.png",
+    "particles": "assets/pmd/particles.png"
   },
   "attacks": [
     "wooper",
@@ -3240,6 +3247,13 @@
     "azumarill",
     "mightyena",
     "poliwrath",
-    "palossand"
-  ]
+    "palossand",
+    "clauncher",
+    "clawitzer",
+    "swablu",
+    "altaria",
+    "tyrunt",
+    "tyrantrum"
+  ],
+  "particles": "assets/pmd/particles.json"
 }

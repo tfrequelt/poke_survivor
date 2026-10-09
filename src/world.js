@@ -21,9 +21,10 @@ export const CAP = {
   coins: 220,
   damageNumbers: 90,
   particles: 320,
-  zones: 60,
+  zones: 140,
   shapes: 48,
   items: 40,
+  sprFx: 240,
 };
 
 // --- Entity factories -------------------------------------------------------
@@ -52,6 +53,12 @@ const newEnemy = () => ({
   // An endless boss's escalation: which one it is (0 for everything else), extra shots per
   // volley, its shot damage and cooldown multipliers, and the countdown to its next summons.
   endlessGen: 0, extraShots: 0, atkDmgMul: 1, atkCdMul: 1, summonT: 0,
+  // Overload signatures living on a target (see overload.js): rupture stacks and whose they are,
+  // a doom countdown with its blast and owner, a Destiny Bond, a charm (fighting for you, its
+  // owner's proc source and how hard it hits), polarity (last sign and how long it holds), chills
+  // counted toward a freeze, and the freeze itself.
+  ovStacks: 0, ovStackSrc: -1, doomT: 0, doomDmg: 0, doomSrc: 0, bondT: 0,
+  charmT: 0, charmSrc: 0, charmMul: 1, polSign: 0, polT: 0, chillN: 0, frozenT: 0,
   // Which totem's trial this enemy belongs to (its index on the floor), or -1.
   trial: -1,
   // Going round a pond (see paths.js): `detour` is set while the straight line to the player
@@ -108,6 +115,10 @@ const newProjectile = () => ({
   // Overloads (see data/overloads.js). `grow` widens the shot over its life, `vis` is the scale it
   // is drawn and collides at, and `pt` paces its particle emission. Reset by spawn().
   grow: 0, vis: 1, pt: 0,
+  // Overload shot signatures (see weapons.js): returning, ricochets and erases left, enemies
+  // pierced (snowball), its polarity, whether it has joined the orbit, a shared timer (wake,
+  // gravity, magnet, orbit re-hits), its launch damage (accel), and its sprite-trail clock.
+  ovRet: 0, ovRic: 0, ovErase: 0, ovSnow: 0, ovPol: 0, ovOrb: 0, ovT: 0, ovBase: 0, ovS: 0, ovEcho: 0, ovAccF: 1,
 });
 
 const newOrb = () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, value: 1, tier: 0, sprId: 0, age: 0, pulling: false });
@@ -148,6 +159,14 @@ const newZone = () => ({
   // `knock` is how hard a nova's front throws what it catches (negative pulls inward). Reset by
   // spawn() to 0 and the nova's usual 140.
   boom: 0, knock: 140,
+  // An overload's time bubble: enemy shots inside it crawl. Reset by spawn().
+  warp: 0,
+});
+
+// A sprite effect: one animation of the particles sheet (data/sprfx.js), playing once. `color`
+// recolours it ('' = its own colours); `kind` indexes SPRFX_KEYS.
+const newSprFx = () => ({
+  alive: false, kind: 0, x: 0, y: 0, vx: 0, vy: 0, grav: 0, t: 0, dur: 0, scale: 1, rot: 0, color: '',
 });
 
 // --- Pools and live arrays --------------------------------------------------
@@ -162,6 +181,7 @@ export const pools = {
   zones: new Pool(newZone, CAP.zones),
   shapes: new Pool(newFxShape, CAP.shapes),
   items: new Pool(newItem, CAP.items),
+  sprFx: new Pool(newSprFx, CAP.sprFx),
 };
 
 export const enemies = [];
@@ -173,17 +193,18 @@ export const particles = [];
 export const zones = [];
 export const fxShapes = [];
 export const items = [];
+export const sprFx = [];
 
 const ALL = [
   ['enemies', enemies], ['projectiles', projectiles], ['orbs', orbs], ['coins', coins],
   ['damageNumbers', damageNumbers], ['particles', particles], ['zones', zones],
-  ['shapes', fxShapes], ['items', items],
+  ['shapes', fxShapes], ['items', items], ['sprFx', sprFx],
 ];
 
 // Built once. A literal here would allocate an object on every single spawn.
 const LIVE = {
   enemies, projectiles, orbs, coins, damageNumbers, particles, zones,
-  shapes: fxShapes, items,
+  shapes: fxShapes, items, sprFx,
 };
 
 /** Take an entity from a pool and push it live. Returns null when the pool is exhausted. */
@@ -199,13 +220,20 @@ export function spawn(kind) {
   if (kind === 'projectiles') {
     e.hostile = false; e.src = damageSource; e.dmg0 = 0; e.look = 0; e.status = 0; e.bossT = 0;
     e.grow = 0; e.vis = 1; e.pt = 0;
+    e.ovRet = 0; e.ovRic = 0; e.ovErase = 0; e.ovSnow = 0; e.ovPol = 0; e.ovOrb = 0; e.ovT = 0; e.ovBase = 0; e.ovS = 0; e.ovEcho = 0; e.ovAccF = 1;
   }
   // A zone is credited to whatever was running when it was laid, which is the only way a pool
   // of fire left behind by a shot can still count towards the weapon that fired it.
-  else if (kind === 'zones') { e.src = damageSource; e.boom = 0; e.knock = 140; }
+  else if (kind === 'zones') { e.src = damageSource; e.boom = 0; e.knock = 140; e.warp = 0; }
   LIVE[kind].push(e);
   return e;
 }
+
+/**
+ * What the hit being dealt right now carries that damageEnemy has no parameter for: the polarity
+ * of the shot (an overload's + / -). weapons.js sets it before a hit; overload.js reads it.
+ */
+export const hitCtx = { pol: 0 };
 
 // --- Damage attribution -------------------------------------------------------
 //

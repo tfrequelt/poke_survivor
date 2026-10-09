@@ -182,6 +182,7 @@ export async function loadAssets() {
   await loadSequences(manifest);
   await loadAttacks(manifest);
   await loadDungeonFont(manifest);
+  await loadParticleIndex(manifest);
 
   const sprites = (manifest && manifest.sprites) || {};
   const names = Object.keys(sprites);
@@ -792,6 +793,24 @@ export async function loadImages(manifest) {
 }
 
 export const getImage = (name) => sheetImages.get(name);
+
+// --- The particles sheet's index ---------------------------------------------
+//
+// The sheet itself is an ordinary `images` entry (`particles`); this is where each animation's
+// frames sit on it, written by tools/packparticles.mjs. Missing is fine: sprite effects are then
+// simply not drawn, and the overloads keep their pixel particles.
+let particleIndex = null;
+async function loadParticleIndex(manifest) {
+  const url = manifest && manifest.particles;
+  if (!url) return;
+  try {
+    const r = await fetch(url);
+    if (r.ok) particleIndex = await r.json();
+  } catch (e) {
+    console.warn('[assets] particles index failed:', e && e.message);
+  }
+}
+export const getParticleIndex = () => particleIndex;
 
 /** key -> [url, ...]. Supplied music, one list per menu/stage key. */
 export const musicTracks = new Map();

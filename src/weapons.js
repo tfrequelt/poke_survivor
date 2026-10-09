@@ -12,7 +12,9 @@ import {
   enemies, projectiles, zones, spawn, despawn,
   cellRange, cellStart, cellItems, GW, nextHitId, setDamageSource,
   decoys, decoyState, decoyTargetable, damageDecoy, DECOY_MAX, DECOY_R,
+  orbs, coins, hitCtx,
 } from './world.js';
+import { spawnSpr } from './sprfx.js';
 import { dirFromAngle } from './assets.js';
 import { waterAtWorld, nearestLand } from './terrain.js';
 import {
@@ -20,7 +22,7 @@ import {
   statusPlayer, srcOvl, setSrcType,
 } from './combat.js';
 import { WEAPONS, WEAPON_BY_ID } from './data/weapons.js';
-import { OVL_PARTICLES, ovlColor } from './data/overloads.js';
+import { OVL_PARTICLES, ovlColor, ovlSprColor } from './data/overloads.js';
 import { spriteBase, spriteDirs, angleSlot } from './sprites.js';
 import { ZONE, ROLE } from './fx.js';
 
@@ -940,6 +942,9 @@ const _lineOpts = { knockback: 0, slow: 0, slowT: 0, weaken: 0 };
 export const ovlHooks = {
   expire: null,   // (pr, ov) -- a shot of an overloaded weapon has ended
   every: null,    // (w, st, p) -- an overloaded weapon's every-Nth pull
+  tick: null,     // (w, dt, p) -- every frame, before its stats resolve: its own state and clocks
+  fired: null,    // (w, st, p) -- after every successful pull: heat, polarity, Metronome
+  metroColor: null, // (i) -- the colour of Metronome roll i
   dollDown: null, // (doll, ov) -- a Substitute doll has fallen
   dollTick: null, // (doll, ov, dt) -- a Substitute doll is standing
 };
@@ -1000,6 +1005,16 @@ function ovlShot(w, pr) {
     pr.impactColor = fx.impact || ov.color;
   }
   if (ov.size) { pr.vis = ov.size; pr.r *= ov.size; pr.r0 = pr.r; }
+  // Signature state the shot carries.
+  pr.ovBase = pr.dmg;
+  pr.ovPol = ov.polarity ? w.pol : 0;
+  pr.ovRic = ov.ricochet ? ov.ricochet.n : 0;
+  pr.ovErase = ov.erase ? ov.erase.n : 0;
+  pr.ovSnow = ov.snowball ? 0 : -1;
+  pr.ovEcho = echoing ? 1 : 0;
+  if (echoing) { pr.trailColor = '#c8bcf0'; pr.impactColor = '#c8bcf0'; }
+  if (ov.metronome && w.metro >= 0 && ovlHooks.metroColor) { const c = ovlHooks.metroColor(w.metro); pr.trailColor = c; pr.impactColor = c; }
+  if (ov.polarity) { const c = w.pol > 0 ? '#ff6a5a' : '#5ab6ff'; pr.trailColor = c; pr.impactColor = c; }
   if (ov.grow) pr.grow = ov.grow;
   // Homing is a motion, so it only takes over motions that are a plain line to begin with.
   if (ov.homing && (pr.motion === MOTION_STRAIGHT || pr.motion === MOTION_ACCEL)) {
@@ -1240,6 +1255,12 @@ export function weaponStats(w) {
     if (m.bounces) o.bounces += m.bounces;
     if (m.jumps) o.jumps += m.jumps;
   }
+  // And what it is doing right now: a tide's phase, momentum, a pinch, souls fed.
+  if (ov) {
+    o.damage *= w.dynDmg;
+    o.cooldown = Math.max(0.05, o.cooldown * w.dynCd);
+    o.area *= w.dynArea;
+  }
   return o;
 }
 
@@ -1257,6 +1278,11 @@ export function addWeapon(defId) {
     // evolution. `fires` counts trigger pulls for `every`, `spinA` turns a spiral pattern, and
     // `volleyN`/`volleyT` are the bursts still to come of a volley.
     ovl: null, fires: 0, spinA: 0, volleyN: 0, volleyT: 0,
+    // An overload's own state (see overload.js): heat and its vent, the tide's clock and phase,
+    // momentum, souls fed, the Lightning Rod's clock, an echo waiting to replay (and where from),
+    // polarity, kills toward a guard, Metronome's roll, and the live multipliers they all produce.
+    heat: 0, ventT: 0, tideT: 0, tidePh: 0, mom: 0, soul: 0, rodT: 0, echoT: 0, echoX: 0, echoY: 0,
+    pol: 1, killN: 0, metro: -1, dynDmg: 1, dynCd: 1, dynArea: 1,
     // Seconds left jammed by a Seal trap: it does not fire at all until this runs out.
     sealT: 0,
     resolved: {
@@ -1301,15 +1327,34 @@ export function levelWeapon(w) {
 const VOLLEYS = new Set(['projectile', 'cone', 'bouncer', 'split', 'chain', 'tether', 'link', 'rain', 'bloom', 'mine', 'nova', 'sweep']);
 const VOLLEY_GAP = 0.09;
 
+/** Whether any time bubble is up, and whether a point sits in one. */
+let warpZones = 0;
+function inWarp(pr) {
+  for (let j = 0; j < zones.length; j++) {
+    const z = zones[j];
+    if (z.warp && dist2(pr.x, pr.y, z.x, z.y) < z.r * z.r) return true;
+  }
+  return false;
+}
+
 export function updateWeapons(dt) {
   const p = G.player;
   if (!p) return;
+  warpZones = 0;
+  for (let j = 0; j < zones.length; j++) if (zones[j].warp) { warpZones = 1; break; }
   for (let i = 0; i < G.weapons.length; i++) {
     const w = G.weapons[i];
     // Sealed by a trap: the weapon does nothing until the seal wears off.
     if (w.sealT > 0) { w.sealT -= dt; continue; }
+    if (w.ovl && ovlHooks.tick) ovlHooks.tick(w, dt, p);
     const st = weaponStats(w);
     setDamageSource(w.srcId);
+    hitCtx.pol = w.pol;
+    // An echo: the last volley again, from where you stood, a beat later and fainter.
+    if (w.echoT > 0) {
+      w.echoT -= dt;
+      if (w.echoT <= 0) fireEcho(w, st, p);
+    }
     // The rest of a volley, a beat apart, re-aimed each time.
     if (w.volleyN > 0) {
       w.volleyT -= dt;
@@ -1333,14 +1378,226 @@ export function updateWeapons(dt) {
           w.volleyT = VOLLEY_GAP;
         }
         if (ov.every && w.fires % ov.every.n === 0 && ovlHooks.every) ovlHooks.every(w, st, p);
+        if (ovlHooks.fired) ovlHooks.fired(w, st, p);
+        if (ov.echo) { w.echoT = ov.echo.delay || 0.35; w.echoX = p.x; w.echoY = p.y; }
+        if (ov.gamble) gamble(w, st, p, ov.gamble);
       }
     }
   }
   setDamageSource(0);
 }
 
+/** Fire the weapon once more from where the player stood, at the echo's share of its damage. */
+let echoing = false;
+function fireEcho(w, st, p) {
+  const e = w.ovl && w.ovl.echo;
+  if (!e) return;
+  const px = p.x, py = p.y, d0 = st.damage;
+  p.x = w.echoX; p.y = w.echoY;
+  st.damage = d0 * (e.dmg || 0.6);
+  echoing = true;
+  BEHAVIOR[w.def.behavior](w, st, p);
+  echoing = false;
+  st.damage = d0;
+  p.x = px; p.y = py;
+  const rec = srcOvl[w.srcId];
+  if (rec) spawnSpr('ring_s', w.echoX, w.echoY - 6, ovlSprColor(w.ovl, G.clock, 1), 1.6);
+}
+
+/** A gamble: sometimes the pull goes off twice, and once in a while five times. */
+function gamble(w, st, p, g) {
+  const r = G.rngRun();
+  const extra = r < (g.five || 0.04) ? 4 : r < (g.five || 0.04) + (g.twice || 0.25) ? 1 : 0;
+  if (!extra) return;
+  if (VOLLEYS.has(w.def.behavior)) { w.volleyN += extra; w.volleyT = VOLLEY_GAP; }
+  else for (let i = 0; i < extra; i++) BEHAVIOR[w.def.behavior](w, st, p);
+  spawnSpr(extra > 1 ? 'flash_burst' : 'star3', p.x, p.y - 18, '#ffd166', extra > 1 ? 1.4 : 2);
+}
+
+// Motions a returning or ricocheting shot may be turned from: the ones that are a line in flight.
+let RETURNABLE = null;
+function returnable(m) {
+  if (!RETURNABLE) RETURNABLE = new Set(['straight', 'accelerate', 'homing', 'wave', 'zigzag', 'weave', 'spiral', 'crawl'].map(motionIndex));
+  return RETURNABLE.has(m);
+}
+let MOTION_ORBITP = -1;
+
+/** Enemy shots this tick, so an eraser checks a short list instead of every projectile. */
+const _hostile = [];
+/** Wake zones laid this tick, all weapons together: a wake of fire is a line, not a carpet. */
+let wakeBudget = 0;
+/** How many overloaded shots pulled orbs this tick (magnet), and gravity pulls. */
+let fieldBudget = 0;
+
+/**
+ * An overloaded shot's signature in flight: it returns, accelerates, drags foes along, vacuums
+ * up orbs, lays a wake, erases enemy shots, and sheds its sprite trail. Returns true if the shot
+ * is gone.
+ */
+function ovlFlight(pr, rec, i, dt) {
+  const d = rec.def;
+  const p = G.player;
+  // Sprite trail.
+  const sp = d.fx && d.fx.spr;
+  if (sp && sp.trail) {
+    pr.ovS -= dt;
+    if (pr.ovS <= 0) {
+      pr.ovS = 0.09;
+      spawnSpr(sp.trail, pr.x + (G.rngFx() - 0.5) * 4, pr.y - pr.z + (G.rngFx() - 0.5) * 4,
+        pr.ovEcho ? '#c8bcf0' : ovlSprColor(d, G.clock, 1), 0, Math.atan2(pr.vy, pr.vx) + Math.PI / 2);
+    }
+  }
+  if (d.boomerang && pr.ovRet === 0 && pr.ovOrb === 0 && pr.life > pr.maxLife * 0.5 && returnable(pr.motion)) {
+    pr.ovRet = 1;
+    pr.motion = MOTION_STRAIGHT;
+    pr.hitId = nextHitId();
+    pr.maxLife = pr.life + 2.5;
+    pr.pierce = Math.max(pr.pierce, 99);
+    if (d.boomerang.dmg) pr.dmg *= d.boomerang.dmg;
+  }
+  if (pr.ovRet === 1 && p) {
+    const dx = p.x - pr.x, dy = p.y - pr.y;
+    const dd = Math.hypot(dx, dy) || 1;
+    if (dd < 12) { despawn('projectiles', projectiles, i); return true; }
+    const s = Math.max(200, Math.hypot(pr.vx, pr.vy));
+    pr.vx += ((dx / dd) * s - pr.vx) * Math.min(1, 9 * dt);
+    pr.vy += ((dy / dd) * s - pr.vy) * Math.min(1, 9 * dt);
+    pr.angle = Math.atan2(pr.vy, pr.vx);
+  }
+  if (d.accel && pr.ovOrb === 0 && pr.ovBase > 0 && pr.gen !== ROLE.TURRET) {
+    // Multiplied in, not set: a bouncer's ramp and a charge's stacks are already in pr.dmg.
+    const k = Math.min(1, pr.life / Math.max(0.2, pr.maxLife));
+    const f = 1 + d.accel.max * k;
+    pr.dmg *= f / (pr.ovAccF || 1);
+    pr.ovAccF = f;
+    if (Math.hypot(pr.vx, pr.vy) < 600) { pr.vx *= 1 + 1.4 * dt; pr.vy *= 1 + 1.4 * dt; }
+  }
+  if (d.wake) {
+    pr.ovT -= dt;
+    if (pr.ovT <= 0 && wakeBudget > 0) {
+      pr.ovT = d.wake.every || 0.12;
+      wakeBudget--;
+      const z = spawn('zones');
+      if (z) {
+        z.x = pr.x; z.y = pr.y; z.r = d.wake.r || 14;
+        z.maxLife = z.life = d.wake.life || 1.6;
+        z.dps = pr.ovBase * (d.wake.dps || 0.3); z.tick = 0;
+        z.slow = d.wake.slow || 0;
+        z.kind = d.wake.burn ? ZONE.BURN : ZONE.PLAIN;
+        z.color = d.wake.color || ovlColor(d, G.clock, 1);
+        z.hitId = 0; z.burn = d.wake.burn ? pr.ovBase * d.wake.burn : 0; z.pull = 0;
+      }
+    }
+  }
+  if ((d.gravity || d.magnet) && fieldBudget > 0) {
+    pr.ovT -= d.wake ? 0 : dt;
+    if (pr.ovT <= 0) {
+      pr.ovT = 0.1;
+      fieldBudget--;
+      if (d.gravity) pullAlong(pr, d.gravity);
+      if (d.magnet && p) vacuum(pr, d.magnet.r || 28);
+    }
+  }
+  if (pr.ovErase > 0 && _hostile.length) {
+    for (let h = _hostile.length - 1; h >= 0; h--) {
+      const q = _hostile[h];
+      if (!q.alive) continue;
+      const rr = pr.r + q.r + 4;
+      if (dist2(pr.x, pr.y, q.x, q.y) > rr * rr) continue;
+      q.life = q.maxLife;                   // spent: it ends on its own next tick
+      q.r = 0;
+      spawnSpr('guard_break', q.x, q.y, '', 0.45);
+      if (sp && sp.proc) spawnSpr(sp.proc, q.x, q.y, ovlSprColor(d, G.clock, 2));
+      if (--pr.ovErase <= 0) break;
+    }
+  }
+  // An orbiting shot sweeps through the same enemies again and again.
+  if (pr.ovOrb === 1) {
+    pr.ovT -= dt;
+    if (pr.ovT <= 0) { pr.ovT = 0.45; pr.hitId = nextHitId(); }
+  }
+  return false;
+}
+
+/** Gravity: the shot drags what it passes along with it. */
+function pullAlong(pr, g) {
+  const r = g.r || 34;
+  const range = cellRange(pr.x, pr.y, r);
+  if (!range) return;
+  for (let gy = range.y0; gy <= range.y1; gy++) {
+    for (let gx = range.x0; gx <= range.x1; gx++) {
+      const c = gy * GW + gx;
+      for (let k = cellStart[c]; k < cellStart[c + 1]; k++) {
+        const e = enemies[cellItems[k]];
+        if (!e.alive || e.boss || e.legend || e.prop) continue;
+        const dx = pr.x - e.x, dy = pr.y - e.y;
+        const dd = Math.hypot(dx, dy);
+        if (dd > r || dd < 1) continue;
+        const f = (g.pull || 90) * (1 - e.knockResist) * 0.1;
+        e.knockX += (dx / dd) * f;
+        e.knockY += (dy / dd) * f;
+      }
+    }
+  }
+}
+
+/** Magnet: orbs and coins the shot passes fly to the player. */
+function vacuum(pr, r) {
+  const r2 = r * r;
+  for (let j = 0; j < orbs.length; j++) {
+    const o = orbs[j];
+    if (!o.pulling && dist2(pr.x, pr.y, o.x, o.y) < r2) o.pulling = true;
+  }
+  for (let j = 0; j < coins.length; j++) {
+    const o = coins[j];
+    if (!o.pulling && dist2(pr.x, pr.y, o.x, o.y) < r2) o.pulling = true;
+  }
+}
+
+/**
+ * A spent overloaded shot that does not just vanish: it joins an orbit round the player, or
+ * stays behind as a mine. Returns true if the shot lives on.
+ */
+function ovlAfterlife(pr, rec) {
+  const d = rec.def;
+  const p = G.player;
+  if (d.orbitOut && pr.ovOrb === 0 && p && pr.gen !== ROLE.MINE) {
+    if (MOTION_ORBITP < 0) MOTION_ORBITP = motionIndex('orbitPlayer');
+    pr.ovOrb = 1;
+    pr.motion = MOTION_ORBITP;
+    pr.orbitA = Math.atan2(pr.y - p.y, pr.x - p.x);
+    pr.orbitR = d.orbitOut.r || 34;
+    pr.spin = 4.2; pr.amp = 0; pr.t = pr.orbitA;
+    pr.life = 0; pr.maxLife = d.orbitOut.t || 3;
+    // A few more hits each, not a blender: an orbiting shot re-hitting a crowd every 0.45s with
+    // unlimited pierce read as eleven times the weapon.
+    pr.pierce = d.orbitOut.hits || 3; pr.ovT = 0; pr.r = Math.max(pr.r, 4); pr.ovRet = 2;
+    pr.dmg *= d.orbitOut.dmg || 0.6;
+    return true;
+  }
+  if (d.mine && pr.gen !== ROLE.MINE && pr.ovOrb === 0 && G.rngRun() < (d.mine.chance === undefined ? 1 : d.mine.chance)) {
+    const m = spawn('projectiles');
+    if (m) {
+      m.x = m.ox = pr.x; m.y = m.oy = pr.y; m.vx = 0; m.vy = 0; m.angle = 0;
+      m.r = m.r0 = 6; m.dmg = pr.ovBase * (d.mine.dmg || 1); m.pierce = 0;
+      m.life = 0; m.maxLife = d.mine.life || 6; m.motion = motionIndex('anchor');
+      m.sprBase = pr.sprBase; m.nd = pr.nd; m.knockback = 60; m.weapon = -1; m.targetIdx = -1;
+      m.homingTurn = 0; m.area = 1; m.hitId = nextHitId(); m.trail = 0; m.pulse = 0.6;
+      m.impact = 8; m.impactColor = ovlColor(d, G.clock, 2); m.spin = 0; m.amp = 0; m.freq = 0;
+      m.returning = false; m.crit = false; m.orbitA = 0; m.orbitR = 0; m.z = 0; m.bounces = 0;
+      m.fuse = 0; m.emitT = 0; m.gen = ROLE.MINE; m.payload = d.mine.r || 26; m.t = 0;
+      m.burn = 0; m.burnT = 3; m.slow = 0; m.vis = 0.8; m.ovBase = m.dmg;
+    }
+  }
+  return false;
+}
+
 export function updateProjectiles(dt) {
   ovlParticles = 0;
+  wakeBudget = 10;
+  fieldBudget = 40;
+  _hostile.length = 0;
+  for (let i = 0; i < projectiles.length; i++) if (projectiles[i].hostile) _hostile.push(projectiles[i]);
   for (let i = projectiles.length - 1; i >= 0; i--) {
     const pr = projectiles[i];
     // A shot counts to whatever fired it, and so does anything it spawns or leaves behind.
@@ -1372,8 +1629,17 @@ export function updateProjectiles(dt) {
     }
 
     if (pr.gen === ROLE.TURRET) updateTurret(pr, dt);
+    let rec = undefined;
+    if (!pr.hostile) {
+      rec = srcOvl[pr.src];
+      if (rec !== undefined && rec.def._shot && ovlFlight(pr, rec, i, dt)) continue;
+    } else if (warpZones && inWarp(pr)) {
+      // An enemy shot inside a time bubble crawls: undo most of this tick's movement.
+      pr.x -= pr.vx * dt * 0.7; pr.y -= pr.vy * dt * 0.7; pr.life -= dt * 0.7;
+    }
 
     if (pr.life >= pr.maxLife) {
+      if (rec !== undefined && rec.def._shot && ovlAfterlife(pr, rec)) continue;
       // A seed that reaches the end of its fuse is the whole point of the weapon, so it goes off
       // rather than quietly expiring the way a spent shot does.
       if (pr.gen === ROLE.SEED) detonate(pr);
@@ -1493,6 +1759,8 @@ function emitShot(pr, def, ov, kt, a, idx) {
   shot.burn = def.emitBurn || 0;
   shot.burnT = def.burnT || 3;
   shot.slow = def.slow || 0;
+  // An overloaded emplacement's shots carry its signature like any other shot of the weapon.
+  if (ov) { shot.ovBase = shot.dmg; shot.ovRic = ov.ricochet ? ov.ricochet.n : 0; shot.ovErase = ov.erase ? ov.erase.n : 0; shot.ovSnow = ov.snowball ? 0 : -1; }
 }
 
 /** A mine or a seed going off: area damage where it sits, then it is gone. */
@@ -1553,7 +1821,8 @@ function collideProjectile(pr) {
       const end = cellStart[c + 1];
       for (let k = cellStart[c]; k < end; k++) {
         const e = enemies[cellItems[k]];
-        if (!e.alive || e.lastHitId === pr.hitId) continue;
+        // A charmed enemy is on your side: shots pass it by.
+        if (!e.alive || e.lastHitId === pr.hitId || e.charmT > 0) continue;
         const rr = pr.r + e.r;
         if (dist2(pr.x, pr.y, e.x, e.y) > rr * rr) continue;
 
@@ -1577,6 +1846,7 @@ function collideProjectile(pr) {
         // Statuses land before the hit, so something the hit kills does not briefly light up.
         if (pr.burn > 0) applyBurn(e, pr.burn * (G.stats.power || 1), pr.burnT);
         if (pr.slow > 0) applyChill(e, pr.slow, CHILL_TIME);
+        hitCtx.pol = pr.ovPol;
         damageEnemy(e, pr.dmg, pr.vx * inv, pr.vy * inv);
         if (pr.impact > 0 && impactFx) impactFx(e.x, e.y, pr.impact, pr.impactColor);
 
@@ -1585,6 +1855,18 @@ function collideProjectile(pr) {
 
         // Ricochets toward something else, hitting harder each time it does.
         if (pr.bounces > 0 && ricochet(pr, e)) return false;
+        // An overload's ricochet re-aims a plain shot at the nearest foe it has not hit; a
+        // snowball swells with everything it goes through.
+        if (pr.ovRic > 0 && ovlRicochet(pr, e)) return false;
+        if (pr.ovSnow >= 0 && pr.ovBase > 0) {
+          const rc = srcOvl[pr.src];
+          const sb = rc !== undefined && rc.def.snowball;
+          if (sb && pr.ovSnow < (sb.max || 8)) {
+            pr.ovSnow++;
+            pr.vis *= 1 + sb.grow; pr.r *= 1 + sb.grow; pr.r0 = pr.r;
+            pr.dmg *= 1 + sb.dmg;
+          }
+        }
 
         if (pr.pierce <= 0) return true;
         pr.pierce--;
@@ -1592,6 +1874,34 @@ function collideProjectile(pr) {
     }
   }
   return false;
+}
+
+/** An overload's ricochet: re-aim at the nearest enemy this shot has not just hit. */
+function ovlRicochet(pr, from) {
+  const range = cellRange(pr.x, pr.y, 150);
+  if (!range) return false;
+  let best = null, bd = 150 * 150;
+  for (let gy = range.y0; gy <= range.y1; gy++) {
+    for (let gx = range.x0; gx <= range.x1; gx++) {
+      const c = gy * GW + gx;
+      for (let k = cellStart[c]; k < cellStart[c + 1]; k++) {
+        const e = enemies[cellItems[k]];
+        if (e === from || !e.alive || e.prop || e.charmT > 0 || e.lastHitId === pr.hitId) continue;
+        const d = dist2(pr.x, pr.y, e.x, e.y);
+        if (d < bd) { bd = d; best = e; }
+      }
+    }
+  }
+  if (!best) return false;
+  pr.ovRic--;
+  const s = Math.max(180, Math.hypot(pr.vx, pr.vy));
+  const a = Math.atan2(best.y - pr.y, best.x - pr.x);
+  pr.vx = Math.cos(a) * s; pr.vy = Math.sin(a) * s; pr.angle = a;
+  if (pr.motion !== MOTION_HOMING) pr.motion = MOTION_STRAIGHT;
+  pr.life = Math.min(pr.life, pr.maxLife * 0.5);
+  const rc = srcOvl[pr.src];
+  if (rc !== undefined && rc.def.fx && rc.def.fx.spr && rc.def.fx.spr.proc) spawnSpr(rc.def.fx.spr.proc, pr.x, pr.y, ovlSprColor(rc.def, G.clock, 2));
+  return true;
 }
 
 /** Split the parent into its shards, fanned across its heading. */
@@ -1617,6 +1927,7 @@ function fork(pr) {
     shard.slow = pr.slow;
     shard.burn = pr.burn;
     shard.burnT = pr.burnT;
+    shard.ovPol = pr.ovPol;
     shard.motion = MOTION_STRAIGHT;
     shard.sprBase = pr.sprBase;
     shard.nd = pr.nd;

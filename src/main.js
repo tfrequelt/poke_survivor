@@ -31,6 +31,7 @@ import {
 import {
   initOverloads, tickOverloads, resetOverloads, overloadHit, overloadKill, overloadExpire,
   overloadEvery, overloadDollDown, overloadDollTick, weaponEvolved, ovlFx,
+  overloadWeaponTick, overloadFired, updateOverloadStates, METRO,
 } from './overload.js';
 import {
   initBag, resetBag, bagAdd, bagUse, bagFull, bagRevive, rollBagItem, updateBuffs, bagFx,
@@ -107,6 +108,7 @@ import { CHARACTERS, CHARACTER_BY_ID, characterSpritePairs } from './data/charac
 import { enemySpritePairs } from './data/enemies.js';
 import { weaponSpritePairs } from './data/weapons.js';
 import { STAGE_BY_ID, STAGES, propSpritePairs } from './data/stages.js';
+import { sprFxTick, updateSprFx, spawnSpr } from './sprfx.js';
 import {
   loadAssets, pickMusic, getSheet, sfxFiles, sfxGains, getAttack, loadLegendAnims, unloadLegendAnims, getPortrait,
 } from './assets.js';
@@ -484,6 +486,9 @@ function installHooks() {
   hooks.onHit = overloadHit;
   ovlHooks.expire = overloadExpire;
   ovlHooks.every = overloadEvery;
+  ovlHooks.tick = overloadWeaponTick;
+  ovlHooks.fired = overloadFired;
+  ovlHooks.metroColor = (i) => METRO[i].color;
   ovlHooks.dollDown = overloadDollDown;
   ovlHooks.dollTick = overloadDollTick;
   ovlFx.arc = (x0, y0, x1, y1, color) =>
@@ -1933,6 +1938,7 @@ function frame(now) {
 function stepSim(dt) {
   G.tick++;
   tickOverloads();
+  sprFxTick();
   updateBuffs(dt);
   if ((G.tick % 60) === 0) {
     unlockIf('full_house', G.bag.filter(Boolean).length >= 3 && G.passives.length >= 6
@@ -1949,6 +1955,7 @@ function stepSim(dt) {
   }
   drainBossQueue();
   updateEndless(dt);
+  updateOverloadStates(dt);
   if (!G.secret) updateTotems(dt);
   drainSpawnRequests();
 
@@ -2579,6 +2586,7 @@ function burst(x, y, n, color) {
 }
 
 function updateFx(dt) {
+  updateSprFx(dt);
   for (let i = damageNumbers.length - 1; i >= 0; i--) {
     const d = damageNumbers[i];
     d.life -= dt;

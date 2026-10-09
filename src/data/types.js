@@ -57,16 +57,18 @@ export const SPECIES_TYPES = {
   butterfree: ['bug', 'flying'], pidgey: ['normal', 'flying'], pidgeotto: ['normal', 'flying'],
   pidgeot: ['normal', 'flying'], spearow: ['normal', 'flying'], fearow: ['normal', 'flying'],
   applin: ['grass', 'dragon'], appletun: ['grass', 'dragon'], flapple: ['grass', 'dragon'],
-  tauros: ['normal'],
+  tauros: ['normal'], swablu: ['normal', 'flying'], altaria: ['dragon', 'flying'],
   // Damp Cave
   zubat: ['poison', 'flying'], crobat: ['poison', 'flying'], roggenrola: ['rock'], boldore: ['rock'],
   gigalith: ['rock'], diglett: ['ground'], dugtrio: ['ground'], aron: ['steel', 'rock'],
   lairon: ['steel', 'rock'], aggron: ['steel', 'rock'], geodude: ['rock', 'ground'],
   graveler: ['rock', 'ground'], skarmory: ['steel', 'flying'],
+  tyrunt: ['rock', 'dragon'], tyrantrum: ['rock', 'dragon'],
   // Beach Cave
   poliwag: ['water'], poliwhirl: ['water'], poliwrath: ['water', 'fighting'],
   marill: ['water', 'fairy'], azumarill: ['water', 'fairy'], zigzagoon: ['normal'], linoone: ['normal'],
   poochyena: ['dark'], mightyena: ['dark'], sandygast: ['ghost', 'ground'], palossand: ['ghost', 'ground'],
+  clauncher: ['water'], clawitzer: ['water'],
   // The secret floors
   articuno: ['ice', 'flying'], moltres: ['fire', 'flying'], zapdos: ['electric', 'flying'],
   regirock: ['rock'], regice: ['ice'], registeel: ['steel'],

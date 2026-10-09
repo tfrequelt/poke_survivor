@@ -506,6 +506,22 @@ golden feather), and gems or stones for the rest -- see the `sprites` section of
 
 **Credited, not yet used:** `ice_stage_tileset.png` and `miracle_sea_tileset.png`.
 
+### Overload particle sprites
+
+`assets/pmd/particles_sprites/` holds the Gravity Circuit particle rip
+(spriters-resource.com/pc_computer/gravitycircuit/asset/500769): 101 animations in folders of
+numbered frames. The game does not load those folders; it loads one packed sheet built from them:
+
+```
+node tools/packparticles.mjs
+```
+
+writes `assets/pmd/particles.png` (every frame, shelf-packed, each centred in its cell) and
+`assets/pmd/particles.json` (where each animation's frames sit). Run it again after adding or
+changing frames. The manifest lists the sheet under `images.particles` and the index as
+`particles`. Which animations the game uses, at what speed, and whether each is recoloured to an
+overload's colours is `src/data/sprfx.js`.
+
 ### Props and the Rare Candy
 
 The three breakable props and the level-up power-up are crops in the manifest's `sprites`, under

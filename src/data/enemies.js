@@ -119,6 +119,24 @@ export const ENEMIES = [
     attack: { kind: 'shot', range: 240, cooldown: 2.6, windup: 0.35, damage: 10, speed: 175 }, coinChance: 0.14, flying: true, armor: 4, knockResist: 0.6,
     stages: ['cave'], from: 16, to: 20, weight: 4,
   },
+  {
+    id: 'tyrunt', name: 'Tyrunt', dex: 39,
+    shape: 'tyrunt', fallback: 'quad_small', palette: 'rock',
+    // A fossil puppy that bites first and asks later: the cave's only fast armoured rusher.
+    hp: 110, dmg: 15, speed: 38, r: 5.5, mass: 2.2, xp: 5,
+    ai: 'rusher', coinChance: 0.10, armor: 2, knockResist: 0.5,
+    stages: ['cave'], from: 9, to: 17, weight: 5,
+  },
+  {
+    id: 'tyrantrum', name: 'Tyrantrum', dex: 40,
+    shape: 'tyrantrum', fallback: 'round_big', palette: 'rock',
+    // The late cave's tyrant: heavier than Aggron, and it charges. Its roar is a short fan of
+    // rocks thrown at whoever kept their distance.
+    hp: 300, dmg: 24, speed: 26, r: 7.5, mass: 6, xp: 11,
+    ai: 'charge',
+    attack: { kind: 'burst', count: 4, spread: 0.9, range: 200, cooldown: 4.4, windup: 0.75, damage: 13, speed: 130 }, coinChance: 0.22, armor: 7, knockResist: 0.92,
+    stages: ['cave'], from: 15, to: 20, weight: 3,
+  },
 
   // --- GRASS: fields, birds and an orchard -----------------------------------
   {
@@ -227,6 +245,23 @@ export const ENEMIES = [
     ai: 'charge', coinChance: 0.18, knockResist: 0.7,
     stages: ['grass'], from: 16, to: 20, weight: 4,
   },
+  {
+    id: 'swablu', name: 'Swablu', dex: 41,
+    shape: 'swablu', fallback: 'bat', palette: 'flying',
+    // Cotton wings drifting in on a wave: soft alone, a cloud of them late in the field.
+    hp: 60, dmg: 10, speed: 34, r: 4.5, mass: 0.9, xp: 4,
+    ai: 'sine', coinChance: 0.08, flying: true,
+    stages: ['grass'], from: 8, to: 16, weight: 6,
+  },
+  {
+    id: 'altaria', name: 'Altaria', dex: 42,
+    shape: 'altaria', fallback: 'bat', palette: 'flying',
+    // A dragon in a cloud. It circles out of reach and breathes a fan of dragon fire.
+    hp: 210, dmg: 18, speed: 36, r: 7, mass: 2.4, xp: 10,
+    ai: 'orbit',
+    attack: { kind: 'burst', count: 5, spread: 1.0, range: 240, cooldown: 3.8, windup: 0.6, damage: 11, speed: 150 }, coinChance: 0.20, flying: true, knockResist: 0.65,
+    stages: ['grass'], from: 14, to: 20, weight: 4,
+  },
 
   // --- BEACH: water, sand and what scavenges them ----------------------------
   {
@@ -312,6 +347,24 @@ export const ENEMIES = [
     ai: 'charge',
     attack: { kind: 'burst', count: 8, range: 240, cooldown: 4.0, windup: 0.7, damage: 11, speed: 120 }, coinChance: 0.18, armor: 5, knockResist: 0.85,
     stages: ['beach'], from: 13, to: 20, weight: 4,
+  },
+  {
+    id: 'clauncher', name: 'Clauncher', dex: 43,
+    shape: 'clauncher', fallback: 'round_big', palette: 'water',
+    // A pistol shrimp: slow on its feet, and it shoots from the water.
+    hp: 70, dmg: 11, speed: 26, r: 4.5, mass: 1.4, xp: 4,
+    swims: true, ai: 'chase',
+    attack: { kind: 'shot', range: 210, cooldown: 3.2, windup: 0.45, damage: 8, speed: 160 }, coinChance: 0.10,
+    stages: ['beach'], from: 8, to: 16, weight: 5,
+  },
+  {
+    id: 'clawitzer', name: 'Clawitzer', dex: 44,
+    shape: 'clawitzer', fallback: 'round_big', palette: 'water',
+    // The howitzer claw. The beach's artillery: long range, a tight fast fan, from the water.
+    hp: 190, dmg: 18, speed: 24, r: 6.5, mass: 3.6, xp: 10,
+    swims: true, ai: 'chase',
+    attack: { kind: 'burst', count: 5, spread: 0.8, range: 270, cooldown: 3.2, windup: 0.6, damage: 12, speed: 180 }, coinChance: 0.20, armor: 3, knockResist: 0.7,
+    stages: ['beach'], from: 14, to: 20, weight: 4,
   },
 ];
 

@@ -172,26 +172,31 @@ warns at boot if two weapons ever end up with the same `behavior` + `motion` pai
 
 A weapon at **level 10** turns your next level-up into an **OVERLOAD** draft: its three overloads,
 side by side, and you take **one, for the rest of the run**. Every weapon has its own three — 234
-in all, the eleven evolutions and Substitute included:
+in all, the eleven evolutions and Substitute included — and each is built around a **signature
+mechanic**, something that changes how the weapon plays rather than a bigger number. No weapon's
+three share a signature, and no signature turns up more than nine times across the 234. Among them:
 
-- **AMPLIFY** — what the weapon already does, pushed further, with a twist (Mudslide Barrage: two
-  more globs, and every splash leaves a deep bog).
-- **TRANSFORM** — a new shape or function: a ring of shots, front-and-back, four ways, a turning
-  spiral, three-shot volleys, a vortex that collapses for triple damage, a coil that becomes a
-  railgun, a sweep that goes all the way round.
-- **WILD** — an elemental or status twist: burns, freezes, paralysis, confusion, marks that make a
-  target take more from everything, chains of lightning, explosions and homing spirits on a kill.
+| Kind | Signatures |
+|---|---|
+| How shots fly | **Boomerang** (returns through everything), **Orbit Shield** (spent shots circle you), **Ricochet**, **Erases Shots** (destroys enemy projectiles), **Ramping** (faster and harder in flight), **Snowball** (grows with every foe pierced), **Wake** (a line of fire, acid or current behind it), **Mines** (spent shots stay armed), **Echo** (a phantom repeat from where you stood), **Gravity** (drags foes along), **Magnet** (vacuums up orbs and coins) |
+| What hits do | **Rupture** (stacks that burst at N), **Doom** (a countdown that detonates), **Contagion** (statuses jump on death), **Destiny Bond** (bonded foes share damage), **Charm** (foes fight for you), **Polarity** (+ then − discharges), **Overkill** (excess damage carries on), **Deep Freeze** (chill N times, frozen solid, shatters), **Thief** (hits knock coins loose), **Crit Burst** |
+| The weapon's own state | **Overheat** (builds to a huge volley, then vents), **Tide** (alternating fast and huge phases), **Momentum** / **Focus** (moving or standing still), **Pinch** (Blaze, Torrent, Overgrow below half health), **Soul Feed** (permanently grows with kills), **Guard** (kills earn a shield), **Speed Boost**, **Time Warp** (kills leave bubbles where enemy shots crawl), **Lightning Rod**, **Metronome** (a random effect every volley), **Gamble** (twice, or five times) |
 
-An overloaded weapon glows softly in its overload's colour, sheds particles, tints the ground it
-lays, and marks what it does on the enemies — a reticle, stars, circling birds, Z's, frost, poison
-bubbles. About twenty overloads (Tri Element, Sacred Fire, the Wish Stars, Galaxy Barrage, Aqua
-Ring, Inferno, Absolute Zero and more) fade from colour to colour as they fire. Its
-procs have their own line in the damage breakdown, under the overload's name. Reroll and banish do
-not apply to an overload draft; skip puts it off to the next level-up. An overloaded weapon keeps
-its overload when it evolves; one that evolves first offers its evolved form's own three.
+The firing patterns (ring, spiral, volley, cross, twin, fan), zones, novas, meteors, vortexes,
+chains and wisps of the first version remain, as the signatures of the overloads they suit.
 
-The data is `src/data/overloads.js` — a closed vocabulary of stats, patterns and hit / kill /
-expiry / every-Nth effects, documented at the top of the file. `src/overload.js` runs the effects.
+An overloaded weapon draws with the **Gravity Circuit particle sprites** — its own trail, hit,
+kill and signature effects — recoloured to its **three-colour palette** (main, trail, accent), and
+about twenty-five overloads fade through their colours as they fire. Its marks show on the enemies
+(rupture pips, a doom ring, polarity signs, charm hearts, ice), and an overload with a state
+(heat, tide, momentum, souls, guard, pinch) gets a small bar bottom right. Its procs have their own
+line in the damage breakdown, under the overload's name. Reroll and banish do not apply to an
+overload draft; skip puts it off to the next level-up. An overloaded weapon keeps its overload when
+it evolves; one that evolves first offers its evolved form's own three.
+
+The data is `src/data/overloads.js` — a closed vocabulary documented at the top of the file;
+`tools/checkoverloads.mjs` checks it (signatures, palettes, sprites, keys, behaviour fit).
+`src/overload.js` and `src/weapons.js` run it.
 
 ### Type matchups
 

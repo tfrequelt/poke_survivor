@@ -24,6 +24,8 @@ import { tierScale, TIER_COUNT } from './pickups.js';
 import { FX, ZONE, fxSprites } from './fx.js';
 import { getImage, getAttack, getSequence, getAnim } from './assets.js';
 import { ovlColor } from './data/overloads.js';
+import { sprFx } from './world.js';
+import { SPR_META } from './sprfx.js';
 import { thrownItem, activeAbility, activeVisual } from './abilities.js';
 import { sampleDuration } from './audio.js';
 import { hash2 } from './util.js';
@@ -85,9 +87,86 @@ export function drawEntities() {
   drawFxShapes(camOffX, camOffY);
   drawShield(camOffX, camOffY);
   drawParticles(camOffX, camOffY);
+  drawSprFx(camOffX, camOffY);
   drawDamageNumbers(camOffX, camOffY);
   drawWeather();
   drawLegendWeather();
+}
+
+// --- Sprite effects ----------------------------------------------------------------
+//
+// One animation frame each, from the packed particles sheet. A recoloured effect is drawn from a
+// strip built once per (effect, colour) on an offscreen canvas -- every frame of it, recoloured by
+// brightness so the white highlights stay white -- and never from the sheet with a composite
+// trick per draw, which would cost a canvas state change for every spark. Cycling overloads hand
+// over only a handful of distinct colours (their palette is quantised for sprites), so the cache
+// stays small; it is still capped, and simply rebuilt if it ever fills.
+
+const tinted = new Map();
+const TINT_CAP = 420;
+
+function tintStrip(meta, color) {
+  const key = meta.def.src + color;
+  let c = tinted.get(key);
+  if (c) return c;
+  const img = getImage('particles');
+  if (!img) return null;
+  if (tinted.size >= TINT_CAP) tinted.clear();
+  c = document.createElement('canvas');
+  c.width = meta.w * meta.n; c.height = meta.h;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  for (let i = 0; i < meta.n; i++) {
+    const f = meta.frames[i];
+    g.drawImage(img.canvas, f[0], f[1], meta.w, meta.h, i * meta.w, 0, meta.w, meta.h);
+  }
+  const n = parseInt(color.slice(1), 16);
+  const tr = (n >> 16) & 255, tg = (n >> 8) & 255, tb = n & 255;
+  const d = g.getImageData(0, 0, c.width, c.height);
+  const px = d.data;
+  for (let i = 0; i < px.length; i += 4) {
+    if (!px[i + 3]) continue;
+    const l = (px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11) / 255;
+    // Mostly the colour, shaded by the frame's own brightness; only the hottest core goes white.
+    const k = 0.5 + 0.6 * l;
+    const w = l > 0.94 ? (l - 0.94) / 0.06 * 0.4 : 0;
+    px[i] = Math.min(255, tr * k * (1 - w) + 255 * w);
+    px[i + 1] = Math.min(255, tg * k * (1 - w) + 255 * w);
+    px[i + 2] = Math.min(255, tb * k * (1 - w) + 255 * w);
+  }
+  g.putImageData(d, 0, 0);
+  tinted.set(key, c);
+  return c;
+}
+
+function drawSprFx(ox, oy) {
+  if (!sprFx.length) return;
+  const img = getImage('particles');
+  if (!img) return;
+  let add = false;
+  for (let i = 0; i < sprFx.length; i++) {
+    const s = sprFx[i];
+    const meta = SPR_META[s.kind];
+    if (!meta) continue;
+    const sx = s.x + ox, sy = s.y + oy;
+    const w = meta.w * s.scale, h = meta.h * s.scale;
+    if (sx < -w || sy < -h || sx > VW + w || sy > VH + h) continue;
+    const f = Math.min(meta.n - 1, ((s.t / s.dur) * meta.n) | 0);
+    const wantAdd = !!meta.def.add;
+    if (wantAdd !== add) { ctx.globalCompositeOperation = wantAdd ? 'lighter' : 'source-over'; add = wantAdd; }
+    let src = img.canvas, fx = meta.frames[f][0], fy = meta.frames[f][1];
+    if (s.color) {
+      const strip = tintStrip(meta, s.color);
+      if (strip) { src = strip; fx = f * meta.w; fy = 0; }
+    }
+    if (s.rot) {
+      ctx.setTransform(Math.cos(s.rot), Math.sin(s.rot), -Math.sin(s.rot), Math.cos(s.rot), Math.round(sx), Math.round(sy));
+      ctx.drawImage(src, fx, fy, meta.w, meta.h, -w / 2, -h / 2, w, h);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+    } else {
+      ctx.drawImage(src, fx, fy, meta.w, meta.h, Math.round(sx - w / 2), Math.round(sy - h / 2), w, h);
+    }
+  }
+  if (add) ctx.globalCompositeOperation = 'source-over';
 }
 
 // The ripped hail overlay: 65 frames of 240x160, stitched into one strip at load. 240x160 is
@@ -1012,7 +1091,69 @@ function drawEnemy(e, ox, oy) {
   if (e.sleep) drawStatusIcon(e, sx, enemyTop(e, sy), SLEEP_MARK, 6);
   else if (e.confuseT > 0) drawStatusIcon(e, sx, enemyTop(e, sy), CONFUSE_MARK, 3);
   if (e.markT > 0 || (e.stunT > 0 && !e.sleep) || (e.slowT > 0 && e.slow >= 0.3)) drawStatusMarks(e, sx, sy);
+  if (e.ovStacks > 0 || e.doomT > 0 || e.charmT > 0 || e.polT > 0 || e.frozenT > 0) drawSigMarks(e, sx, sy);
   if (e.boss || e.elite) drawHealthBar(e, sx, sy);
+}
+
+// --- Overload signature marks ---------------------------------------------------------------
+//
+// What an overload's signature has done to an enemy: rupture pips filling up, a doom's countdown
+// ring, a polarity sign, charm hearts, and the ice of a freeze. A few fillRects each (the freeze
+// is one frame of the status sheet), capped per frame like the other marks.
+
+const SIG_MARK_CAP = 80;
+let sigMarksDrawn = 0;
+let sigTick = -1;
+
+function drawSigMarks(e, sx, sy) {
+  if (sigTick !== G.clock) { sigTick = G.clock; sigMarksDrawn = 0; }
+  if (sigMarksDrawn >= SIG_MARK_CAP) return;
+  sigMarksDrawn++;
+  const top = enemyTop(e, sy);
+  const x = Math.round(sx);
+  if (e.frozenT > 0) {
+    const seq = getSequence('status_freeze');
+    if (seq) {
+      ctx.globalAlpha = 0.8;
+      const f = ((G.clock * 8) | 0) % seq.frames;
+      ctx.drawImage(seq.canvas, f * seq.w, 0, seq.w, seq.h, Math.round(sx - seq.w / 2), Math.round(sy - seq.h + 4), seq.w, seq.h);
+      ctx.globalAlpha = 1;
+    }
+  }
+  if (e.ovStacks > 0) {
+    const rec = srcOvl[e.ovStackSrc];
+    const n = rec !== undefined && rec.def.stacks ? rec.def.stacks.n : 5;
+    const c = rec !== undefined ? ovlColor(rec.def, G.clock, 2) : '#ffffff';
+    const w = n * 3 - 1, x0 = x - (w >> 1), y0 = Math.round(sy + 3);
+    for (let i = 0; i < n; i++) {
+      ctx.fillStyle = i < e.ovStacks ? c : 'rgba(10,10,20,0.6)';
+      ctx.fillRect(x0 + i * 3, y0, 2, 2);
+    }
+  }
+  if (e.doomT > 0) {
+    // A ring closing as the countdown runs, red in its last second.
+    const rec = srcOvl[e.doomSrc];
+    const t0 = rec !== undefined && rec.def.doom ? rec.def.doom.t : 3;
+    const k = Math.max(0, Math.min(1, e.doomT / t0));
+    ctx.strokeStyle = e.doomT < 1 ? '#ff4a4a' : (rec !== undefined ? ovlColor(rec.def, G.clock, 2) : '#c8bcf0');
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(x, Math.round(top - 5), 3.5, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2);
+    ctx.stroke();
+  }
+  if (e.charmT > 0) {
+    // A small pink heart bobbing over its head.
+    const hy = Math.round(top - 5 + Math.sin(G.clock * 6) * 1.5);
+    ctx.fillStyle = '#ff6bb0';
+    ctx.fillRect(x - 3, hy, 2, 2); ctx.fillRect(x + 1, hy, 2, 2);
+    ctx.fillRect(x - 3, hy + 1, 6, 2); ctx.fillRect(x - 2, hy + 3, 4, 1); ctx.fillRect(x - 1, hy + 4, 2, 1);
+  }
+  if (e.polT > 0 && e.polSign !== 0) {
+    const py = Math.round(top - 4), px = x + 6;
+    ctx.fillStyle = e.polSign > 0 ? '#ff6a5a' : '#5ab6ff';
+    ctx.fillRect(px - 2, py, 5, 1);
+    if (e.polSign > 0) ctx.fillRect(px, py - 2, 1, 5);
+  }
 }
 
 // --- Status marks ----------------------------------------------------------------

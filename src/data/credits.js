@@ -68,6 +68,7 @@ const OTHER_RIPS = [
   ['game_boy_advance', 'pokemonfireredleafgreen', '3870', 'POKEMON FIRERED/LEAFGREEN', 'rock prop'],
   ['game_boy_advance', 'pokemonrubysapphire', '8190', 'POKEMON RUBY/SAPPHIRE', 'bush and pot props'],
   ['ds_dsi', 'pokemonheartgoldsoulsilver', '28036', 'POKEMON HEARTGOLD/SOULSILVER', 'Rare Candy'],
+  ['pc_computer', 'gravitycircuit', '500769', 'GRAVITY CIRCUIT', 'overload particle effects'],
 ];
 
 export const CREDITS = [

@@ -21,9 +21,12 @@ import {
 import {
   damageEnemy, damageCircle, applyBurn, applyChill, killEnemy, damageSourceId, srcOvl, setSrcType,
 } from './combat.js';
-import { OVERLOADS, ovlColor } from './data/overloads.js';
+import { OVERLOADS, ovlColor, ovlSprColor } from './data/overloads.js';
 import { ZONE, ROLE } from './fx.js';
 import { unlockIf } from './successes.js';
+import { dropCoin } from './pickups.js';
+import { hitCtx, zones, orbs, coins } from './world.js';
+import { spawnSpr, burstSpr } from './sprfx.js';
 
 /** Procs (splash, chain, kill effects, expiry effects) allowed per simulation tick, all weapons. */
 const PROC_BUDGET = 40;
@@ -89,19 +92,33 @@ export function weaponEvolved(w, oldSrc) {
   if (w.ovl) register(w);
 }
 
+// Which keys make an overload's hits and kills, or its shots in flight, worth a look at all.
+// Worked out once per overload, so an ordinary one pays nothing for the signatures it lacks.
+const SIG_KEYS = ['charm', 'doom', 'thief', 'freezeAfter', 'stacks', 'polarity', 'bond', 'overkill',
+  'critBurst', 'soul', 'guard', 'haste', 'warp', 'contagion'];
+const SHOT_KEYS = ['boomerang', 'accel', 'wake', 'gravity', 'magnet', 'erase', 'orbitOut', 'mine'];
+
 function register(w) {
   const ov = w.ovl;
+  if (ov._sig === undefined) {
+    ov._sig = SIG_KEYS.some((k) => ov[k]);
+    ov._shot = SHOT_KEYS.some((k) => ov[k]) || !!(ov.fx && ov.fx.spr && ov.fx.spr.trail);
+  }
   const proc = damageSourceId(`o:${ov.id}`, ov.name);
   // A proc hits with its weapon's type, like the weapon itself.
   setSrcType(proc, w.def.type);
-  srcOvl[w.srcId] = { def: ov, w, proc, color: ov.color };
+  srcOvl[w.srcId] = { def: ov, w, proc, color: ov.color, bonds: [] };
 }
 
 // --- On hit -------------------------------------------------------------------
 
 /** combat.js calls this for every hit landed by a source that has an overload. */
-export function overloadHit(e, dealt, rec) {
-  const h = rec.def.hit;
+export function overloadHit(e, dealt, rec, crit) {
+  const d = rec.def;
+  if (d.fx && d.fx.spr && d.fx.spr.hit) sprHit(e, rec);
+  if (d._sig) signatureHit(e, dealt, rec, crit);
+  // Metronome: each volley rolled its own effect, and this hit carries whichever came up.
+  const h = d.metronome ? METRO[rec.w.metro < 0 ? 0 : rec.w.metro].hit : d.hit;
   if (!h) return;
   const base = rec.w.resolved.damage;
 
@@ -155,14 +172,282 @@ export function overloadHit(e, dealt, rec) {
 
 const _quiet = { canCrit: false };
 
-/** An overload's colour of the moment, for its effects. */
-const col = (rec) => ovlColor(rec.def, G.clock);
+/** An overload's colour of the moment, for its effects: 0 main, 1 alternate, 2 accent. */
+const col = (rec, slot = 0) => (rec.def.metronome && rec.w.metro >= 0 ? METRO[rec.w.metro].color : ovlColor(rec.def, G.clock, slot));
+
+/** The sprite-safe version of col(): cycling colours snapped to their key colours. */
+const scol = (rec, slot = 0) => (rec.def.metronome && rec.w.metro >= 0 ? METRO[rec.w.metro].color : ovlSprColor(rec.def, G.clock, slot));
+
+/** One sprite of the overload's own, by slot name, where something happened. */
+function spr(rec, slot, x, y, color, scale = 0, rot = 0) {
+  const s = rec.def.fx && rec.def.fx.spr;
+  const k = s && s[slot];
+  if (k) spawnSpr(k, x, y, color || scol(rec, slot === 'trail' ? 1 : 2), scale, rot);
+}
+function sprHit(e, rec) {
+  // Every hit asks, but only some get one: a hose of hits would otherwise spend the whole budget.
+  if (G.rngFx() < 0.45) spr(rec, 'hit', e.x + (G.rngFx() - 0.5) * 6, e.y - 4 - G.rngFx() * 6, null, 0, G.rngFx() * TAU);
+}
+
+// --- Metronome ------------------------------------------------------------------------
+//
+// A Metronome overload rolls one of these on every trigger pull, and every hit of that volley
+// carries it, in its colour.
+export const METRO = [
+  { name: 'BURN', color: '#ff7a1a', hit: { burn: 0.45, burnT: 3 } },
+  { name: 'FREEZE', color: '#9ad8f4', hit: { slow: 0.6, slowT: 2, shatter: 0.5 } },
+  { name: 'PARALYSE', color: '#f8e038', hit: { stun: { chance: 0.35, t: 0.8 } } },
+  { name: 'POISON', color: '#c070e0', hit: { burn: 0.35, burnT: 4, toxic: true } },
+  { name: 'CURSE', color: '#ff4a6a', hit: { mark: { mul: 0.35, t: 3 } } },
+  { name: 'CONFUSE', color: '#ff9ad8', hit: { confuse: 2.5 } },
+  { name: 'DRAIN', color: '#7fe08a', hit: { leech: { chance: 0.15, hp: 1 }, splash: { r: 22, dmg: 0.4, chance: 0.5 } } },
+];
+
+// --- Signatures: what a hit does to its target --------------------------------------------
+
+const _skip = [];
+function signatureHit(e, dealt, rec, crit) {
+  const d = rec.def;
+  const base = rec.w.resolved.damage;
+  if (d.charm && !e.boss && !e.legend && e.charmT <= 0 && G.rngRun() < d.charm.chance) {
+    e.charmT = d.charm.t; e.charmSrc = rec.proc; e.charmMul = d.charm.dmg || 1;
+    e.confuseT = 0;
+    spawnSpr('shine', e.x, e.y - 10, '#ff9ad8', 1.2);
+  }
+  if (d.doom && e.doomT <= 0 && !e.legend) {
+    e.doomT = d.doom.t; e.doomDmg = base * d.doom.dmg; e.doomSrc = rec.w.srcId;
+  }
+  if (d.thief && G.rngRun() < d.thief.chance) {
+    dropCoin(e.x, e.y, 1 + ((G.rngRun() * 3) | 0));
+    spawnSpr('star3', e.x, e.y - 8, '', 2);
+  }
+  if (d.freezeAfter && e.slowT > 0 && e.frozenT <= 0 && !e.legend) {
+    if (++e.chillN >= d.freezeAfter.n) {
+      e.chillN = 0;
+      e.frozenT = d.freezeAfter.t * (e.boss ? 0.3 : 1);
+      e.stunT = Math.max(e.stunT, e.frozenT);
+      burstSpr('freeze', e.x, e.y - 6, scol(rec, 2), 3, 6, 12);
+    }
+  }
+  if (budget <= 0) return;
+  const prev = getDamageSource();
+  setDamageSource(rec.proc);
+  if (d.stacks) {
+    if (e.ovStackSrc !== rec.w.srcId) { e.ovStackSrc = rec.w.srcId; e.ovStacks = 0; }
+    if (++e.ovStacks >= d.stacks.n) {
+      e.ovStacks = 0;
+      budget--;
+      const r = d.stacks.r || 26;
+      damageCircle(e.x, e.y, r, base * d.stacks.dmg, nextHitId(), { knockback: 60, canCrit: false });
+      spr(rec, 'proc', e.x, e.y, null, r / 22);
+      if (ovlFx.ring) ovlFx.ring(e.x, e.y, r, col(rec), 0.25);
+    }
+  }
+  if (d.polarity) {
+    const pol = hitCtx.pol || 1;
+    if (e.polT > 0 && e.polSign !== 0 && e.polSign !== pol) {
+      e.polSign = 0; e.polT = 0;
+      budget--;
+      const r = d.polarity.r || 30;
+      damageCircle(e.x, e.y, r, base * d.polarity.dmg, nextHitId(), { stun: 0.3, canCrit: false });
+      spawnSpr('lightning', e.x, e.y - 50, scol(rec, 2));
+      spr(rec, 'proc', e.x, e.y, null);
+      if (ovlFx.ring) ovlFx.ring(e.x, e.y, r, col(rec), 0.2);
+    } else { e.polSign = pol; e.polT = 2.2; }
+  }
+  if (d.bond) bondHit(e, dealt, rec);
+  if (d.overkill && e.hp < 0) {
+    _skip.length = 0; _skip.push(e);
+    const j = nearestFrom(e.x, e.y, d.overkill.range || 110, _skip);
+    if (j >= 0) {
+      budget--;
+      const t = enemies[j];
+      if (ovlFx.arc) ovlFx.arc(e.x, e.y, t.x, t.y, col(rec, 2));
+      damageEnemy(t, Math.min(-e.hp * d.overkill.share, base * 4), 0, 0, false);
+      spr(rec, 'proc', t.x, t.y, null);
+    }
+  }
+  if (d.critBurst && crit) {
+    budget--;
+    burstShots(e.x, e.y, d.critBurst.n, base * d.critBurst.dmg, rec, false, G.rngFx() * TAU);
+    spr(rec, 'proc', e.x, e.y, null);
+  }
+  setDamageSource(prev);
+}
+
+/** Destiny Bond: the struck are bound together, and what one takes the others feel. */
+function bondHit(e, dealt, rec) {
+  const b = rec.bonds;
+  const max = rec.def.bond.max || 5;
+  if (!b.includes(e)) {
+    if (b.length >= max) b.shift();
+    b.push(e);
+    e.bondT = 5;
+  } else e.bondT = 5;
+  const share = dealt * rec.def.bond.share;
+  for (let i = 0; i < b.length; i++) {
+    const o = b[i];
+    if (o === e || !o.alive || budget <= 0) continue;
+    budget--;
+    damageEnemy(o, share, 0, 0, false);
+  }
+}
+
+// --- Per tick: countdowns that live on the enemies, and the weapons' own state ------------
+
+let bondDrawT = 0;
+let magnetT = 0;
+/** main.js, once per simulation tick: dooms count down, frozen thaw, bonds fray. */
+export function updateOverloadStates(dt) {
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i];
+    if (!e.alive) continue;
+    if (e.polT > 0) e.polT -= dt;
+    if (e.frozenT > 0) e.frozenT -= dt;
+    if (e.bondT > 0) e.bondT -= dt;
+    if (e.doomT > 0) { e.doomT -= dt; if (e.doomT <= 0) detonateDoom(e); }
+  }
+  // A zone weapon with a magnet (a whirlpool that swallows the loot) pulls orbs and coins in.
+  magnetT -= dt;
+  if (magnetT <= 0) {
+    magnetT = 0.2;
+    for (let i = 0; i < zones.length; i++) {
+      const z = zones[i];
+      const rec = srcOvl[z.src];
+      if (rec === undefined || !rec.def.magnet) continue;
+      const r = z.r + (rec.def.magnet.r || 30), r2 = r * r;
+      for (let j = 0; j < orbs.length; j++) if (!orbs[j].pulling && dist2(z.x, z.y, orbs[j].x, orbs[j].y) < r2) orbs[j].pulling = true;
+      for (let j = 0; j < coins.length; j++) if (!coins[j].pulling && dist2(z.x, z.y, coins[j].x, coins[j].y) < r2) coins[j].pulling = true;
+    }
+  }
+  bondDrawT -= dt;
+  const drawBonds = bondDrawT <= 0;
+  if (drawBonds) bondDrawT = 0.12;
+  for (let s = 0; s < srcOvl.length; s++) {
+    const rec = srcOvl[s];
+    if (rec === undefined || !rec.bonds || !rec.bonds.length) continue;
+    const b = rec.bonds;
+    for (let i = b.length - 1; i >= 0; i--) if (!b[i].alive || b[i].bondT <= 0) b.splice(i, 1);
+    if (drawBonds && ovlFx.arc) for (let i = 1; i < b.length; i++) ovlFx.arc(b[i - 1].x, b[i - 1].y, b[i].x, b[i].y, col(rec, 1));
+  }
+}
+
+/** A doom's countdown reaching zero, or its carrier dying first: the blast goes off where it is. */
+function detonateDoom(e) {
+  const rec = srcOvl[e.doomSrc];
+  const dmg = e.doomDmg;
+  e.doomT = 0; e.doomDmg = 0;
+  if (rec === undefined || budget <= 0) return;
+  budget--;
+  const r = (rec.def.doom && rec.def.doom.r) || 30;
+  const prev = getDamageSource();
+  setDamageSource(rec.proc);
+  damageCircle(e.x, e.y, r, dmg, nextHitId(), { knockback: 80, canCrit: false });
+  setDamageSource(prev);
+  spr(rec, 'proc', e.x, e.y, null, r / 20);
+  if (ovlFx.ring) ovlFx.ring(e.x, e.y, r, col(rec), 0.3);
+  if (ovlFx.shake) ovlFx.shake(0.08);
+}
+
+/**
+ * weapons.js, every frame, for every overloaded weapon: its live multipliers (tide, momentum,
+ * pinch, soul), and the clocks it runs on its own (Lightning Rod).
+ */
+export function overloadWeaponTick(w, dt, p) {
+  const d = w.ovl;
+  let dmg = 1, cd = 1, area = 1;
+  if (d.tide) {
+    const t = d.tide;
+    w.tideT += dt;
+    const ph = ((w.tideT / t.period) | 0) & 1;
+    if (ph !== w.tidePh) {
+      w.tidePh = ph;
+      const rec = srcOvl[w.srcId];
+      if (rec) spawnSpr('ring_l', p.x, p.y, scol(rec, ph ? 2 : 1), 1.4);
+    }
+    if (ph) { cd *= t.ebbCd || 1.45; area *= t.ebbArea || 1.7; dmg *= t.ebbDmg || 1.7; }
+    else { cd *= t.flowCd || 0.55; area *= t.flowArea || 0.8; dmg *= t.flowDmg || 0.85; }
+  }
+  if (d.momentum || d.stillness) {
+    const m = d.momentum || d.stillness;
+    const moving = (p.vx * p.vx + p.vy * p.vy) > 400;
+    const up = d.momentum ? moving : !moving;
+    w.mom = Math.min(1, Math.max(0, w.mom + (up ? (m.rise || 0.6) : -1.5) * dt));
+    dmg *= 1 + m.max * w.mom;
+    if (m.cd) cd *= 1 - m.cd * w.mom;
+  }
+  if (d.pinch && G.stats && p.hp < G.stats.maxHp * d.pinch.at) {
+    dmg *= d.pinch.dmg || 1.5;
+    cd *= d.pinch.cd || 0.75;
+  }
+  if (d.soul) dmg *= 1 + w.soul;
+  w.dynDmg = dmg; w.dynCd = cd; w.dynArea = area;
+  if (w.ventT > 0) w.ventT -= dt;
+  if (d.rod) {
+    w.rodT -= dt;
+    if (w.rodT <= 0) { w.rodT = d.rod.every; lightningRod(w, p); }
+  }
+}
+
+/** Lightning Rod: a bolt on the toughest foes near you. */
+function lightningRod(w, p) {
+  const rec = srcOvl[w.srcId];
+  if (!rec) return;
+  const n = gather(p.x, p.y, d_rodRange, 24);
+  if (!n) return;
+  _gathered.sort((a, b) => b.hp - a.hp);
+  const prev = getDamageSource();
+  setDamageSource(rec.proc);
+  const k = Math.min(n, w.ovl.rod.n || 1);
+  for (let i = 0; i < k; i++) {
+    const e = _gathered[i];
+    damageCircle(e.x, e.y, 18, w.resolved.damage * w.ovl.rod.dmg, nextHitId(), { stun: 0.4, canCrit: true });
+    spawnSpr('lightning', e.x, e.y - 50, scol(rec, 2));
+    spr(rec, 'proc', e.x, e.y, null);
+  }
+  setDamageSource(prev);
+  if (ovlFx.shake) ovlFx.shake(0.06);
+}
+const d_rodRange = 260;
+
+/**
+ * weapons.js, after every successful trigger pull of an overloaded weapon. Heat builds and vents,
+ * polarity flips, Metronome rolls. May set the weapon's cooldown (an overheat's vent).
+ */
+export function overloadFired(w, st, p) {
+  const d = w.ovl;
+  if (d.polarity) w.pol = -w.pol;
+  if (d.metronome) w.metro = (G.rngRun() * METRO.length) | 0;
+  if (d.heat) {
+    w.heat++;
+    if (w.heat >= d.heat.max) {
+      w.heat = 0;
+      const rec = srcOvl[w.srcId];
+      if (!rec) return;
+      const prev = getDamageSource();
+      setDamageSource(rec.proc);
+      burstShots(p.x, p.y, d.heat.n || 12, st.damage * (d.heat.dmg || 1.5), rec, false, G.rngFx() * TAU);
+      damageCircle(p.x, p.y, 46, st.damage * (d.heat.dmg || 1.5), nextHitId(), { knockback: 120, canCrit: false });
+      setDamageSource(prev);
+      spr(rec, 'proc', p.x, p.y, null, 1.6);
+      if (ovlFx.ring) ovlFx.ring(p.x, p.y, 46, col(rec), 0.35);
+      if (ovlFx.shake) ovlFx.shake(0.25);
+      // Then it vents: a breather the player can see coming on the heat bar.
+      w.ventT = d.heat.vent || 2;
+      w.cd = w.ventT;
+    }
+  }
+}
+
 
 // --- On kill ------------------------------------------------------------------
 
 /** main.js's kill hook calls this when the killing blow came from an overloaded source. */
 export function overloadKill(e, rec) {
-  const k = rec.def.kill;
+  const d = rec.def;
+  if (d.fx && d.fx.spr && d.fx.spr.kill) spr(rec, 'kill', e.x, e.y - 4, null);
+  if (d._sig) signatureKill(e, rec);
+  const k = d.kill;
   if (!k) return;
   if (k.heal && G.rngRun() < k.heal.chance) heal(k.heal.hp);
   if (budget <= 0) return;
@@ -181,6 +466,58 @@ export function overloadKill(e, rec) {
   if (k.wisps) burstShots(e.x, e.y, k.wisps.n, base * k.wisps.dmg, rec, true, G.rngFx() * TAU);
   if (k.chain) chainFrom(e, k.chain.n, base * k.chain.dmg, k.chain.range || 100, col(rec));
   setDamageSource(prev);
+}
+
+// Time bubbles on the field at once. More is not more time, and they share the zone pool.
+const WARP_MAX = 6;
+function warpCount() { let n = 0; for (let i = 0; i < zones.length; i++) if (zones[i].warp) n++; return n; }
+
+/** What a kill feeds: souls, guard, haste, warp bubbles, contagion, and a doom gone off early. */
+function signatureKill(e, rec) {
+  const d = rec.def, w = rec.w, p = G.player;
+  if (e.doomT > 0) detonateDoom(e);
+  if (d.soul && w.soul < d.soul.max) {
+    w.soul = Math.min(d.soul.max, w.soul + d.soul.per);
+    if (G.rngFx() < 0.5) spawnSpr('motes', e.x, e.y - 6, scol(rec, 2), 1, 0, (p.x - e.x) * 0.8, (p.y - e.y) * 0.8);
+  }
+  if (d.guard && p) {
+    if (++w.killN >= d.guard.kills) {
+      w.killN = 0;
+      if (!p.barrier) { p.barrier = true; spawnSpr('guard_ring', p.x, p.y - 6, scol(rec, 2), 0.7); }
+    }
+  }
+  if (d.haste && p) { p.hasteT = d.haste.t; p.hasteMul = d.haste.mul || 1.35; }
+  if (d.warp && G.rngRun() < (d.warp.chance === undefined ? 1 : d.warp.chance) && warpCount() < WARP_MAX) {
+    const z = spawn('zones');
+    if (z) {
+      z.x = e.x; z.y = e.y; z.r = d.warp.r; z.maxLife = z.life = d.warp.t;
+      z.dps = 0; z.tick = 0; z.slow = d.warp.slow || 0.7; z.kind = ZONE.PLAIN;
+      z.color = col(rec, 1); z.hitId = 0; z.burn = 0; z.pull = 0; z.boom = 0; z.warp = 1;
+      spawnSpr('ring_l', e.x, e.y, scol(rec, 2), d.warp.r / 20);
+    }
+  }
+  if (d.contagion && budget > 0) {
+    budget--;
+    const n = gather(e.x, e.y, d.contagion.r, d.contagion.n || 4);
+    for (let i = 0; i < n; i++) {
+      const t = _gathered[i];
+      if (t === e) continue;
+      if (e.burnT > 0) { applyBurn(t, e.burnDps, Math.max(1.5, e.burnT)); if (e.dotKind === 1) t.dotKind = 1; }
+      if (e.slowT > 0) applyChill(t, e.slow, Math.max(1, e.slowT));
+      if (e.markT > 0) { t.markT = Math.max(t.markT, e.markT); t.markMul = Math.max(t.markMul, e.markMul); }
+      if (e.confuseT > 0 && !t.boss && !t.legend) t.confuseT = Math.max(t.confuseT, e.confuseT);
+      if (ovlFx.arc) ovlFx.arc(e.x, e.y, t.x, t.y, col(rec, 1));
+      spawnSpr('motes', t.x, t.y - 6, scol(rec, 2));
+    }
+  }
+  if (d.freezeAfter && e.frozenT > 0 && budget > 0) {
+    budget--;
+    const prev = getDamageSource();
+    setDamageSource(rec.proc);
+    burstShots(e.x, e.y, d.freezeAfter.shards || 6, w.resolved.damage * 0.6, rec, false, G.rngFx() * TAU);
+    setDamageSource(prev);
+    burstSpr('freeze', e.x, e.y - 4, scol(rec, 2), 5, 8, 40);
+  }
 }
 
 // --- When a shot ends ----------------------------------------------------------
@@ -451,6 +788,16 @@ export function chipsFor(ov) {
   let c = _chips.get(ov);
   if (c) return c;
   c = [];
+  const sigWords = [
+    ['boomerang', 'BOOMERANG'], ['orbitOut', 'ORBIT SHIELD'], ['ricochet', 'RICOCHET'], ['erase', 'ERASES SHOTS'],
+    ['accel', 'RAMPING'], ['snowball', 'SNOWBALL'], ['wake', 'WAKE'], ['mine', 'MINES'], ['echo', 'ECHO'],
+    ['gravity', 'GRAVITY'], ['magnet', 'MAGNET'], ['stacks', 'RUPTURE'], ['doom', 'DOOM'], ['contagion', 'CONTAGION'],
+    ['bond', 'BOND'], ['charm', 'CHARM'], ['polarity', 'POLARITY'], ['overkill', 'OVERKILL'], ['freezeAfter', 'DEEP FREEZE'],
+    ['thief', 'THIEF'], ['rod', 'LIGHTNING ROD'], ['heat', 'OVERHEAT'], ['tide', 'TIDE'], ['momentum', 'MOMENTUM'],
+    ['stillness', 'FOCUS'], ['pinch', 'PINCH'], ['soul', 'SOUL FEED'], ['guard', 'GUARD'], ['haste', 'SPEED BOOST'],
+    ['warp', 'TIME WARP'], ['critBurst', 'CRIT BURST'], ['metronome', 'METRONOME'], ['gamble', 'GAMBLE'],
+  ];
+  for (const [k, word] of sigWords) if (ov[k]) c.push(word);
   const P = { ring: 'RING', twin: 'TWIN', cross: 'CROSS', fan: 'WIDE FAN', spiral: 'SPIRAL', volley: `${ov.volley || 3}x VOLLEY` };
   if (ov.pattern) c.push(P[ov.pattern]);
   const s = ov.stats || {};

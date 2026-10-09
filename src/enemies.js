@@ -11,7 +11,7 @@ import {
   setDamageSource, decoys, decoyTargetable, damageDecoy, DECOY_MAX, DECOY_R,
 } from './world.js';
 import { ENEMIES, ENEMY_BY_ID } from './data/enemies.js';
-import { damageOverTime } from './combat.js';
+import { damageOverTime, damageEnemy } from './combat.js';
 import { dirFromAngle } from './assets.js';
 import { spriteBase, spriteInfo } from './sprites.js';
 import { waterAtWorld, nearestLand, pondsActive } from './terrain.js';
@@ -253,6 +253,42 @@ const VIEW_HALF_H = 160;
 
 // --- Spawning ---------------------------------------------------------------
 
+/**
+ * Charmed by an overload: it fights for you. It hunts the nearest enemy that is not charmed too,
+ * and bites it with its own contact damage (times the charm's multiplier), credited to the
+ * overload that charmed it. It never touches the player and never fires.
+ */
+const CHARM_RANGE = 170;
+function charmed(e, dt) {
+  e.charmT -= dt;
+  if (e.contactCd > 0) e.contactCd -= dt;
+  const r = cellRange(e.x, e.y, CHARM_RANGE);
+  let best = null, bd = CHARM_RANGE * CHARM_RANGE;
+  if (r) {
+    for (let gy = r.y0; gy <= r.y1; gy++) {
+      for (let gx = r.x0; gx <= r.x1; gx++) {
+        const c = gy * GW + gx;
+        for (let k = cellStart[c]; k < cellStart[c + 1]; k++) {
+          const o = enemies[cellItems[k]];
+          if (o === e || !o.alive || o.prop || o.charmT > 0) continue;
+          const d = dist2(e.x, e.y, o.x, o.y);
+          if (d < bd) { bd = d; best = o; }
+        }
+      }
+    }
+  }
+  if (!best) { e.vx *= 0.8; e.vy *= 0.8; return; }
+  const d = Math.sqrt(bd) || 1;
+  e.vx = ((best.x - e.x) / d) * e.speed * 1.2;
+  e.vy = ((best.y - e.y) / d) * e.speed * 1.2;
+  if (d <= e.r + best.r + 3 && e.contactCd <= 0) {
+    e.contactCd = 0.45;
+    setDamageSource(e.charmSrc);
+    damageEnemy(best, Math.max(4, e.dmg * e.charmMul), (best.x - e.x) / d * 60, (best.y - e.y) / d * 60, false);
+    setDamageSource(0);
+  }
+}
+
 /** Place an enemy on the ring just outside the camera, at a random angle. */
 export function spawnAtRing(def, rng, elite) {
   const a = rng() * TAU;
@@ -339,6 +375,8 @@ export function spawnEnemy(def, x, y, opts) {
   e.markT = 0; e.markMul = 0; e.confuseT = 0; e.dotKind = 0; e.sleep = false;
   e.wanderA = 0; e.wanderT = 0;
   e.endlessGen = 0; e.extraShots = 0; e.atkDmgMul = 1; e.atkCdMul = 1; e.summonT = 0;
+  e.ovStacks = 0; e.ovStackSrc = -1; e.doomT = 0; e.doomDmg = 0; e.doomSrc = 0; e.bondT = 0;
+  e.charmT = 0; e.charmSrc = 0; e.charmMul = 1; e.polSign = 0; e.polT = 0; e.chillN = 0; e.frozenT = 0;
   e.trial = opts && opts.trial !== undefined ? opts.trial : -1;
   e.flash = 0; e.knockX = 0; e.knockY = 0; e.contactCd = 0; e.decoyCd = 0;
   e.slow = 0; e.slowT = 0;
@@ -489,6 +527,8 @@ export function updateEnemies(dt, separationOn) {
       e.stunT -= dt;
       if (e.stunT <= 0) e.sleep = false;
       e.vx = 0; e.vy = 0;
+    } else if (e.charmT > 0) {
+      charmed(e, dt);
     } else if (e.confuseT > 0 && !e.legend) {
       // Confused: it stumbles about at full tilt, lurching off somewhere new every fraction of a
       // second and now and then stopping dead to totter on the spot. It neither chases nor attacks.

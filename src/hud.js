@@ -39,6 +39,7 @@ export function drawHud() {
   drawPortalMarker();
   drawBag();
   drawBuffs();
+  drawOverloadStates();
   if (G.banner.t > 0) drawBanner();
   drawStairsPrompt();
   drawBagPrompt();
@@ -46,6 +47,45 @@ export function drawHud() {
   if (!G.stairs.near && !G.portal.near) drawFortunePrompt();
   drawSuccessToast();
   if (G.runOver) drawRunOver();
+}
+
+// --- Overload states ---------------------------------------------------------
+//
+// Bottom right: one small row per overloaded weapon whose overload keeps a state worth watching --
+// heat building to its overheat, a tide's phase, momentum, souls fed, kills toward a guard, a
+// pinch that is live. Its weapon's own sprite, a label and a bar in the overload's colour.
+
+function drawOverloadStates() {
+  let y = VH - 14;
+  for (let i = G.weapons.length - 1; i >= 0; i--) {
+    const w = G.weapons[i];
+    const d = w.ovl;
+    if (!d) continue;
+    let label = '', k = -1, col = d.color;
+    if (d.heat) {
+      if (w.ventT > 0) { label = 'VENTING'; k = w.ventT / (d.heat.vent || 2); col = '#8a8a96'; }
+      else { label = 'HEAT'; k = w.heat / d.heat.max; col = k > 0.75 ? '#ff5a1a' : '#ffb347'; }
+    } else if (d.tide) { label = w.tidePh ? 'EBB TIDE' : 'FLOW TIDE'; k = (w.tideT % d.tide.period) / d.tide.period; col = w.tidePh ? '#2276bd' : '#7af0e8'; }
+    else if (d.momentum) { label = 'MOMENTUM'; k = w.mom; }
+    else if (d.stillness) { label = 'FOCUS'; k = w.mom; }
+    else if (d.soul) { label = `SOULS +${Math.round(w.soul * 100)}%`; k = w.soul / d.soul.max; }
+    else if (d.guard) { label = G.player && G.player.barrier ? 'GUARD UP' : 'GUARD'; k = G.player && G.player.barrier ? 1 : w.killN / d.guard.kills; }
+    else if (d.pinch) {
+      const live = G.player && G.stats && G.player.hp < G.stats.maxHp * d.pinch.at;
+      if (!live) continue;
+      label = 'PINCH!'; k = 1; col = '#ff4a4a';
+    } else continue;
+    const x = VW - 74;
+    ctx.fillStyle = 'rgba(6,10,26,0.6)';
+    ctx.fillRect(x - 13, y - 6, 84, 12);
+    if (w.def.sprBase >= 0) drawSprite(ctx, w.def.sprBase + 1, x - 6, y + 4);
+    drawText(ctx, label, x + 2, y - 4, 'white');
+    ctx.fillStyle = '#1a1e30';
+    ctx.fillRect(x + 2, y + 3, 64, 2);
+    ctx.fillStyle = col;
+    ctx.fillRect(x + 2, y + 3, Math.round(64 * Math.max(0, Math.min(1, k))), 2);
+    y -= 14;
+  }
 }
 
 // --- Ability slots ----------------------------------------------------------
