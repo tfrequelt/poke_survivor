@@ -2,6 +2,12 @@
 
 ![alt text](assets/miscellaneous/logo.png)
 
+## The Project
+
+Pokemon Dracula Edition is a vampire survivor like pokemon fangame, written in Vanilla JavaScript ES
+modules, Canvas 2D and Web Audio -- no framework, no dependencies, no build step; to run on a web browser. 
+Inspired by the fangame Pokemon Survivor Burst, but with exclusive features and ways of approaching vampire survivor. 
+A personal project that leans towards learning about JavaScript and building a fun game.
 
 ## Credits
 
@@ -14,9 +20,6 @@ Pokemon is a trademark of Nintendo, Game Freak and Creatures Inc. This is a non-
 project and is not affiliated with them.
 
 Code, music, sound, UI and the fallback pixel art were made for this project.
-
-A Pokemon-flavoured Vampire Survivors clone that runs in the browser. Vanilla JavaScript ES
-modules, Canvas 2D and Web Audio -- no framework, no dependencies, no build step.
 
 Every piece of supplied art and audio is optional. The PMD sprite sheets, the ripped tilesets and
 the soundtrack all have a drawn or synthesised fallback in `src/data/art.js` and `src/audio.js`,
