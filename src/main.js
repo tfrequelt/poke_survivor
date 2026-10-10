@@ -26,7 +26,7 @@ import { loadSave, bankGold, bankTotal, rankOf, buyRank, resetProgress, saveData
 import { SHOP_ITEMS, rankCost } from './data/shop.js';
 import {
   hooks, damageEnemy, killAll, applyBurn, applyChill, resetDamageTally, damageBreakdown, damageCircle,
-  damageSourceId, srcOvl,
+  damageSourceId, srcOvl, setSrcType,
 } from './combat.js';
 import {
   initOverloads, tickOverloads, resetOverloads, overloadHit, overloadKill, overloadExpire,
@@ -51,7 +51,7 @@ import {
   unlockSuccess, unlockIf, bumpStat, recordKey, flushRecords,
 } from './successes.js';
 import { SUCCESSES } from './data/successes.js';
-import { createPlayer, updatePlayer, setReviveFx, setLegendTouch, clearStatuses, setBagRevive } from './player.js';
+import { createPlayer, updatePlayer, setReviveFx, setLegendTouch, clearStatuses, setBagRevive, setRoughSkinHook } from './player.js';
 import { initEnemyDefs, updateEnemies, spawnEnemy, ringPoint, resetAttacks, aiIndex } from './enemies.js';
 import {
   legend, hazards, fx as legendFx, beginLegend, clearLegend, endLegend, updateLegend,
@@ -64,7 +64,7 @@ import {
 import { ENEMIES } from './data/enemies.js';
 import { ENEMY_BY_ID, BOSS_TIERS } from './data/enemies.js';
 import {
-  initWeaponDefs, addWeapon, updateWeapons, updateProjectiles, motionIndex, setWeaponFx,
+  initWeaponDefs, addWeapon, updateWeapons, updateProjectiles, motionIndex, setWeaponFx, extendBehaviors,
   evolveWeapon, setWeaponSfx, updateDecoys, ovlHooks, motionOf, levelWeapon,
 } from './weapons.js';
 import {
@@ -102,9 +102,11 @@ import {
   ui, drawLevelUp, drawPause, drawTitle, drawSelect, drawStageSelect, drawEvolution, drawEvolutionChoice,
   EVO_TOTAL, setBallSprite, drawCredits, creditsMax, drawSettings, settingsRows,
   drawSummary, drawShop, shopRows, drawWheel,
- drawVictoryChoice, drawSuccesses, TITLE_MENU, drawDungeonText,} from './ui.js';
+ drawVictoryChoice, drawSuccesses, TITLE_MENU, drawDungeonText, SELECT_PAGE, drawPartnerReveal, REVEAL_LOCK,} from './ui.js';
 import { wheel, startWheel, updateWheel, chooseSwap } from './wheel.js';
-import { CHARACTERS, CHARACTER_BY_ID, characterSpritePairs } from './data/characters.js';
+import { DRAGON_BEHAVIOR, updateDragon, resetDragon } from './dragon.js';
+import { seqTick, updateSeqFx, resetSeqFx } from './seqfx.js';
+import { CHARACTERS, CHARACTER_BY_ID, characterSpritePairs, partnerUnlocked } from './data/characters.js';
 import { enemySpritePairs } from './data/enemies.js';
 import { weaponSpritePairs } from './data/weapons.js';
 import { STAGE_BY_ID, STAGES, propSpritePairs } from './data/stages.js';
@@ -182,8 +184,8 @@ async function boot() {
     if (pal === 'elite' && getSheet(shape)) continue;
     registerSprite(shape, pal, 0, fallback);
   }
-  for (const [shape, pal, rot] of weaponSpritePairs()) registerSprite(shape, pal, rot || 0);
-  for (const [shape, pal, rot] of abilitySpritePairs()) registerSprite(shape, pal, rot || 0);
+  for (const [shape, pal, rot, fb] of weaponSpritePairs()) registerSprite(shape, pal, rot || 0, fb);
+  for (const [shape, pal, rot, fb] of abilitySpritePairs()) registerSprite(shape, pal, rot || 0, fb || null);
   for (const [shape, pal] of propSpritePairs()) registerSprite(shape, pal);
   for (const [shape, pal, fb] of itemSpritePairs()) registerSprite(shape, pal, 0, fb);
   for (const [shape, pal, fb] of relicSpritePairs()) registerSprite(shape, pal, 0, fb);
@@ -206,6 +208,9 @@ async function boot() {
   atlasStats = buildAtlas();
 
   initEnemyDefs();
+  // The Dragon type's behaviours live in dragon.js; the registry has to know them before the
+  // definitions are resolved.
+  extendBehaviors(DRAGON_BEHAVIOR);
   initWeaponDefs();
   initOverloads(motionOf);
   initBag(motionOf);
@@ -348,12 +353,30 @@ async function boot() {
  * damage live below the L3 systems while still producing orbs, numbers and screen shake.
  */
 function installHooks() {
+  // Haxorus's Rough Skin: a cut on everything that bites, typed dragon, on its own breakdown line.
+  const roughSrc = damageSourceId('t:rough_skin', 'Rough Skin');
+  setSrcType(roughSrc, 'dragon');
+  setRoughSkinHook((e) => {
+    const prev = getDamageSource();
+    setDamageSource(roughSrc);
+    damageEnemy(e, 14 * (G.stats.power || 1) + e.maxHp * 0.04, 0, 0, false);
+    setDamageSource(prev);
+  });
   hooks.onDamage = (e, dealt, crit, eff) => {
     popDamage(e.x, e.y - 12, dealt, crit, eff);
+    if (crit && G.sharpOn) sharpshoot();
     if (eff > 1.05 && G.trk && ++G.trk.superHits === 2000) unlockSuccess('super_effective');
     if (e.elite && dealt >= e.maxHp) unlockSuccess('one_punch');
     sfx(crit ? 'crit' : 'hit');
   };
+  // A blow that should have killed, survived: Mr. Mime's Barrier or a Gigalith's Sturdy.
+  hooks.onSurvive = (e, kind) => {
+    if (G.clock - (e.survAt || 0) < 0.4) return;
+    e.survAt = G.clock;
+    popText(e.x, e.y - 16, kind === 'barrier' ? 'BARRIER!' : 'STURDY!', kind === 'barrier' ? 'pink' : 'gold');
+    spawnSpr(kind === 'barrier' ? 'guard_break' : 'guard_ring', e.x, e.y - 6, kind === 'barrier' ? '' : '#ffd166', 0.6);
+  };
+  hooks.onShieldBreak = (e) => { spawnSpr('guard_break', e.x, e.y - 6, '', 0.5); };
   hooks.onKill = (e) => {
     if (e.prop) {
       // Scenery is not a kill: no tally, and it never comes back -- the cell is remembered as
@@ -418,6 +441,8 @@ function installHooks() {
   // abilities.js emits its FX through these rather than importing render/world upward.
   abilityFx.burst = burst;
   abilityFx.shake = addShake;
+  // A sound picked from a list, for an effect that sounds per hit rather than per cast.
+  abilityFx.sound = (ids) => sfx(Array.isArray(ids) ? ids[(G.rngFx() * ids.length) | 0] : ids);
   abilityFx.ring = (x, y, r, color, life) => pushFx(FX.RING, x, y, r, 0, color, life);
   abilityFx.beam = (x, y, angle, len, width, color, life) =>
     pushFx(FX.BEAM, x, y, len, angle, color, life, width);
@@ -456,7 +481,7 @@ function installHooks() {
   const SHOT_SFX = {
     water: 'shoot_water', normal: 'shoot_normal', grass: 'shoot_grass',
     rock: 'shoot_rock', electric: 'shoot_bolt', poison: 'shoot_water',
-    psychic: 'shoot_normal', ghostly: 'shoot_grass',
+    psychic: 'shoot_normal', ghostly: 'shoot_grass', dragon: 'shoot_rock',
   };
   setWeaponSfx((def) => sfx(SHOT_SFX[def.palette] || 'shoot_normal'));
 
@@ -693,6 +718,8 @@ function startRun(character, q, stageId) {
   resetDamageTally();
   resetRunSuccesses();
   resetOverloads();
+  resetDragon();
+  resetSeqFx();
   // Perks from claimed Expedition Records, read once per run.
   G.perks = { ...saveData().perks };
   resetBag(G.perks.bag4 ? 4 : 3);
@@ -720,6 +747,8 @@ function startRun(character, q, stageId) {
   // be added: after the stat block is rebuilt, before anything resolves it.
   applyShopMods();
   // The shiny roll has to come before the stats are first resolved, for its luck to count.
+  // Axew's Mold Breaker, read by combat.js on every hit.
+  G.moldBreaker = character.id === 'axew';
   G.shiny = !!getSheet('shiny_' + character.shape) &&
     (q && q.has('shiny') ? q.get('shiny') !== '0' : G.rngFx() < 1 / SHINY_ODDS);
   if (G.shiny) addMods([{ stat: 'luck', op: 'flat', value: SHINY_LUCK }], 'shiny');
@@ -1325,6 +1354,8 @@ function leaveLegendBehind() {
 function legendDefeated(e) {
   const def = legend.def;
   unlockIf('prodigy', G.level <= 30);
+  // Wild Beast: felled within 20 seconds of the fight going live (its entrance does not count).
+  unlockIf('wild_beast', legend.fightAt >= 0 && G.clock - legend.fightAt < 20);
   endLegend();
   stopMusicFile(2.5);
 
@@ -1534,9 +1565,23 @@ function openSuccesses() {
   sfx('select');
 }
 
+/**
+ * The new-partner card open over the Successes screen, or null: { c, at } with `at` the menu
+ * clock it opened on. Nothing else can be pressed while it is up, and it only closes once it has
+ * been on screen for REVEAL_LOCK, so the Enter that claimed it cannot dismiss it too.
+ */
+let reveal = null;
+
 /** Two columns: left/right step one card, up/down a whole row. */
 function successesKey(code) {
   code = menuCode(code);
+  if (reveal) {
+    if ((code === 'Enter' || code === 'Space' || code === 'Escape') && menuTime - reveal.at >= REVEAL_LOCK) {
+      reveal = null;
+      sfx('confirm');
+    }
+    return;
+  }
   const n = SUCCESSES.length;
   switch (code) {
     case 'ArrowLeft': successCursor = Math.max(0, successCursor - 1); break;
@@ -1544,8 +1589,14 @@ function successesKey(code) {
     case 'ArrowUp': successCursor = Math.max(0, successCursor - 2); break;
     case 'ArrowDown': successCursor = Math.min(n - 1, successCursor + 2); break;
     case 'Enter': case 'Space': {
-      const got = claimSuccess(SUCCESSES[successCursor].id);
+      const sc = SUCCESSES[successCursor];
+      const got = claimSuccess(sc.id);
       sfx(got > 0 ? 'levelup' : 'select');
+      // A partner for a prize gets its own moment.
+      if (got > 0 && sc.reward && sc.reward.partner && CHARACTER_BY_ID[sc.reward.partner]) {
+        reveal = { c: CHARACTER_BY_ID[sc.reward.partner], at: menuTime };
+        sfx('evolve');
+      }
       break;
     }
     case 'Escape': case 'Backspace': setMode(MODES.TITLE); sfx('select'); break;
@@ -1598,20 +1649,34 @@ function toSelect() {
   startMusic('menu', TITLE);
 }
 
+/** Whether each partner can be picked, in CHARACTERS order. */
+const partnersOpen = () => CHARACTERS.map((c) => partnerUnlocked(c, saveData()));
+
+/**
+ * Six partners to a page: Right off the last card of a page turns to the next one, Left off the
+ * first turns back, and the two ends wrap. A digit picks within the page on screen.
+ */
 function selectKey(code) {
   code = menuCode(code);
   const n = CHARACTERS.length;
   switch (code) {
-    case 'ArrowLeft': ui.cursor = (ui.cursor + n - 1) % n; break;
-    case 'ArrowRight': ui.cursor = (ui.cursor + 1) % n; break;
-    case 'Digit1': case 'Digit2': case 'Digit3': case 'Digit4': {
-      const i = Number(code.slice(5)) - 1;
-      if (i < n) chooseStarter(CHARACTERS[i]);
+    case 'ArrowLeft': ui.cursor = (ui.cursor + n - 1) % n; sfx('select'); break;
+    case 'ArrowRight': ui.cursor = (ui.cursor + 1) % n; sfx('select'); break;
+    case 'Digit1': case 'Digit2': case 'Digit3': case 'Digit4': case 'Digit5': case 'Digit6': {
+      const i = Math.floor(ui.cursor / SELECT_PAGE) * SELECT_PAGE + Number(code.slice(5)) - 1;
+      if (i < n) { ui.cursor = i; pickStarter(i); }
       break;
     }
-    case 'Enter': case 'Space': chooseStarter(CHARACTERS[ui.cursor]); break;
+    case 'Enter': case 'Space': pickStarter(ui.cursor); break;
     case 'Escape': setMode(MODES.TITLE); break;
   }
+}
+
+/** A locked partner refuses: a buzz, and the card stays put. */
+function pickStarter(i) {
+  const c = CHARACTERS[i];
+  if (!partnerUnlocked(c, saveData())) { sfx('deny'); return; }
+  chooseStarter(c);
 }
 
 /** The partner is locked in; the stage screen picks where to take them. */
@@ -1722,7 +1787,8 @@ function castAbility(slot) {
   const p = G.player;
   const atk = p && G.form ? getAttack(p.sprShape || G.form.shape) : null;
   if (atk) { p.actT = 0; p.actDur = atk.total; }
-  sfx(abilitySound(a.def));
+  const snd = abilitySound(a.def);
+  if (snd) sfx(snd);
   return true;
 }
 
@@ -1737,6 +1803,7 @@ const FALLBACK_SFX = {
   skyStrike: 'shoot_bolt', wave: 'shoot_water',
   fireShot: 'quake', firePit: 'quake', pierceLine: 'shoot_grass', shadowOrb: 'shoot_bolt',
   multiHoming: 'shoot_grass', present: 'pickup', blizzard: 'shoot_water',
+  crunch: 'hit', dracoMeteor: 'quake',
 };
 
 /**
@@ -1748,6 +1815,8 @@ const FALLBACK_SFX = {
  */
 function abilitySound(def) {
   const want = def.sound;
+  // A move that sounds on its own beats rather than on the cast (Draco Meteor's impacts).
+  if (want === false) return null;
   const id = Array.isArray(want) ? want[(G.rngFx() * want.length) | 0] : want;
   if (id && sampleDuration(id) > 0) return id;
   return FALLBACK_SFX[def.effect] || 'ability';
@@ -1762,7 +1831,8 @@ function abilitySound(def) {
 function pickEndPortrait(mood) {
   const form = (G.form && G.form.shape) || (G.character && G.character.shape) || '';
   const k = 1 + ((Math.random() * 3) | 0);
-  G.endPortrait = getPortrait(`${form}_${mood}${k}`) ? `${form}_${mood}${k}` : '';
+  // A form drawn without happy or sad faces (Fraxure) shows its everyday portrait instead.
+  G.endPortrait = getPortrait(`${form}_${mood}${k}`) ? `${form}_${mood}${k}` : getPortrait(form) ? form : '';
 }
 
 /** The shape a form is drawn with: its shiny sheet on a shiny run, if there is one. */
@@ -1939,6 +2009,7 @@ function stepSim(dt) {
   G.tick++;
   tickOverloads();
   sprFxTick();
+  seqTick();
   updateBuffs(dt);
   if ((G.tick % 60) === 0) {
     unlockIf('full_house', G.bag.filter(Boolean).length >= 3 && G.passives.length >= 6
@@ -1955,6 +2026,11 @@ function stepSim(dt) {
   }
   drainBossQueue();
   updateEndless(dt);
+  checkSharpshoot();
+  // Axew's line: Axe Kick from Fraxure on, Rough Skin as Haxorus.
+  const fid = G.form ? G.form.id : '';
+  G.axeKick = fid === 'fraxure' || fid === 'haxorus';
+  G.roughSkin = fid === 'haxorus';
   updateOverloadStates(dt);
   if (!G.secret) updateTotems(dt);
   drainSpawnRequests();
@@ -1973,6 +2049,7 @@ function stepSim(dt) {
   updateAbilities(dt);
   updateZones(dt);
   updateProjectiles(dt);
+  updateDragon(dt);
   updatePlayer(dt);
   updateRelics(dt);
   updatePickups(dt, (v) => { grantXp(v); sfx('xp'); }, (v) => { grantCoins(v); sfx('coin'); });
@@ -2384,6 +2461,30 @@ function endlessSummons(e, dt) {
   sfx('move_ghost');
 }
 
+// --- Sharpshoot -----------------------------------------------------------------------------
+//
+// Rowlet's line gets it on evolving into Dartrix, and keeps it as Decidueye: a bar of bonus crit
+// chance that crits themselves fill. +0.03% per crit up to 50%, +0.01% per crit after that, to 100%.
+// It lasts the run.
+
+const SHARP_LINE = new Set(['dartrix', 'decidueye']);
+
+function sharpshoot() {
+  if (G.sharp >= 100) return;
+  const was = G.sharp;
+  G.sharp = Math.min(100, G.sharp + (G.sharp < 50 ? 0.03 : 0.01));
+  G.sharpAt = G.clock;
+  if (was < 50 && G.sharp >= 50) showBanner('SHARPSHOOT 50%', 'EVERY CRIT NOW ADDS 0.05% CRIT CHANCE');
+  else if (G.sharp >= 100) { showBanner('SHARPSHOOT MAXED', '+100% CRIT CHANCE'); sfx('levelup'); }
+}
+
+/** Turned on the first time the form is one that has it. */
+function checkSharpshoot() {
+  if (G.sharpOn || !G.form || !SHARP_LINE.has(G.form.id)) return;
+  G.sharpOn = true;
+  showBanner('SHARPSHOOT UNLOCKED', 'EVERY CRIT RAISES YOUR CRIT CHANCE');
+}
+
 function drainBossQueue() {
   if (G.pendingMiniboss > 0) {
     const tier = G.pendingMiniboss;
@@ -2587,6 +2688,7 @@ function burst(x, y, n, color) {
 
 function updateFx(dt) {
   updateSprFx(dt);
+  updateSeqFx(dt);
   for (let i = damageNumbers.length - 1; i >= 0; i--) {
     const d = damageNumbers[i];
     d.life -= dt;
@@ -2664,12 +2766,15 @@ function draw() {
       G.mode === MODES.STAGE_SELECT || G.mode === MODES.CREDITS || G.mode === MODES.SUMMARY ||
       G.mode === MODES.SUCCESSES) {
     if (G.mode === MODES.CREDITS) drawCredits();
-    else if (G.mode === MODES.SUCCESSES) drawSuccesses(successCursor);
+    else if (G.mode === MODES.SUCCESSES) {
+      drawSuccesses(successCursor);
+      if (reveal) drawPartnerReveal(reveal.c, menuTime - reveal.at);
+    }
     else if (G.mode === MODES.SUMMARY) drawSummary();
     else if (G.mode === MODES.SHOP) drawShop();
-    else if (G.mode === MODES.TITLE) drawTitle(CHARACTERS, menuTime, titleCursor, claimableCount());
+    else if (G.mode === MODES.TITLE) drawTitle(CHARACTERS.filter((c) => partnerUnlocked(c, saveData())), menuTime, titleCursor, claimableCount());
     else if (G.mode === MODES.STAGE_SELECT) drawStageSelect(STAGES, pendingCharacter, menuTime);
-    else drawSelect(CHARACTERS, menuTime);
+    else drawSelect(CHARACTERS, menuTime, partnersOpen());
     present();
     if (G.debug.on) drawDebugOverlay([`mode ${G.mode}   1-${CHARACTERS.length} / ARROWS + ENTER`]);
     return;

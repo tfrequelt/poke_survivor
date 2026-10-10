@@ -24,7 +24,7 @@ import { G } from './state.js';
 import { hash2, dist2 } from './util.js';
 import { enemies, cellRange, cellStart, cellItems, GW, nextHitId, setDamageSource } from './world.js';
 import {
-  damagePlayer, damageEnemy, damageCircle, damageOverTime, damageSourceId, statusPlayer, applyChill,
+  damagePlayer, damageEnemy, damageCircle, damageOverTime, damageSourceId, statusPlayer, applyChill, applyBurn,
 } from './combat.js';
 import { waterAtWorld } from './terrain.js';
 
@@ -65,10 +65,12 @@ const TRAPS = {
     // An enemy that walks onto it falls asleep, the real thing: Sleep animation and all.
     onEnemy: (e) => { e.stunT = Math.max(e.stunT, 2.4); e.sleep = true; },
   },
+  // A sting, then the real thing: four seconds of poison ticking away, the skull over your head.
+  // On an enemy, a poison of its own (a toxic damage-over-time, shown the same way).
   poison: {
     label: 'POISON TRAP', weight: 8,
-    onPlayer: () => damagePlayer(9),
-    onEnemy: (e) => damageOverTime(e, 30),
+    onPlayer: () => { damagePlayer(4); statusPlayer('poison'); },
+    onEnemy: (e) => { applyBurn(e, 8, 4); e.dotKind = 1; },
   },
   warp: {
     label: 'WARP TRAP', range: 260, weight: 6,

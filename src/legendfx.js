@@ -643,6 +643,35 @@ export function drawLegendWeather() {
 
 const BURN_MARK = { x: 104, y: 112, w: 16, h: 16, frames: 7 };
 
+// Poisoned: status.png's skull strip, the Mystery Dungeon poison icon. The sheet's skulls are
+// white, so a purple copy is made once, the first time one is needed.
+export const POISON_MARK = { x: 104, y: 248, w: 16, h: 16, frames: 15 };
+let poisonStrip = null;
+function skullStrip() {
+  if (poisonStrip) return poisonStrip;
+  const img = getImage('status');
+  if (!img) return null;
+  const M = POISON_MARK;
+  const c = document.createElement('canvas');
+  c.width = M.w * M.frames; c.height = M.h;
+  const g = c.getContext('2d');
+  g.drawImage(img.canvas, M.x, M.y, c.width, M.h, 0, 0, c.width, M.h);
+  g.globalCompositeOperation = 'source-atop';
+  g.fillStyle = 'rgba(176,80,224,0.6)';
+  g.fillRect(0, 0, c.width, c.height);
+  poisonStrip = c;
+  return c;
+}
+
+/** One frame of the poison skull with its top-left at (x, y); `phase` staggers neighbours. */
+export function drawPoisonMark(x, y, phase = 0) {
+  const s = skullStrip();
+  if (!s) return;
+  const M = POISON_MARK;
+  const f = (((G.tick / 3) | 0) + phase) % M.frames;
+  ctx.drawImage(s, f * M.w, 0, M.w, M.h, Math.round(x), Math.round(y), M.w, M.h);
+}
+
 /** Frozen solid, burning, crackling or frosted over -- drawn on top of the player sprite. */
 export function drawPlayerStatus(p, sx, sy) {
   if (p.freezeT > 0) {
@@ -688,6 +717,22 @@ export function drawPlayerStatus(p, sx, sy) {
         Math.round(sx - 14), Math.round(sy - 30), BURN_MARK.w, BURN_MARK.h);
     }
   }
+  if (p.stringT > 0) {
+    // Webbed: silk strands wrapped round the body, pulled taut as it struggles.
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.85;
+    ctx.beginPath();
+    for (let i = 0; i < 3; i++) {
+      const a = i * 1.05 + Math.sin(G.clock * 6 + i) * 0.15;
+      const dx = Math.cos(a) * 10, dy = Math.sin(a) * 6;
+      ctx.moveTo(Math.round(sx - dx), Math.round(sy - 9 - dy));
+      ctx.quadraticCurveTo(sx, sy - 9 + (i - 1) * 3, Math.round(sx + dx), Math.round(sy - 9 + dy));
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  if (p.poisonT > 0) drawPoisonMark(sx - 2 + (p.burnT > 0 ? 6 : -6), sy - 32);
   if (p.paraT > 0 && ((G.tick >> 2) & 1)) {
     // Static jumping off the body, a few short zigzags that move every other frame.
     ctx.strokeStyle = '#fff060';

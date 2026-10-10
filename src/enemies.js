@@ -12,11 +12,15 @@ import {
 } from './world.js';
 import { ENEMIES, ENEMY_BY_ID } from './data/enemies.js';
 import { damageOverTime, damageEnemy } from './combat.js';
+import { spawnSpr } from './sprfx.js';
+import { statusIndex } from './data/legends.js';
 import { dirFromAngle } from './assets.js';
 import { spriteBase, spriteInfo } from './sprites.js';
 import { waterAtWorld, nearestLand, pondsActive } from './terrain.js';
 import { typeTable, SPECIES_TYPES } from './data/types.js';
-import { updateFlow, flowClear, flowTarget, FLOW_STEER, FLOW_HOLD } from './paths.js';
+import {
+  updateFlow, flowClear, flowTarget, FLOW_STEER, FLOW_HOLD, updateDollFlow, dollFlowClear, dollFlowTarget,
+} from './paths.js';
 
 /** Does water stop this enemy? Flyers, the water species, scenery and legendaries ignore it. */
 const walks = (e) => !e.flying && !e.prop && !e.legend && !(e.def && e.def.swims);
@@ -174,7 +178,7 @@ export const attackIndex = (name) => {
 
 function fireHostile(e, nx, ny, def) {
   const pr = spawn('projectiles');
-  if (!pr) return;
+  if (!pr) return null;
   const sp = def.speed || 130;
   pr.x = e.x; pr.y = e.y;
   pr.vx = nx * sp; pr.vy = ny * sp;
@@ -198,6 +202,107 @@ function fireHostile(e, nx, ny, def) {
   pr.returning = false; pr.orbitA = 0; pr.orbitR = 0; pr.amp = 0; pr.freq = 0;
   pr.emitT = 0; pr.homingTurn = 0; pr.t = 0; pr.ox = 0; pr.oy = 0;
   pr.weapon = -1;
+  return pr;
+}
+
+// --- Support powers ---------------------------------------------------------------------------
+//
+// A species with a `special` casts it on its own clock: it plants itself for the windup (flashing,
+// a ring in the power's colour growing under it -- kill it and the cast never lands), then:
+//   barrier  (Mr. Mime) up to n nearby enemies can't be killed for t seconds: a lethal hit leaves
+//            them at 1 HP. Never itself, a boss or a legendary, and never one whose last Barrier
+//            ended under `lockout` seconds ago -- two Mimes cannot pass one target back and forth.
+//   magnet   (Claydol) everything within r, Claydol too, gets a shield of `frac` of its max HP for
+//            t seconds. Shields don't stack; the larger wins. combat.js spends them first.
+//   tailwind (Pelipper) everything within r moves `mul` times faster for t seconds.
+//   string   (Butterfree) a fan of silk strands that sting and slow the player.
+// Only while on screen, and not stunned, asleep, charmed or confused.
+
+const _near = [];
+function nearAround(e, r, max) {
+  _near.length = 0;
+  const range = cellRange(e.x, e.y, r);
+  if (!range) return _near;
+  const r2 = r * r;
+  for (let gy = range.y0; gy <= range.y1; gy++) {
+    for (let gx = range.x0; gx <= range.x1; gx++) {
+      const c = gy * GW + gx;
+      for (let k = cellStart[c]; k < cellStart[c + 1]; k++) {
+        const o = enemies[cellItems[k]];
+        if (!o.alive || o.prop || o.legend || dist2(e.x, e.y, o.x, o.y) > r2) continue;
+        _near.push(o);
+        if (_near.length >= max) return _near;
+      }
+    }
+  }
+  return _near;
+}
+
+function updateSpecial(e, dt, px, py) {
+  const s = e.def.special;
+  if (e.specWind > 0) {
+    e.specWind -= dt;
+    if (e.stunT > 0 || e.sleep || e.charmT > 0) { e.specWind = 0; return; }   // interrupted
+    if (e.specWind <= 0) castSpecial(e, s, px, py);
+    return;
+  }
+  e.specT -= dt;
+  if (e.specT > 0) return;
+  if (e.stunT > 0 || e.sleep || e.charmT > 0 || e.confuseT > 0 ||
+      Math.abs(e.x - px) > VIEW_HALF_W || Math.abs(e.y - py) > VIEW_HALF_H) { e.specT = 0.5; return; }
+  if (s.kind === 'string' && dist2(e.x, e.y, px, py) > s.range * s.range) { e.specT = 0.4; return; }
+  e.specT = s.every;
+  e.specWind = s.windup;
+  e.flash = Math.max(e.flash, 0.12);
+  spawnSpr('ring_m', e.x, e.y - 2, s.color, 1.4);
+}
+
+function castSpecial(e, s, px, py) {
+  if (s.kind === 'barrier') {
+    const list = nearAround(e, s.r, 40);
+    list.sort((a, b) => dist2(e.x, e.y, a.x, a.y) - dist2(e.x, e.y, b.x, b.y));
+    let n = 0;
+    for (const o of list) {
+      if (n >= s.n) break;
+      if (o === e || o.boss || o.protT > 0 || G.clock - o.protLast < s.lockout) continue;
+      o.protT = s.t;
+      n++;
+      spawnSpr('ring_m', o.x, o.y - 6, s.color, 1.1);
+      spawnSpr('shine', o.x, o.y - 14, s.color, 1.3);
+    }
+    if (n) spawnSpr('flash_burst', e.x, e.y - 8, s.color, 1.6);
+  } else if (s.kind === 'magnet') {
+    for (const o of nearAround(e, s.r, 40)) {
+      o.shieldHp = Math.max(o.shieldHp, Math.round(o.maxHp * s.frac));
+      o.shieldT = Math.max(o.shieldT, s.t);
+      if (o !== e) spawnSpr('circuit', o.x, o.y - 10, s.color, 1.6, 0, (e.x - o.x) * 0.8, (e.y - o.y) * 0.8);
+    }
+    // The field's edge, marked by a ring of motes rather than one sprite blown up to its radius.
+    spawnSpr('ring_l', e.x, e.y - 4, s.color, 1.4);
+    spawnSpr('ring_m', e.x, e.y - 4, '#ffffff', 1.2);
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * TAU;
+      spawnSpr('circuit', e.x + Math.cos(a) * s.r, e.y + Math.sin(a) * s.r * 0.62, s.color, 1.4, 0, -Math.cos(a) * 40, -Math.sin(a) * 25);
+    }
+  } else if (s.kind === 'tailwind') {
+    for (const o of nearAround(e, s.r, 40)) {
+      if (o.tailT <= 0) { o.tailMul = s.mul; o.speed *= s.mul; }
+      o.tailT = Math.max(o.tailT, s.t);
+    }
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * TAU;
+      spawnSpr(i & 1 ? 'slide_dust' : 'dust', e.x + Math.cos(a) * 14, e.y + Math.sin(a) * 10, s.color, 1.2, 0, Math.cos(a) * 140, Math.sin(a) * 100);
+      if (!(i & 1)) spawnSpr('streak', e.x + Math.cos(a) * 30, e.y + Math.sin(a) * 22, s.color, 0.5, a - Math.PI / 2, Math.cos(a) * 160, Math.sin(a) * 120);
+    }
+  } else if (s.kind === 'string') {
+    const base = Math.atan2(py - e.y, px - e.x);
+    const def = { speed: s.speed, damage: s.damage, r: 3, life: 2.6 };
+    for (let i = 0; i < s.n; i++) {
+      const a = base + (i - (s.n - 1) / 2) * s.spread;
+      const pr = fireHostile(e, Math.cos(a), Math.sin(a), def);
+      if (pr) { pr.strand = 1; pr.status = statusIndex('string'); }
+    }
+  }
 }
 
 /**
@@ -323,6 +428,8 @@ export function ringPoint(cx, cy, angle, r, rng) {
   return _pt;
 }
 
+let spawnSerial = 0;
+
 export function spawnEnemy(def, x, y, opts) {
   const e = spawn('enemies');
   if (!e) return null;                            // pool exhausted: skip rather than stutter
@@ -333,6 +440,8 @@ export function spawnEnemy(def, x, y, opts) {
   const elite = !!(opts && opts.elite);
 
   e.def = def;
+  e.sn = ++spawnSerial;
+  e.aged = false;
   e.x = x; e.y = y; e.vx = 0; e.vy = 0;
   // A walker that would appear in a pond appears on its shore instead. Every spawn comes through
   // here -- the ring, formations, pincers, mini-bosses -- so this one check covers them all.
@@ -377,6 +486,10 @@ export function spawnEnemy(def, x, y, opts) {
   e.endlessGen = 0; e.extraShots = 0; e.atkDmgMul = 1; e.atkCdMul = 1; e.summonT = 0;
   e.ovStacks = 0; e.ovStackSrc = -1; e.doomT = 0; e.doomDmg = 0; e.doomSrc = 0; e.bondT = 0;
   e.charmT = 0; e.charmSrc = 0; e.charmMul = 1; e.polSign = 0; e.polT = 0; e.chillN = 0; e.frozenT = 0;
+  // A support power starts part-way through its cooldown, so a flock does not cast in unison.
+  e.specT = def.special ? def.special.every * (0.35 + G.rngRun() * 0.65) : 0; e.specWind = 0;
+  e.protT = 0; e.protLast = -99; e.shieldHp = 0; e.shieldT = 0; e.tailT = 0; e.tailMul = 1;
+  e.sturdy = !!def.sturdy;
   e.trial = opts && opts.trial !== undefined ? opts.trial : -1;
   e.flash = 0; e.knockX = 0; e.knockY = 0; e.contactCd = 0; e.decoyCd = 0;
   e.slow = 0; e.slowT = 0;
@@ -464,7 +577,7 @@ export function updateEnemies(dt, separationOn) {
   // Checked once per tick: on a floor with no ponds, no enemy pays for a single water lookup.
   const wet = pondsActive();
   const paths = wet && !G.debug.noPaths;
-  if (paths) updateFlow(px, py, dt);
+  if (paths) { updateFlow(px, py, dt); updateDollFlow(_decoyLive, nDecoys); }
 
   for (let i = enemies.length - 1; i >= 0; i--) {
     const e = enemies[i];
@@ -510,22 +623,31 @@ export function updateEnemies(dt, separationOn) {
 
     // A stunned enemy keeps its velocity for knockback but stops steering and stops advancing,
     // so Earthquake and Thunderbolt actually buy the player breathing room.
-    // A walker with a pond between it and you goes round it instead of pressing into the shore.
-    // Only on its way to you: the field leads to the player, not to a doll. And not mid-charge,
-    // which is a committed dash and not a walk.
-    if (paths && !doll && walks(e)) {
+    // A walker with a pond between it and its target goes round it instead of pressing into the
+    // shore: by the player's field on its way to you, by the dolls' field on its way to a doll.
+    // Not mid-charge, which is a committed dash and not a walk.
+    if (paths && walks(e)) {
       e.losT -= dt;
       if (e.losT <= 0) {
         e.losT = LOS_EVERY * (0.8 + 0.4 * ((i * 0.618) % 1));
-        e.detour = flowClear(e.x, e.y, px, py) ? 0 : 1;
+        e.detour = (doll ? dollFlowClear(e.x, e.y, tx, ty) : flowClear(e.x, e.y, px, py)) ? 0 : 1;
       }
     } else {
       e.detour = 0;
     }
 
+    // Support powers and what they leave on enemies.
+    if (e.protT > 0) { e.protT -= dt; if (e.protT <= 0) e.protLast = G.clock; }
+    if (e.shieldT > 0) { e.shieldT -= dt; if (e.shieldT <= 0) e.shieldHp = 0; }
+    if (e.tailT > 0) { e.tailT -= dt; if (e.tailT <= 0) { e.speed /= e.tailMul; e.tailMul = 1; } }
+    if (e.def.special && !e.legend) updateSpecial(e, dt, px, py);
+
     if (e.stunT > 0) {
       e.stunT -= dt;
       if (e.stunT <= 0) e.sleep = false;
+      e.vx = 0; e.vy = 0;
+    } else if (e.specWind > 0) {
+      // Casting: planted, like an attack's windup, so the tell is honest.
       e.vx = 0; e.vy = 0;
     } else if (e.charmT > 0) {
       charmed(e, dt);
@@ -544,7 +666,7 @@ export function updateEnemies(dt, separationOn) {
       // you while it charges.
       e.vx = 0; e.vy = 0;
     } else {
-      const way = e.detour && e.aiState === 0 ? flowTarget(e.x, e.y, _way) : 0;
+      const way = e.detour && e.aiState === 0 ? (doll ? dollFlowTarget(e.x, e.y, _way) : flowTarget(e.x, e.y, _way)) : 0;
       if (way === FLOW_STEER) {
         const dx = _way.x - e.x, dy = _way.y - e.y;
         const d = Math.hypot(dx, dy) || 1;
@@ -602,7 +724,7 @@ export function updateEnemies(dt, separationOn) {
       else if (!waterAtWorld(e.x, oy)) e.y = oy;
       else { e.x = ox; e.y = oy; }
       e.knockX = 0; e.knockY = 0;
-      if (paths && !doll) e.detour = 1;
+      if (paths) e.detour = 1;
     }
 
     if (e.nd === 8) {

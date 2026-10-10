@@ -32,6 +32,7 @@ export function drawHud() {
   drawXpBar();
   drawHealth();
   drawAbilities();
+  if (G.sharpOn) drawSharpshoot();
   drawTimer();
   drawTallies();
   drawRelics();
@@ -86,6 +87,74 @@ function drawOverloadStates() {
     ctx.fillRect(x + 2, y + 3, Math.round(64 * Math.max(0, Math.min(1, k))), 2);
     y -= 14;
   }
+}
+
+// --- Sharpshoot (Rowlet's line) ----------------------------------------------
+//
+// Right of the ability slots: a reticle icon, then a bar of bonus crit chance with a notch at 50%
+// (where each crit starts to count for half). The fill brightens and a highlight sweeps along it
+// every time it grows; at 100% it glows gold.
+
+function drawSharpshoot() {
+  const x = PAD + 2 * (SLOT + 4) + 2, y = 40;
+  const k = clamp(G.sharp / 100, 0, 1);
+  const fresh = G.sharpAt >= 0 ? clamp(1 - (G.clock - G.sharpAt) / 0.35, 0, 1) : 0;
+  const full = G.sharp >= 100;
+
+  // Panel.
+  ctx.fillStyle = 'rgba(6,10,26,0.72)';
+  const W = 22 + textWidth('SHARPSHOOT') + 6 + textWidth('+99.5%') + 4;
+  ctx.fillRect(x, y, W, SLOT);
+  ctx.strokeStyle = full ? '#ffd166' : '#3a3a55';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, W - 1, SLOT - 1);
+
+  // The icon: a reticle with a leaf-green feather through it, ring brightening on each crit.
+  const cx = x + 10, cy = y + 10;
+  ctx.strokeStyle = fresh > 0 ? '#ffffff' : (full ? '#ffd166' : '#c8d8a0');
+  ctx.beginPath();
+  ctx.arc(cx + 0.5, cy + 0.5, 6, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = ctx.strokeStyle;
+  ctx.fillRect(cx, cy - 8, 1, 3); ctx.fillRect(cx, cy + 6, 1, 3);
+  ctx.fillRect(cx - 8, cy, 3, 1); ctx.fillRect(cx + 6, cy, 3, 1);
+  ctx.fillStyle = '#7fe08a';
+  for (let i = 0; i < 7; i++) ctx.fillRect(cx - 4 + i, cy + 3 - i, 1, 1);
+  ctx.fillStyle = '#c4f29a';
+  ctx.fillRect(cx + 2, cy - 3, 2, 2);
+  ctx.fillStyle = '#ff4a4a';
+  ctx.fillRect(cx, cy, 1, 1);
+
+  // Label and value.
+  drawText(ctx, 'SHARPSHOOT', x + 21, y + 2, full ? 'gold' : 'white');
+  const v = `+${G.sharp % 1 ? G.sharp.toFixed(1) : G.sharp}%`;
+  drawText(ctx, v, x + W - 4 - textWidth(v), y + 2, full ? 'gold' : 'green');
+
+  // The bar, with its 50% notch.
+  const bx = x + 21, by = y + 12, bw = W - 25, bh = 4;
+  ctx.fillStyle = '#141826';
+  ctx.fillRect(bx, by, bw, bh);
+  const fw = Math.round(bw * k);
+  ctx.fillStyle = full ? '#ffd166' : '#5fc06a';
+  ctx.fillRect(bx, by, fw, bh);
+  ctx.fillStyle = full ? '#fff0a0' : '#a8f0a0';
+  ctx.fillRect(bx, by, fw, 1);
+  if (fresh > 0 && fw > 2) {
+    // A highlight sweeping out to the new edge.
+    const hx = bx + Math.round(fw * (1 - fresh));
+    ctx.globalAlpha = fresh;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(Math.max(bx, hx - 3), by, 4, bh);
+    ctx.globalAlpha = 1;
+  }
+  if (full) {
+    ctx.globalAlpha = 0.35 + Math.sin(G.clock * 6) * 0.2;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(bx, by, bw, bh);
+    ctx.globalAlpha = 1;
+  }
+  ctx.fillStyle = '#e8e8f0';
+  ctx.fillRect(bx + (bw >> 1), by - 1, 1, bh + 2);
 }
 
 // --- Ability slots ----------------------------------------------------------

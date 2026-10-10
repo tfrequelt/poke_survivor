@@ -87,6 +87,11 @@ export const SUCCESSES = [
   { id: 'wonder_walker', title: 'Wonder Walker', tier: 'bronze',
     desc: 'Step on 20 Wonder Tiles.', reward: { gold: 400 },
     progress: { count: 'wonderTiles', of: 20 } },
+  // The one success whose prize is a secret: it reads "???" until it is claimed, and claiming it
+  // opens the reveal card for the partner it brings.
+  { id: 'wild_beast', title: 'Wild Beast', tier: 'platinum',
+    desc: 'Defeat one of the secret legendaries in under 20 seconds.', reward: { partner: 'axew' },
+    secret: true },
 ];
 
 export const SUCCESS_BY_ID = Object.fromEntries(SUCCESSES.map((s) => [s.id, s]));
@@ -114,9 +119,10 @@ export const RANKS = [
   { name: 'ULTRA', at: 54 }, { name: 'HYPER', at: 70 }, { name: 'MASTER', at: 86 },
 ];
 
-/** How a reward reads on a card. */
-export function rewardLabel(reward) {
+/** How a reward reads on a card. A secret one is "???" until it has been claimed. */
+export function rewardLabel(reward, claimed = false, secret = false) {
   if (!reward) return '';
+  if (reward.partner) return secret && !claimed ? '???' : reward.partner.toUpperCase();
   const gold = reward.gold ? `${reward.gold} G` : '';
   if (reward.perk && PERKS[reward.perk]) return gold ? `${gold} + PERK` : 'PERK';
   return gold;

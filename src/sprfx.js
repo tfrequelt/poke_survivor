@@ -13,7 +13,7 @@ import { SPRFX, SPRFX_KEYS, SPRFX_INDEX } from './data/sprfx.js';
 import { getParticleIndex } from './assets.js';
 
 /** Sprite effects allowed to start per simulation tick, everything together. */
-const BUDGET = 40;
+const BUDGET = 56;
 let budget = BUDGET;
 
 /** Per kind: frame count, cell size and duration, resolved once the sheet's index is in. */

@@ -397,6 +397,17 @@ pass `fx_crescent`, `fx_firestar`, `fx_outrage`, `fx_meteor`, `fx_dust`, `fx_aur
 `dark_moves.png`, `fx_zigzag` out of `thunderbolt.png`, and `status_freeze` / `status_shield` out
 of `status.png`). `hail` is the only one in the per-file form; the rest are cut out of sheets.
 
+Axew's line adds the Dragon weapons' and its abilities' set, measured pixel by pixel off the
+sheets: `fx_rage_ball`, `fx_rage_flash`, `fx_rage_burst` (Dragon Rage), `fx_pulse_orb` (Dragon
+Pulse), `fx_dance_ring`, `fx_spark_o`, `fx_spark_c` (Dragon Dance), `fx_rush_slash`,
+`fx_rush_rocks` (Dragon Rush), `fx_rend_star` (Spacial Rend), `fx_roar_burst` (Roar of Time),
+`fx_claw_fleck` (Dragon Claw), `fx_twister_bits` (Twister), and Draco Meteor's `fx_draco_streak`,
+`fx_draco_fall`, `fx_draco_flare` and `fx_draco_boom` from `dragon_moves.png`; `fx_jaw_up` and
+`fx_jaw_low` (Crunch) from `dark_moves.png`'s Bite/Crunch column. Draco
+Meteor's explosion leaves out the three cut-off frames that open the second row of its animation
+((9,275), (158,275) and (314,275)). The line's sheets are `axew`, `fraxure`, `haxorus` and their
+`shiny_` folders; Fraxure has no happy or sad portraits, so its end screens use its own.
+
 The legendaries' effects come mostly from `thunderbolt.png` (its labelled Ice, Fire 3, Bolt 3 and
 Break rows) and `wave.png` (the Flame and blue-flame columns, the Earthquake spire, the Tornado),
 with the tumbling rock from `rock_moves.png`. Which effect each attack uses is the `LOOKS` table
@@ -505,6 +516,20 @@ golden feather), and gems or stones for the rest -- see the `sprites` section of
 `RELICS` in `src/data/legends.js`.
 
 **Credited, not yet used:** `ice_stage_tileset.png` and `miracle_sea_tileset.png`.
+
+**Axew's ability icons** come from `fire_red_abilities.png`, a custom sheet of Pokémon FireRed's
+move sprites ripped by wormintheworks
+(spriters-resource.com/custom_edited/pokemoncustoms/asset/18433): `icon_crunch` is the white bite
+at the top centre (both jaws, 62x36 at (385,90)), `icon_draco` the big white-headed fireball
+streaking down, left of the bite (30x30 at (319,154)). Both are keyed off the sheet's green and shrunk to the
+20px ability slot with `"smooth": true`, an averaged downscale (nearest neighbour drops whole rows
+of teeth at that size). Without the file they fall back to the drawn Lick and flame icons.
+
+**Overload cards** show a weapon as it looks in play when its look is a sheet animation rather
+than its atlas icon: a weapon definition's `card` names the frame (`seq`, `frame`, `scale`) or a
+small drawing of the move (`draw: 'rake' | 'twister'`), and `tint` draws it in the overload's
+palette, as the overloaded move is drawn. The Dragon weapons and Substitute have one; every other
+weapon's card shows its atlas sprite, which is what it fires.
 
 ### Overload particle sprites
 

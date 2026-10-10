@@ -77,8 +77,17 @@ onto the portal and press `Enter`.
 The game opens on a **main menu** — PLAY, SUCCESSES, KECLEON SHOP, OPTIONS, CREDITS — driven with
 the arrows (or W/S) and Enter. PLAY goes to partner select, where you pick one of six
 partners, and then to stage select.
-`?char=wooper|eevee|rowlet|vulpix|delibird|gastly` skips straight into a run with that partner,
-and `?stage=grass|cave|beach` picks where.
+`?char=wooper|eevee|rowlet|vulpix|delibird|gastly|axew` skips straight into a run with that
+partner (locked or not), and `?stage=grass|cave|beach` picks where.
+
+**A secret seventh partner.** Pressing Right past Gastly turns the select screen to a second page
+(six cards to a page; Left from its first card turns back, and digits 1-6 pick within the page).
+Until it is earned, that page holds a locked card: a black silhouette with a padlock, no name or
+numbers, and the hint "A WILD BEAST AWAITS...". Enter on it only buzzes. Claim the **Wild Beast**
+success and it becomes **Axew** -- Dragon type, a bruiser (120 HP, slow, 2 armour, +15% power) with
+**Mold Breaker** (hits ignore 4 armour and drive a quarter of their damage through Magnet Field
+shields). It evolves into **Fraxure** at 10 (**Axe Kick**: critical hits knock foes back hard) and
+**Haxorus** at 20 (**Rough Skin**: whatever touches you is cut). Shiny sprites cover all three.
 
 ## Settings
 
@@ -111,6 +120,15 @@ Evolving plays a cutscene that **holds on its last frame until you press Enter**
 read which form you landed on and what it changed before being dropped back into the crowd. The
 new form lands with a shockwave that clears the area and a second and a half of invulnerability.
 
+An ability at its **last level (5)** gets a new look: each one layers its own sprite effects
+(sparks, light streaks, rings, embers, motes from the Gravity Circuit set) and shifting colours on
+its cast — an iridescent Protect Bubble, ember spirals through Fire Spin, rainbow spray on Hydro
+Pump, lightning on every Thunderbolt strike. What it does is unchanged.
+
+**Sharpshoot (Rowlet's line).** Evolving into Dartrix unlocks a bar of bonus crit chance, shown
+beside the ability slots. Every crit fills it: +1% per crit up to 50%, then +0.5% per crit, up to
++100%. It lasts the rest of the run, Decidueye included.
+
 | Partner | `Q` | `E` (after evolving) |
 |---|---|---|
 | Wooper | **Protect Bubble** -- shield that blocks all contact damage, then bursts | **Earthquake** (Quagsire) -- shockwaves that stun; flying enemies are immune |
@@ -121,6 +139,7 @@ new form lands with a shockwave that clears the area and a second and a half of 
 | Gastly | **Shadow Ball** -- an orb thrown at a target that gnaws at everything it drifts past, then bursts | **Night Shade** (Haunter) -- opens a shadow that drains whatever stands in it |
 | Vulpix | **Flamethrower** -- hurls a spinning fire star that bursts where it lands, leaving everything burning | **Fire Spin** (Ninetales) -- a vortex of flame that wraps around you and moves with you |
 | Delibird | **Present** -- throws the gift on a short arc: four times in five it detonates, the fifth time it heals you | **Blizzard** (Hustle) -- hail falls across the whole screen; little damage, but nothing moves through it |
+| Axew | **Crunch** (crunch_sound / crunch_sound2, at random) -- the Bite sheet's jaws open over the nearest foe and slam shut: everything in the bite (the jaws' own size) is hurt, and what survives is stunned for 1.6s and weakened | **Draco Meteor** (Fraxure) -- one meteor per level of the ability falls at random spots around you, one after another, each with its own small_explosion sound; each blasts the ground, burns what survives and leaves you 30% faster for 3s. Haxorus makes each one bigger and harder, never more of them |
 
 Every ability has its own sound, named on the ability itself rather than derived from what it
 does -- Dark Pulse, Night Shade and Lick are all built from the same ring effect and have to sound
@@ -160,12 +179,44 @@ draws; it never takes away a weapon you already hold.
 | Gastly / Haunter / Gengar | Ghost + Poison |
 | Vulpix / Ninetales | Fire |
 | Delibird | Ice + Flying |
+| Axew / Fraxure / Haxorus | Dragon |
+
+**The Dragon weapons** (dragon.js) are eight moves cut from `dragon_moves.png`, each its own
+behaviour rather than a shot, aura or zone in a new colour:
+
+| Weapon | What it does |
+|---|---|
+| Dragon Rage (Axew's own) | A spinning fireball that bursts into a pillar of flame. **Fixed damage**: no type matchup, no crit, no armour |
+| Dragon Pulse | A slow, ringed orb that rolls into the crowd and throbs out a shockwave every 0.3s |
+| Dragon Dance | Each cast is a dance step: sparks rise from your feet, hang, then dive onto separate foes -- 3 plus the steps you are into the dance -- and each step is +6% move speed for 3s. Its upgrades add steps (and so sparks), speed per step and step time, never "+projectile" |
+| Dragon Rush | Always one phantom crescent: it charges from behind you, through you and on ahead, pins what it strikes to its edge, carries it along and slams it down at the end (stunning shockwave), flinging rocks as it goes. Its upgrades carry more, slam harder, throw more rocks and run further |
+| Dragon Claw | Three bowed claw rakes across the nearest foe, one after another, trailing flecks; the last rake of every set is a critical hit |
+| Twister | A tornado of leaves and pebbles that wanders off on its own, sucks foes in, spins a few helpless in the air and flings them out |
+| Spacial Rend | Tears space open on a foe: the tear drags the crowd in, then crescents slash outward and snap back, cutting both ways |
+| Roar of Time | Stops time inside a ring of gears: what is caught freezes, the ring banks its own damage, and on release each foe takes it at once ×1.5 plus half of whatever else hit it while frozen |
+
+Each has its three overloads, and every one of the 24 is a mechanic no other weapon has -- no
+plain damage or projectile bump, no bounce or return (`tools/checkoverloads.mjs` enforces it):
+
+| Weapon | Overloads |
+|---|---|
+| Dragon Rage | **Wildfire Pillar** (the pillar creeps after foes) · **Grudge Flame** (fixed damage becomes a share of max HP) · **Revenge Blaze** (a hit on you fires a giant blue fireball at once) |
+| Dragon Pulse | **Heartbeat** (ba-dum double throb; caught by both = knocked flat) · **Resonator** (plants on a foe, ripples wider each throb, collapses) · **Mirror Pulse** (throbs send enemy shots back as yours) |
+| Dragon Dance | **Grand Finale** (a full dance fuses every spark into one comet) · **Afterimage** (a dancing copy of you throws its own sparks) · **Static Steps** (hastened footfalls leave shocking prints) |
+| Dragon Rush | **Meteor Charge** (the slam leaves a crater rocks rain into) · **Phantom Lane** (a ghost lane yanks crossers back to its start) · **Dragon's Wake** (you ride the rush as an invulnerable dash) |
+| Dragon Claw | **Crosshatch** (crossing rakes leave X scars) · **Rending Gale** (rakes three times as long) · **Dragon Tail** (the last rake throws its foe across the field, dazed) |
+| Twister | **Debris Storm** (flung foes are missiles) · **Storm Merge** (twisters that meet merge) · **Bramble Wind** (vines root where foes land) |
+| Spacial Rend | **Fault Lines** (rifts join the crescents' points) · **Mirror Space** (cut foes are swapped through the tear) · **Spatial Anchor** (cut foes are chained to the tear) |
+| Roar of Time | **Aging** (survivors stay slower and weaker for good) · **Clockwork Gears** (the gears roll away as saws) · **Time Dilation** (all your weapons fire 40% faster while a ring stands) |
+
+Each overload also redraws its weapon's animation in its own palette (a recoloured copy of the
+strip, cached) and sheds its own particles, so the three versions of a move never look alike.
 
 Weapons run to **level 10**, passives to five to seven picks, and once that pool finally thins
 out **Mastery** cards appear — uncapped +6% power, +5% area and the like — so a very long run, or
 an endless one, never runs out of things to take.
 
-No two weapons share a delivery mechanism. There are twenty firing behaviours -- among them mines
+No two weapons share a delivery mechanism. There are twenty-eight firing behaviours -- among them mines
 you leave behind, turrets that fire on their own, shots that ricochet and gain damage, seeds that
 detonate seconds later, beams that burn everything on the line to their target, vortices that drag
 the crowd together, and an attack that charges while you stand still -- and `initWeaponDefs()`
@@ -243,6 +294,21 @@ flying and water species among the enemies; the rest **path round it** (`src/pat
 field toward you, rebuilt as you move, that every walker reads), so a pond is cover from a crowd
 but never a wall it gets stuck on. Swim out into one and the walkers wait on the nearest shore.
 
+
+### Support Pokémon
+
+Some of the late roster make the crowd around them harder to kill, and you can always see it
+coming: a caster plants itself and flashes, a ring in its colour growing under it, for half a
+second before the power lands — kill it then and the cast never happens.
+
+| Pokémon | Stage | Power |
+|---|---|---|
+| **Mr. Mime** | Grass Route | **Barrier**, every 7s: up to three nearby Pokémon can't be killed for 3s — a lethal hit leaves them at 1 HP (pink outline). A Pokémon is never re-shielded within 7s of its last Barrier ending, so two Mimes can't pass one back and forth |
+| **Butterfree** | Grass Route | **String Shot**, every 3.5s: three silk strands that sting and slow you for 1.8s |
+| **Gigalith** | Damp Cave | **Sturdy**: survives its first lethal hit at 1 HP |
+| **Claydol** (from Baltoy) | Damp Cave | **Magnet Field**, every 8s: it and everything within 110px get a shield of 35% of their health for 6s, shown as a blue segment on their health bar and the shield icon over their head |
+| **Pelipper** (from Wingull) | Beach Cave | **Tailwind**, every 6s: everything within 110px moves 45% faster for 4s, white wind streaming off it |
+
 ## Floors
 
 At **5:00, 10:00 and 15:00** a staircase appears somewhere in the arena, always outside the
@@ -278,8 +344,9 @@ one untaken and those marks are spent, so taking it at 16:00 gets you one floor,
 ## Traps
 
 Five Mystery Dungeon trap tiles lie in the floor: **spike** (damage), **explosion** (damage in a
-radius), **slumber** (holds you still), **poison**, and **warp** (throws you somewhere else in
-the arena). They are placed off-camera so you never see one arrive, and each cell is remembered —
+radius), **slumber** (holds you still), **poison** (a sting, then 4 seconds of poison ticking
+away, the skull over your head — enemies that step on one are poisoned too), and **warp** (throws
+you somewhere else in the arena). They are placed off-camera so you never see one arrive, and each cell is remembered —
 a sprung trap never comes back.
 
 They are **invisible until you get within about 80px**, fading in as you close, which is roughly
@@ -399,7 +466,8 @@ a legendary portal twice as often, one more reroll, and level-up cards that lean
 what you already carry. `?shiny=1` forces one when testing.
 
 The victory screen shows your partner's face, one of its three happy portraits at random; the
-defeat screen one of its three sad ones.
+defeat screen one of its three sad ones. A form drawn without moods (Fraxure) shows its own
+portrait instead.
 
 **Expedition Records** add twenty-two harder ones — each a bronze, silver, gold or platinum tier:
 
@@ -423,6 +491,7 @@ defeat screen one of its three sad ones.
 | Iron Stomach | Win without eating a berry | 1000 G |
 | Endless Hero | Ten bosses in one endless run | 2000 G |
 | Type Expert | 5,000 super effective knockouts | 800 G + **Second Look** |
+| Wild Beast | Defeat a secret legendary in under 20 seconds (timed from when it lands) | `???` -- a secret until claimed: **Axew**, announced by a new-partner card |
 | One Punch | An elite felled in a single hit | 400 G |
 | Full House | Three bag items, four overloads and six held items at once | 1000 G |
 | Conqueror | Win on every stage | 1500 G |

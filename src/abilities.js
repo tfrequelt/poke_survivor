@@ -17,6 +17,9 @@ import { ABILITY_TYPES } from './data/types.js';
 import { ABILITIES, ABILITY_BY_ID } from './data/abilities.js';
 import { spriteBase, spriteDirs } from './sprites.js';
 import { ZONE, fxSprites } from './fx.js';
+import { spawnSpr, burstSpr } from './sprfx.js';
+import { spawnSeq, SEQ } from './seqfx.js';
+import { projectiles } from './world.js';
 
 export const ABILITY_SLOTS = 2;
 
@@ -27,6 +30,8 @@ export const fx = {
   // Added for the ability visual pass: a ground fissure, a strike from the sky, a wave front,
   // and a particle that is a sprite rather than a coloured pixel.
   crack: null, bolt: null, wave: null, motes: null,
+  // (id | [ids]) -- a sample, picked at random from a list.
+  sound: null,
 };
 
 // --- Resolved stats ---------------------------------------------------------
@@ -141,6 +146,7 @@ export function abilityStats(a) {
     if (up.damage) o.damage += up.damage;
     if (up.arrows) o.arrows += up.arrows;
     if (up.execute) o.execute += up.execute;
+    if (up.radius) o.radius += up.radius;
   }
 
   // Player stats: power scales damage, area scales radii, cooldown stat scales the recharge.
@@ -185,6 +191,8 @@ export function addAbility(id) {
     // Kills since this ability was last cast -- the "Kaboom" success counts one cast at a time,
     // including whatever the cast left burning or lingering on the ground.
     castKills: 0,
+    // The maxed look's own clock (see FLOURISH): paces its sparkles while the ability plays.
+    fxT: 0,
   };
   setSrcType(a.srcId, ABILITY_TYPES[def.id]);
   abilityStats(a);
@@ -324,6 +332,7 @@ const EFFECT = {
 
   /** Homing Leaf: one projectile per distinct nearby target. */
   multiHoming(a, st, p) {
+    if (maxed(a)) FLOURISH.homing_leaf.cast(a, st, p);
     const targets = distinctTargets(p.x, p.y, a.def.range, st.count);
     for (let i = 0; i < st.count; i++) {
       const pr = spawn('projectiles');
@@ -368,6 +377,7 @@ const EFFECT = {
       });
       // The arrow, not a drawn beam: it flies the length of the shot, turned to face along it.
       if (fx.dart) fx.dart(p.x, p.y, ang, st.length, 0.24);
+      if (maxed(a)) FLOURISH.spectral_arrow.cast(a, st, p, ang);
 
       // Burn corridor: a chain of small zones along the shot.
       const steps = Math.max(2, Math.round(st.length / 40));
@@ -503,6 +513,28 @@ const EFFECT = {
     a.gx = p.x; a.gy = p.y;
   },
 
+  /**
+   * Crunch: the jaws open on the nearest foe and close. The target spot is fixed on cast, like a
+   * thrown move's, and the bite lands when the jaws meet (see the update).
+   */
+  crunch(a, st, p) {
+    const idx = nearestEnemyIdx(p.x, p.y, st.range);
+    if (idx >= 0) { a.zx = enemies[idx].x; a.zy = enemies[idx].y; }
+    else { a.zx = p.x + (p.dir ? 40 : -40); a.zy = p.y; }
+    a.activeT = a.def.channel;
+    spawnSeq('fx_jaw_up', a.zx, a.zy, { mode: SEQ.JAWS, dur: a.def.channel + 0.42, scale: (st.radius * 2) / 29 });
+  },
+
+  /** Draco Meteor: one meteor per level, dropped a beat apart (see the update). */
+  dracoMeteor(a, st, p) {
+    a.wavesLeft = a.level;
+    a.waveT = 0;
+    a.activeT = a.level * a.def.gap + a.def.fall + 0.1;
+    if (!a.drops) a.drops = [];
+    a.drops.length = 0;
+    a.lastDrop = undefined;
+  },
+
   /** Thunderbolt: instant chain between nearby enemies. */
   chain(a, st, p) {
     let x = p.x, y = p.y;
@@ -526,6 +558,229 @@ const EFFECT = {
     if (fx.shake) fx.shake(0.25);
   },
 };
+
+// --- The maxed look -----------------------------------------------------------------------------
+//
+// An ability at its last level (5) looks the part: each one layers sprite effects from the
+// Gravity Circuit set (data/sprfx.js) -- sparks, light streaks, rings, embers, motes -- on its
+// own visual, in colours that shift as it plays. Nothing here changes what the ability does.
+//
+// Hooks: `always` runs every frame the ability is maxed (for the ones with nothing channelled to
+// hang a tick on: blades already in flight, a flame vortex that is a zone); `tick` every frame
+// while it plays; `cast`, `ring`, `land` and `expire` at those moments. Spawns are paced by the
+// slot's own fxT and go through the shared sprite-effect budget.
+
+const maxed = (a) => a.level >= a.def.levels.length;
+function flourish(a, hook, st, p) {
+  if (!maxed(a)) return;
+  const f = FLOURISH[a.def.id];
+  if (f && f[hook]) f[hook](a, st, p);
+}
+/** A colour from `list` that changes `rate` times a second: shifting, but from a small palette. */
+const shift = (list, rate, off = 0) => list[(((G.clock * rate) | 0) + off) % list.length];
+/** Pace a flourish: true once every `gap` seconds of play. */
+function every(a, dt, gap) {
+  a.fxT -= dt;
+  if (a.fxT > 0) return false;
+  a.fxT = gap;
+  return true;
+}
+const UP = -Math.PI / 2;
+
+const BUBBLE = ['#a8e4ff', '#7af0e8', '#ff9ad8', '#c49aff'];
+const LEAF = ['#7fe08a', '#c4f29a', '#ffd166'];
+const SPIRIT = ['#9af0d8', '#c49aff', '#a0f0d0'];
+const FLAME = ['#ff9040', '#ffd166', '#ffffff'];
+const CONFETTI = ['#ff6b6b', '#ffd166', '#7fe08a', '#7ac8ff', '#c49aff'];
+const FROST = ['#eaffff', '#9ad8f4', '#c8f0ff'];
+const RAIN = ['#ff9a9a', '#ffd166', '#7fe08a', '#7ac8ff', '#c49aff'];
+const SHADE = ['#8a72b8', '#c49aff', '#4a3a66'];
+
+const FLOURISH = {
+  protect_bubble: {
+    tick(a, st, p, dt) {
+      if (!every(a, dt, 0.08)) return;
+      const r = st.radius * 0.9;
+      for (let k = 0; k < 2; k++) {
+        const ang = G.clock * 3 + k * Math.PI;
+        spawnSpr('sparkle', p.x + Math.cos(ang) * r, p.y - 8 + Math.sin(ang) * r * 0.8, shift(BUBBLE, 4, k));
+      }
+      if (G.tick % 24 === 0) spawnSpr('guard_ring', p.x, p.y - 8, shift(BUBBLE, 2), st.radius / 30);
+    },
+    expire(a, st, p) {
+      const r = st.radius * 1.5;
+      spawnSpr('ring_l', p.x, p.y - 6, '#c8f0ff', r / 20);
+      spawnSpr('flash_burst', p.x, p.y - 6, '#ffffff', 2);
+      for (let i = 0; i < 12; i++) {
+        const ang = (i / 12) * TAU;
+        spawnSpr('blade', p.x + Math.cos(ang) * r * 0.5, p.y - 6 + Math.sin(ang) * r * 0.4, BUBBLE[i % 4], 2, ang + Math.PI / 2, Math.cos(ang) * 160, Math.sin(ang) * 130);
+      }
+    },
+  },
+  earthquake: {
+    ring(a, st, p) {
+      spawnSpr('boom', p.x, p.y, '#c49a5e', 1.6);
+      for (let i = 0; i < 10; i++) {
+        const ang = (i / 10) * TAU + G.rngFx() * 0.3;
+        const x = p.x + Math.cos(ang) * st.radius, y = p.y + Math.sin(ang) * st.radius * 0.62;
+        spawnSpr(i & 1 ? 'land_dust' : 'slide_dust', x, y, '#d8c48a', 1.4);
+      }
+      for (let i = 0; i < 6; i++) {
+        const ang = G.rngFx() * TAU, sp = 60 + G.rngFx() * 90;
+        spawnSpr('shard', p.x, p.y - 4, '#c49a5e', 1, ang, Math.cos(ang) * sp, Math.sin(ang) * sp * 0.6 - 120, 320);
+      }
+    },
+  },
+  homing_leaf: {
+    always(a, st, p, dt) {
+      if (!every(a, dt, 0.06)) return;
+      for (let i = 0; i < projectiles.length; i++) {
+        const pr = projectiles[i];
+        if (pr.src !== a.srcId || pr.hostile) continue;
+        spawnSpr('slash', pr.x, pr.y, shift(LEAF, 6, i), 1, pr.angle);
+      }
+    },
+  },
+  spectral_arrow: {},
+  flamethrower: {
+    tick(a, st, p, dt) {
+      if (!every(a, dt, 0.04)) return;
+      spawnSpr(G.rngFx() < 0.5 ? 'cannon' : 'spin_oval', a.gx, a.gy, '', 1, G.rngFx() * TAU, (G.rngFx() - 0.5) * 50, -20 - G.rngFx() * 30);
+    },
+    land(a, st, p) {
+      for (let i = 0; i < 8; i++) {
+        const ang = (i / 8) * TAU;
+        spawnSpr('boom_fire', a.zx + Math.cos(ang) * st.radius * 0.7, a.zy + Math.sin(ang) * st.radius * 0.5, '', 0.8);
+      }
+      spawnSpr('flash_burst', a.zx, a.zy, '#ffd166', 2);
+    },
+  },
+  fire_spin: {
+    always(a, st, p, dt) {
+      // The vortex is a zone that follows you: while it burns, embers spiral up through it and a
+      // second band of fire turns the other way, shifting from orange to gold to white.
+      let z = null;
+      for (let i = 0; i < zones.length; i++) if (zones[i].src === a.srcId && zones[i].kind === ZONE.FIRE) { z = zones[i]; break; }
+      if (!z || !every(a, dt, 0.05)) return;
+      const r = z.r * 0.85;
+      const a1 = G.clock * 5, a2 = -G.clock * 3.5;
+      spawnSpr('cannon', z.x + Math.cos(a1) * r, z.y + Math.sin(a1) * r * 0.6, '', 1, 0, 0, -45);
+      spawnSpr('spark_s', z.x + Math.cos(a2) * r * 0.7, z.y + Math.sin(a2) * r * 0.45 - 4, shift(FLAME, 5), 1, a2);
+    },
+  },
+  present: {
+    tick(a, st, p, dt) {
+      if (every(a, dt, 0.05)) spawnSpr('star3', a.gx, a.gy, '', 2, 0, (G.rngFx() - 0.5) * 30, 10);
+    },
+    land(a, st, p) {
+      const x = a.wavesLeft ? a.zx : p.x, y = a.wavesLeft ? a.zy : p.y;
+      spawnSpr('flash_burst', x, y, a.wavesLeft ? '#ffd166' : '#7fe08a', 2);
+      for (let i = 0; i < 12; i++) {
+        const ang = (i / 12) * TAU, sp = 70 + G.rngFx() * 60;
+        spawnSpr('shine', x, y - 6, CONFETTI[i % 5], 1, 0, Math.cos(ang) * sp, Math.sin(ang) * sp - 40, 180);
+      }
+    },
+  },
+  blizzard: {
+    tick(a, st, p, dt) {
+      if (!every(a, dt, 0.06)) return;
+      for (let k = 0; k < 2; k++) {
+        const ang = G.rngFx() * TAU, d = (0.2 + G.rngFx() * 0.8) * st.radius;
+        spawnSpr(k ? 'sparkle' : 'freeze_s', p.x + Math.cos(ang) * d, p.y + Math.sin(ang) * d * 0.7, shift(FROST, 3, k), 1, 0, -20, 30);
+      }
+    },
+  },
+  hyperbeam: {
+    tick(a, st, p, dt) {
+      if (!every(a, dt, 0.04)) return;
+      const ca = Math.cos(a.angle), sa = Math.sin(a.angle);
+      const u = G.rngFx() * st.length;
+      spawnSpr('spark', p.x + ca * u, p.y + sa * u, G.tick & 4 ? '#ffd166' : '#ff9040', 1, a.angle - Math.PI / 2);
+      if (G.tick & 1) spawnSpr('punch_s', p.x + ca * u * 0.7, p.y + sa * u * 0.7, '#ffb347', 1, a.angle - Math.PI / 2);
+      if (G.tick % 8 === 0) spawnSpr('beam_flash', p.x + ca * 14, p.y + sa * 14, '#fff6c8', 1, a.angle);
+      if (G.tick % 10 === 0) spawnSpr('ring_m', p.x + ca * st.length, p.y + sa * st.length, '#ffd166', 1);
+    },
+  },
+  thunderbolt: {
+    tick(a, st, p, dt) {
+      if (!every(a, dt, 0.09)) return;
+      const ang = G.rngFx() * TAU, d = Math.sqrt(G.rngFx()) * st.radius;
+      spawnSpr('circuit', a.zx + Math.cos(ang) * d, a.zy + Math.sin(ang) * d * 0.62, G.tick & 8 ? '#fff6a0' : '#7ac8ff', 1.5, 0, 0, -25);
+    },
+  },
+  hydro_pump: {
+    tick(a, st, p, dt) {
+      if (!every(a, dt, 0.035)) return;
+      const ax = Math.cos(a.angle), ay = Math.sin(a.angle);
+      const u = (G.rngFx() - 0.5) * st.wallLen;
+      const x = a.gx + ay * u, y = a.gy - ax * u;
+      spawnSpr(G.rngFx() < 0.5 ? 'gibs' : 'oval', x, y - 8, '#9adcff', 1, 0, ax * 40, -30, 90);
+      // A sheen along the crest, running through the colours of a rainbow.
+      spawnSpr('slit', x, y - 14, shift(RAIN, 8, u | 0), 1, a.angle);
+    },
+  },
+  dark_pulse: {
+    ring(a, st, p) {
+      spawnSpr('guard_ring', p.x, p.y - 6, '#8a72b8', 0.9);
+      for (let i = 0; i < 10; i++) {
+        const ang = (i / 10) * TAU;
+        const x = p.x + Math.cos(ang) * st.radius, y = p.y + Math.sin(ang) * st.radius * 0.7;
+        spawnSpr(i & 1 ? 'oval' : 'hash', x, y, shift(SHADE, 3, i), 1.2, ang, -Math.sin(ang) * 60, Math.cos(ang) * 45);
+      }
+    },
+  },
+  shadow_orb: {
+    tick(a, st, p, dt) {
+      if (!every(a, dt, 0.035)) return;
+      const ang = G.clock * 9;
+      spawnSpr(G.tick & 2 ? 'dot' : 'motes', a.gx + Math.cos(ang) * 9, a.gy + Math.sin(ang) * 6, shift(SHADE, 5), 1.2, 0, 0, -12);
+    },
+    land(a, st, p) {
+      spawnSpr('death_flash', a.zx, a.zy, '#c49aff', 1.2);
+      spawnSpr('guard_ring', a.zx, a.zy, '#8a72b8', st.radius / 30);
+    },
+  },
+  night_shade: {
+    tick(a, st, p, dt) {
+      if (!every(a, dt, 0.06)) return;
+      const ang = G.rngFx() * TAU, d = G.rngFx() * st.radius;
+      spawnSpr(G.rngFx() < 0.6 ? 'motes' : 'oval', p.x + Math.cos(ang) * d, p.y + Math.sin(ang) * d * 0.7, shift(SPIRIT, 3), 1.2, 0, (G.rngFx() - 0.5) * 20, -35);
+    },
+  },
+};
+
+// Axew's two: the bite rings out in violet and gold, and every meteor throws up a halo of flame.
+FLOURISH.crunch = {
+  land(a, st) {
+    spawnSpr('ring_blade', a.zx, a.zy, shift(['#c8b8ff', '#ffd166', '#ffffff'], 6), st.radius / 22);
+    for (let i = 0; i < 6; i++) {
+      const ang = (i / 6) * TAU;
+      spawnSpr('spark', a.zx + Math.cos(ang) * st.radius * 0.6, a.zy + Math.sin(ang) * st.radius * 0.5, '#e0d0ff', 1, ang, Math.cos(ang) * 50, Math.sin(ang) * 40);
+    }
+  },
+};
+FLOURISH.draco_meteor = {
+  land(a, st) {
+    const x = a.zx, y = a.zy;
+    spawnSpr('flash_burst', x, y - 10, shift(FLAME, 8), st.radius / 40);
+    for (let i = 0; i < 4; i++) {
+      spawnSpr('lava', x + (G.rngFx() - 0.5) * 30, y - G.rngFx() * 10, '#ff9040', 1, 0, (G.rngFx() - 0.5) * 40, -40 - G.rngFx() * 30, 120);
+    }
+  },
+};
+
+// Spectral Arrow fires and is done in one call, so its look is laid down in the cast itself.
+FLOURISH.spectral_arrow.cast = function (a, st, p, ang) {
+  const ca = Math.cos(ang), sa = Math.sin(ang);
+  spawnSpr('beam_flash', p.x + ca * 12, p.y + sa * 12, '#a0f0d0', 1, ang);
+  const n = Math.max(3, Math.round(st.length / 26));
+  for (let i = 1; i <= n; i++) {
+    const u = (st.length * i) / n;
+    spawnSpr(i & 1 ? 'streak' : 'motes', p.x + ca * u, p.y + sa * u, shift(SPIRIT, 4, i), 1, ang - Math.PI / 2, 0, i & 1 ? 0 : -25);
+  }
+  spawnSpr('death_flash', p.x + ca * st.length, p.y + sa * st.length, '#9af0d8', 0.9);
+};
+FLOURISH.homing_leaf.cast = function (a, st, p) { spawnSpr('ring_blade', p.x, p.y - 6, '#7fe08a', 2); };
 
 // Resolved at boot from weapons.js, so reordering the MOTION registry cannot silently break this.
 let MOTION_HOMING = 1;
@@ -584,7 +839,10 @@ function updateAbilitiesInner(dt) {
     const a = G.abilities[slot];
     if (!a) continue;
     if (a.cd > 0) a.cd -= dt;
+    const fl = maxed(a) ? FLOURISH[a.def.id] : null;
+    if (fl && fl.always) fl.always(a, a.resolved, p, dt);
     if (a.activeT <= 0) continue;
+    if (fl && fl.tick) fl.tick(a, a.resolved, p, dt);
     setDamageSource(a.srcId);
 
     const st = a.resolved;
@@ -602,6 +860,7 @@ function updateAbilitiesInner(dt) {
           });
           if (fx.ring) fx.ring(p.x, p.y, st.radius * 1.5, '#a8e4ff', 0.35);
           if (fx.shake) fx.shake(0.4);
+          flourish(a, 'expire', st, p);
         }
         break;
       }
@@ -677,6 +936,7 @@ function updateAbilitiesInner(dt) {
           if (fx.ring) fx.ring(a.zx, a.zy, st.radius, '#7a6ab0', 0.35);
           if (fx.burst) fx.burst(a.zx, a.zy, 22, '#c8bcf0');
           if (fx.shake) fx.shake(0.3);
+          flourish(a, 'land', st, p);
         }
         break;
       }
@@ -696,6 +956,7 @@ function updateAbilitiesInner(dt) {
           });
           if (fx.fireburst) fx.fireburst(a.zx, a.zy, st.radius, 0.5);
           if (fx.shake) fx.shake(0.4);
+          flourish(a, 'land', st, p);
         }
         break;
       }
@@ -720,6 +981,59 @@ function updateAbilitiesInner(dt) {
             fx.heal(Math.round(G.stats.maxHp * (st.heal || 0.3)));
             if (fx.ring) fx.ring(p.x, p.y, 34, '#9ad8f4', 0.35);
           }
+          flourish(a, 'land', st, p);
+        }
+        break;
+      }
+
+      case 'crunch': {
+        if (prev > 0 && a.activeT <= 0) {
+          // The snap: the bite's zone takes the damage, and what is left standing is stunned.
+          damageCircle(a.zx, a.zy, st.radius, st.damage, nextHitId(), {
+            stun: a.def.stun, weaken: a.def.weaken,
+          });
+          spawnSpr('punch_flash', a.zx, a.zy, '#e0d0ff', 1.2);
+          if (fx.shake) fx.shake(0.3);
+          flourish(a, 'land', st, p);
+        }
+        break;
+      }
+
+      case 'dracoMeteor': {
+        // Drop the next meteor where it will land, a random spot around you as you are now.
+        a.waveT -= dt;
+        if (a.wavesLeft > 0 && a.waveT <= 0) {
+          a.wavesLeft--;
+          a.waveT = a.def.gap;
+          // A spot clear of the last one, so two blasts never stack on the same ground.
+          let x = p.x, y = p.y;
+          for (let tries = 0; tries < 6; tries++) {
+            const ang = G.rngRun() * TAU;
+            const d = a.def.near + G.rngRun() * (a.def.far - a.def.near);
+            x = p.x + Math.cos(ang) * d; y = p.y + Math.sin(ang) * d * 0.8;
+            if (a.lastDrop === undefined || Math.hypot(x - a.lastX, y - a.lastY) >= 40) break;
+          }
+          a.lastDrop = 1; a.lastX = x; a.lastY = y;
+          a.drops.push(x, y, a.def.fall);
+          spawnSeq('fx_draco_fall', x, y, { mode: SEQ.METEOR, dur: a.def.fall, z: 180, fps: 14, scale: 1.2 });
+          spawnSeq('fx_draco_flare', x - 100, y - 170, { dur: 0.22, fps: 14, scale: 0.8 });
+        }
+        for (let j = a.drops.length - 3; j >= 0; j -= 3) {
+          a.drops[j + 2] -= dt;
+          if (a.drops[j + 2] > 0) continue;
+          const x = a.drops[j], y = a.drops[j + 1];
+          a.drops.splice(j, 3);
+          damageCircle(x, y, st.radius, st.damage, nextHitId(), {
+            burn: st.burn, burnT: a.def.burnT || 4, knockback: 70,
+          });
+          spawnSeq('fx_draco_boom', x, y - 8, { dur: 0.95, fps: 15, scale: Math.max(0.7, (st.radius * 2) / 95) });
+          if (fx.shake) fx.shake(0.35);
+          if (fx.sound) fx.sound(a.def.impactSound);
+          // And it spurs you on: faster, for a few seconds, every meteor topping it up.
+          p.hasteMul = p.hasteT > 0 ? Math.max(p.hasteMul, a.def.haste) : a.def.haste;
+          p.hasteT = Math.max(p.hasteT, a.def.hasteT);
+          a.zx = x; a.zy = y;
+          flourish(a, 'land', st, p);
         }
         break;
       }
@@ -780,6 +1094,7 @@ function emitRing(a, st, p) {
 
   if (isDrain) emitShadowPool(a, st, p);
   else emitFissures(a, st, p);
+  flourish(a, 'ring', st, p);
 }
 
 /** Earthquake: fissures radiating out of the epicentre, and the earth they throw up. */
@@ -850,6 +1165,11 @@ function emitStrike(a, st) {
   });
   if (fx.bolt) fx.bolt(x, y, 230, 0.34);
   if (fx.burst) fx.burst(x, y, 8, '#fffaa8');
+  if (maxed(a)) {
+    spawnSpr('lightning', x, y - 52, '#fff6a0');
+    burstSpr('spark', x, y - 4, '#ffe14a', 4, 6, 50);
+    spawnSpr('flash_burst', x, y - 4, '#ffffff', 1.4);
+  }
   if (fx.shake) fx.shake(first ? 0.5 : 0.28);
 }
 

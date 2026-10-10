@@ -12,7 +12,7 @@ import {
   enemies, projectiles, zones, spawn, despawn,
   cellRange, cellStart, cellItems, GW, nextHitId, setDamageSource,
   decoys, decoyState, decoyTargetable, damageDecoy, DECOY_MAX, DECOY_R,
-  orbs, coins, hitCtx,
+  orbs, coins, hitCtx, sprFx,
 } from './world.js';
 import { spawnSpr } from './sprfx.js';
 import { dirFromAngle } from './assets.js';
@@ -343,6 +343,19 @@ function headings(w, base, n, spread) {
 }
 
 // --- Firing behaviours ------------------------------------------------------
+
+/**
+ * Behaviours that live in another module of this layer (the Dragon type's, in dragon.js), plugged
+ * in by main.js at boot, before initWeaponDefs. They take (w, st, p) and return whether they
+ * fired, exactly like the ones below.
+ */
+export function extendBehaviors(map) {
+  for (const k of Object.keys(map)) {
+    if (BEHAVIOR[k]) throw new Error(`weapons: behaviour "${k}" already exists`);
+    BEHAVIOR[k] = map[k];
+  }
+  for (const k of Object.keys(map)) VOLLEYS.add(k);
+}
 
 const BEHAVIOR = {
   /** Launch `amount` projectiles at the aimed target, fanned by `spread`. */
@@ -1097,7 +1110,7 @@ function spawnFor(w, st, p) {
   pr.dmg = st.damage;
   pr.pierce = st.pierce;
   pr.life = 0;
-  pr.sprBase = def.sprBase;
+  pr.sprBase = def.altSprBase >= 0 && G.rngFx() < 0.5 ? def.altSprBase : def.sprBase;
   pr.nd = def.sprDirs;
   pr.knockback = def.knockback || 0;
   pr.weapon = w.defIdx;
@@ -1148,7 +1161,7 @@ function fireProjectile(w, st, p, angle, targetIdx, hitId) {
   pr.life = 0;
   pr.maxLife = st.duration;
   pr.motion = def.motionIdx;
-  pr.sprBase = def.sprBase;
+  pr.sprBase = def.altSprBase >= 0 && G.rngFx() < 0.5 ? def.altSprBase : def.sprBase;
   pr.nd = def.sprDirs;
   pr.knockback = def.knockback || 0;
   pr.weapon = w.defIdx;
@@ -1261,6 +1274,8 @@ export function weaponStats(w) {
     o.cooldown = Math.max(0.05, o.cooldown * w.dynCd);
     o.area *= w.dynArea;
   }
+  // Roar of Time's Time Dilation: while a ring of it stands, every weapon you own runs faster.
+  if (G.dilate && G.dilate !== 1) o.cooldown = Math.max(0.05, o.cooldown * G.dilate);
   return o;
 }
 
@@ -1441,8 +1456,8 @@ function ovlFlight(pr, rec, i, dt) {
   const sp = d.fx && d.fx.spr;
   if (sp && sp.trail) {
     pr.ovS -= dt;
-    if (pr.ovS <= 0) {
-      pr.ovS = 0.09;
+    if (pr.ovS <= 0 && sprFx.length < 180) {
+      pr.ovS = 0.12;
       spawnSpr(sp.trail, pr.x + (G.rngFx() - 0.5) * 4, pr.y - pr.z + (G.rngFx() - 0.5) * 4,
         pr.ovEcho ? '#c8bcf0' : ovlSprColor(d, G.clock, 1), 0, Math.atan2(pr.vy, pr.vx) + Math.PI / 2);
     }
@@ -2016,6 +2031,8 @@ export function initWeaponDefs() {
     def.motionIdx = motionIndex(def.motion);
     def.sprBase = spriteBase(def.sprite, def.palette);
     def.sprDirs = spriteDirs(def.sprite, def.palette);
+    // A second look a shot may wear instead, picked per shot (Seed Bomb's two seeds).
+    def.altSprBase = def.spriteAlt ? spriteBase(def.spriteAlt, def.palette) : -1;
     if (def.emitSprite) {
       def.emitSprBase = spriteBase(def.emitSprite, def.emitPalette || def.palette);
       def.emitSprDirs = spriteDirs(def.emitSprite, def.emitPalette || def.palette);

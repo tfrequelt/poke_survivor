@@ -101,9 +101,13 @@ export const STATUS = {
   burn: { secs: 3.0, dps: 4, color: '#ff9040' },
   para: { secs: 0.9, slow: 0.65, color: '#fff060' },
   freeze: { secs: 1.1, slow: 1, color: '#e8ffff' },
+  // Poison: a Poison trap's, ticking like a burn but longer and weaker.
+  poison: { secs: 4.0, dps: 3, color: '#c070e0' },
+  // String Shot's silk: a short, heavy slow.
+  string: { secs: 1.8, slow: 0.45, color: '#ffffff' },
 };
 
-export const STATUS_KEYS = ['', 'chill', 'burn', 'para', 'freeze'];
+export const STATUS_KEYS = ['', 'chill', 'burn', 'para', 'freeze', 'poison', 'string'];
 export const statusIndex = (name) => (name ? Math.max(0, STATUS_KEYS.indexOf(name)) : 0);
 
 // --- The nine --------------------------------------------------------------------------------

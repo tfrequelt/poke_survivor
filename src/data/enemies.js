@@ -96,6 +96,8 @@ export const ENEMIES = [
     shape: 'gigalith', fallback: 'round_big', palette: 'rock',
     // The heaviest thing on the board. It will not be pushed and it will not be rushed.
     hp: 230, dmg: 21, speed: 13, r: 7, mass: 5.5, xp: 9,
+    // Sturdy: its first lethal hit leaves it standing at 1 HP.
+    sturdy: true,
     ai: 'charge',
     attack: { kind: 'burst', count: 8, range: 250, cooldown: 4.2, windup: 0.7, damage: 11, speed: 125 }, coinChance: 0.20, armor: 6, knockResist: 0.88,
     stages: ['cave'], from: 13, to: 20, weight: 3,
@@ -118,6 +120,23 @@ export const ENEMIES = [
     ai: 'orbit',
     attack: { kind: 'shot', range: 240, cooldown: 2.6, windup: 0.35, damage: 10, speed: 175 }, coinChance: 0.14, flying: true, armor: 4, knockResist: 0.6,
     stages: ['cave'], from: 16, to: 20, weight: 4,
+  },
+  {
+    id: 'baltoy', name: 'Baltoy', dex: 46,
+    shape: 'baltoy', fallback: 'round_big', palette: 'ground',
+    // A clay doll spinning in on Levitate: ponds do not stop it.
+    hp: 70, dmg: 11, speed: 30, r: 5, mass: 1.6, xp: 4,
+    ai: 'sine', flying: true, coinChance: 0.08,
+    stages: ['cave'], from: 6, to: 15, weight: 5,
+  },
+  {
+    id: 'claydol', name: 'Claydol', dex: 47,
+    shape: 'claydol', fallback: 'round_big', palette: 'ground',
+    // Magnet Field: it shields itself and everything around it.
+    hp: 230, dmg: 18, speed: 22, r: 7, mass: 4.5, xp: 10,
+    ai: 'chase', flying: true, armor: 4, knockResist: 0.8, coinChance: 0.2,
+    special: { kind: 'magnet', every: 8, windup: 0.8, r: 110, frac: 0.35, t: 6, color: '#5ab6ff' },
+    stages: ['cave'], from: 12, to: 20, weight: 3,
   },
   {
     id: 'tyrunt', name: 'Tyrunt', dex: 39,
@@ -210,6 +229,8 @@ export const ENEMIES = [
     hp: 90, dmg: 13, speed: 30, r: 5.5, mass: 1.2, xp: 6,
     ai: 'sine',
     attack: { kind: 'burst', count: 7, range: 230, cooldown: 4.0, windup: 0.65, damage: 9, speed: 120 }, coinChance: 0.12, flying: true,
+    // String Shot: silk strands that sting and slow you.
+    special: { kind: 'string', every: 3.5, windup: 0.4, range: 210, n: 3, spread: 0.32, damage: 6, speed: 150, color: '#ffffff' },
     stages: ['grass'], from: 11, to: 20, weight: 5,
   },
   {
@@ -244,6 +265,15 @@ export const ENEMIES = [
     hp: 190, dmg: 20, speed: 54, r: 6.5, mass: 4.5, xp: 9,
     ai: 'charge', coinChance: 0.18, knockResist: 0.7,
     stages: ['grass'], from: 16, to: 20, weight: 4,
+  },
+  {
+    id: 'mr_mime', name: 'Mr. Mime', dex: 45,
+    shape: 'mr_mime', fallback: 'round_big', palette: 'poison',
+    // Barrier: walls of light around its friends, that let nothing kill them for a few seconds.
+    hp: 150, dmg: 14, speed: 30, r: 6, mass: 2, xp: 9,
+    ai: 'orbit', coinChance: 0.2,
+    special: { kind: 'barrier', every: 7, windup: 0.6, r: 120, n: 3, t: 3, lockout: 7, color: '#ff8ad8' },
+    stages: ['grass'], from: 9, to: 20, weight: 3,
   },
   {
     id: 'swablu', name: 'Swablu', dex: 41,
@@ -347,6 +377,22 @@ export const ENEMIES = [
     ai: 'charge',
     attack: { kind: 'burst', count: 8, range: 240, cooldown: 4.0, windup: 0.7, damage: 11, speed: 120 }, coinChance: 0.18, armor: 5, knockResist: 0.85,
     stages: ['beach'], from: 13, to: 20, weight: 4,
+  },
+  {
+    id: 'wingull', name: 'Wingull', dex: 48,
+    shape: 'wingull', fallback: 'bat', palette: 'water',
+    hp: 45, dmg: 9, speed: 52, r: 4.5, mass: 0.8, xp: 3,
+    ai: 'sine', flying: true, coinChance: 0.06,
+    stages: ['beach'], from: 4, to: 14, weight: 6,
+  },
+  {
+    id: 'pelipper', name: 'Pelipper', dex: 49,
+    shape: 'pelipper', fallback: 'bat', palette: 'water',
+    // Tailwind: a gust that sends everything around it at you faster.
+    hp: 170, dmg: 16, speed: 40, r: 6.5, mass: 2.2, xp: 9,
+    ai: 'orbit', flying: true, coinChance: 0.18,
+    special: { kind: 'tailwind', every: 6, windup: 0.5, r: 110, t: 4, mul: 1.45, color: '#e8f4ff' },
+    stages: ['beach'], from: 11, to: 20, weight: 4,
   },
   {
     id: 'clauncher', name: 'Clauncher', dex: 43,

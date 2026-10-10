@@ -45,6 +45,8 @@ export function claimSuccess(id) {
   s.ach[id] = 'claimed';
   // A perk is for good: every run from the next one on.
   if (def.reward && def.reward.perk) s.perks[def.reward.perk] = 1;
+  // A partner, likewise: selectable from now on.
+  if (def.reward && def.reward.partner) s.partners[def.reward.partner] = 1;
   // bankGold persists, so the claimed mark, the perk and the gold land in the same write.
   return bankGold((def.reward && def.reward.gold) || 0) || 1;
 }

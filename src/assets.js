@@ -57,6 +57,36 @@ async function decode(url, rect) {
 }
 
 /** A packed image resized by `k`, nearest neighbour, sampling each target pixel's centre. */
+/**
+ * The same, averaged: each output pixel is the alpha-weighted mean of the source pixels it covers.
+ * For a big sheet icon shrunk a long way (Crunch's 62px bite into a 20px slot), where nearest
+ * neighbour would drop whole rows of teeth.
+ */
+function smoothScalePacked(img, k) {
+  const w = Math.max(1, Math.round(img.w * k)), h = Math.max(1, Math.round(img.h * k));
+  const data = new Uint32Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const y0 = Math.floor(y / k), y1 = Math.max(y0 + 1, Math.min(img.h, Math.floor((y + 1) / k)));
+    for (let x = 0; x < w; x++) {
+      const x0 = Math.floor(x / k), x1 = Math.max(x0 + 1, Math.min(img.w, Math.floor((x + 1) / k)));
+      let r = 0, g = 0, b = 0, a = 0, n = 0;
+      for (let sy = y0; sy < y1; sy++) {
+        for (let sx = x0; sx < x1; sx++) {
+          const v = img.data[sy * img.w + sx];
+          const al = v >>> 24;
+          r += (v & 255) * al; g += ((v >>> 8) & 255) * al; b += ((v >>> 16) & 255) * al; a += al; n++;
+        }
+      }
+      if (!a) continue;
+      // Edges stay crisp: a pixel more than a third covered is drawn solid, the rest not at all.
+      const alpha = a / n > 85 ? 255 : 0;
+      if (!alpha) continue;
+      data[y * w + x] = ((alpha << 24) | (Math.round(b / a) << 16) | (Math.round(g / a) << 8) | Math.round(r / a)) >>> 0;
+    }
+  }
+  return { w, h, data };
+}
+
 function scalePacked(img, k) {
   const w = Math.max(1, Math.round(img.w * k)), h = Math.max(1, Math.round(img.h * k));
   const data = new Uint32Array(w * h);
@@ -210,7 +240,7 @@ export async function loadAssets() {
       // `scale`, for a sprite from a sheet drawn at another size than ours (the HeartGold items
       // are 21px against Mystery Dungeon's 12-16). Nearest neighbour, once, at load.
       if (typeof e === 'object' && e.scale && e.scale !== 1) {
-        const s = scalePacked(px, e.scale);
+        const s = e.smooth ? smoothScalePacked(px, e.scale) : scalePacked(px, e.scale);
         s.anchor = px.anchor;
         return [name, s];
       }

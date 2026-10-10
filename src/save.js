@@ -29,6 +29,8 @@ const empty = () => ({
   // win, `perks` what claimed successes have unlocked, `deep` the stages reached on their 4th
   // floor, `won` the stages won on.
   stats: {}, ribbons: {}, perks: {}, deep: {}, won: {},
+  // Partners a claimed success has unlocked (Axew, from Wild Beast).
+  partners: {},
 });
 
 const ACH_STATES = new Set(['unlocked', 'claimed']);
@@ -71,6 +73,9 @@ function sanitize(data) {
   }
   if (data.perks && typeof data.perks === 'object') {
     for (const k of Object.keys(PERKS)) if (data.perks[k]) s.perks[k] = 1;
+  }
+  if (data.partners && typeof data.partners === 'object') {
+    for (const c of CHARACTERS) if (c.locked && data.partners[c.id]) s.partners[c.id] = 1;
   }
   for (const f of ['deep', 'won']) {
     if (data[f] && typeof data[f] === 'object') for (const st of STAGES) if (data[f][st.id]) s[f][st.id] = 1;

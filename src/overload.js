@@ -25,8 +25,12 @@ import { OVERLOADS, ovlColor, ovlSprColor } from './data/overloads.js';
 import { ZONE, ROLE } from './fx.js';
 import { unlockIf } from './successes.js';
 import { dropCoin } from './pickups.js';
-import { hitCtx, zones, orbs, coins } from './world.js';
+import { hitCtx, zones, orbs, coins, sprFx } from './world.js';
+
+/** Above this many live sprite effects, routine ones (hits, kills, trails) stand aside. */
+export const SPR_BUSY = 180;
 import { spawnSpr, burstSpr } from './sprfx.js';
+import { getAttack } from './assets.js';
 
 /** Procs (splash, chain, kill effects, expiry effects) allowed per simulation tick, all weapons. */
 const PROC_BUDGET = 40;
@@ -185,8 +189,9 @@ function spr(rec, slot, x, y, color, scale = 0, rot = 0) {
   if (k) spawnSpr(k, x, y, color || scol(rec, slot === 'trail' ? 1 : 2), scale, rot);
 }
 function sprHit(e, rec) {
-  // Every hit asks, but only some get one: a hose of hits would otherwise spend the whole budget.
-  if (G.rngFx() < 0.45) spr(rec, 'hit', e.x + (G.rngFx() - 0.5) * 6, e.y - 4 - G.rngFx() * 6, null, 0, G.rngFx() * TAU);
+  // Every hit asks, but only some get one: a hose of hits would otherwise spend the whole budget,
+  // and none at all once the field is busy -- a ground weapon hits dozens of foes a tick.
+  if (sprFx.length < SPR_BUSY && G.rngFx() < 0.2) spr(rec, 'hit', e.x + (G.rngFx() - 0.5) * 6, e.y - 4 - G.rngFx() * 6, null, 0, G.rngFx() * TAU);
 }
 
 // --- Metronome ------------------------------------------------------------------------
@@ -209,7 +214,10 @@ const _skip = [];
 function signatureHit(e, dealt, rec, crit) {
   const d = rec.def;
   const base = rec.w.resolved.damage;
-  if (d.charm && !e.boss && !e.legend && e.charmT <= 0 && G.rngRun() < d.charm.chance) {
+  // At most CHARM_MAX fighting for you at once: a swarm that charmed half the field would have
+  // nothing left of its own to hit, since a charmed foe is off-limits to your weapons.
+  if (d.charm && charmed < CHARM_MAX && !e.boss && !e.legend && e.charmT <= 0 && G.rngRun() < d.charm.chance) {
+    charmed++;
     e.charmT = d.charm.t; e.charmSrc = rec.proc; e.charmMul = d.charm.dmg || 1;
     e.confuseT = 0;
     spawnSpr('shine', e.x, e.y - 10, '#ff9ad8', 1.2);
@@ -298,10 +306,16 @@ function bondHit(e, dealt, rec) {
 let bondDrawT = 0;
 let magnetT = 0;
 /** main.js, once per simulation tick: dooms count down, frozen thaw, bonds fray. */
+const CHARM_MAX = 5;
+let charmed = 0;
+
 export function updateOverloadStates(dt) {
+  doomsThisTick = 0;
+  charmed = 0;
   for (let i = 0; i < enemies.length; i++) {
     const e = enemies[i];
     if (!e.alive) continue;
+    if (e.charmT > 0) charmed++;
     if (e.polT > 0) e.polT -= dt;
     if (e.frozenT > 0) e.frozenT -= dt;
     if (e.bondT > 0) e.bondT -= dt;
@@ -320,6 +334,7 @@ export function updateOverloadStates(dt) {
       for (let j = 0; j < coins.length; j++) if (!coins[j].pulling && dist2(z.x, z.y, coins[j].x, coins[j].y) < r2) coins[j].pulling = true;
     }
   }
+  if (doomsThisTick >= 3) procShake(0.05);
   bondDrawT -= dt;
   const drawBonds = bondDrawT <= 0;
   if (drawBonds) bondDrawT = 0.12;
@@ -346,7 +361,22 @@ function detonateDoom(e) {
   setDamageSource(prev);
   spr(rec, 'proc', e.x, e.y, null, r / 20);
   if (ovlFx.ring) ovlFx.ring(e.x, e.y, r, col(rec), 0.3);
-  if (ovlFx.shake) ovlFx.shake(0.08);
+  doomsThisTick++;
+}
+
+// --- Screen shake from procs ----------------------------------------------------------------
+//
+// addShake sums trauma, so a proc that shakes once per enemy turned a doomed crowd (Scorching
+// Sands) into a camera that never stopped rattling. Procs go through here instead: at most one
+// nudge a quarter-second, and never more than PROC_SHAKE_MAX of trauma from procs. Dooms shake
+// once per batch, and only for a batch of three or more.
+const PROC_SHAKE_GAP = 0.25, PROC_SHAKE_MAX = 0.15;
+let procShakeAt = -1, doomsThisTick = 0;
+function procShake(amount) {
+  if (!ovlFx.shake || G.clock - procShakeAt < PROC_SHAKE_GAP) return;
+  procShakeAt = G.clock;
+  const room = PROC_SHAKE_MAX - (G.cam ? G.cam.trauma : 0);
+  if (room > 0) ovlFx.shake(Math.min(amount, room));
 }
 
 /**
@@ -406,7 +436,7 @@ function lightningRod(w, p) {
     spr(rec, 'proc', e.x, e.y, null);
   }
   setDamageSource(prev);
-  if (ovlFx.shake) ovlFx.shake(0.06);
+  procShake(0.06);
 }
 const d_rodRange = 260;
 
@@ -431,7 +461,7 @@ export function overloadFired(w, st, p) {
       setDamageSource(prev);
       spr(rec, 'proc', p.x, p.y, null, 1.6);
       if (ovlFx.ring) ovlFx.ring(p.x, p.y, 46, col(rec), 0.35);
-      if (ovlFx.shake) ovlFx.shake(0.25);
+      procShake(0.15);
       // Then it vents: a breather the player can see coming on the heat bar.
       w.ventT = d.heat.vent || 2;
       w.cd = w.ventT;
@@ -445,7 +475,7 @@ export function overloadFired(w, st, p) {
 /** main.js's kill hook calls this when the killing blow came from an overloaded source. */
 export function overloadKill(e, rec) {
   const d = rec.def;
-  if (d.fx && d.fx.spr && d.fx.spr.kill) spr(rec, 'kill', e.x, e.y - 4, null);
+  if (d.fx && d.fx.spr && d.fx.spr.kill && sprFx.length < SPR_BUSY) spr(rec, 'kill', e.x, e.y - 4, null);
   if (d._sig) signatureKill(e, rec);
   const k = d.kill;
   if (!k) return;
@@ -478,7 +508,7 @@ function signatureKill(e, rec) {
   if (e.doomT > 0) detonateDoom(e);
   if (d.soul && w.soul < d.soul.max) {
     w.soul = Math.min(d.soul.max, w.soul + d.soul.per);
-    if (G.rngFx() < 0.5) spawnSpr('motes', e.x, e.y - 6, scol(rec, 2), 1, 0, (p.x - e.x) * 0.8, (p.y - e.y) * 0.8);
+    if (sprFx.length < SPR_BUSY && G.rngFx() < 0.15) spawnSpr('motes', e.x, e.y - 6, scol(rec, 2), 1, 0, (p.x - e.x) * 0.8, (p.y - e.y) * 0.8);
   }
   if (d.guard && p) {
     if (++w.killN >= d.guard.kills) {
@@ -603,7 +633,7 @@ function strikes(p, s, dmg, rec) {
       if (ovlFx.ring) ovlFx.ring(e.x, e.y, r, s.color || col(rec), 0.2);
     }
   }
-  if (ovlFx.shake && n > 0) ovlFx.shake(0.12);
+  if (n > 0) procShake(0.1);
 }
 
 // --- Substitute dolls --------------------------------------------------------------
@@ -628,7 +658,8 @@ export function overloadDollDown(d, rec) {
 /** A doll of an overloaded Substitute is standing. Taunt pulses and shots run on its own clock. */
 export function overloadDollTick(d, rec, dt) {
   const k = rec.def.decoy;
-  if (!k || (!k.taunt && !k.shoot)) return;
+  if (!k || (!k.taunt && !k.shoot && !k.strike)) return;
+  if (k.strike) { dollStrike(d, rec, k.strike, dt); if (!k.taunt) return; }
   d.tick -= dt;
   if (d.tick > 0) return;
   const prev = getDamageSource();
@@ -648,6 +679,45 @@ export function overloadDollTick(d, rec, dt) {
     }
   }
   setDamageSource(prev);
+}
+
+/**
+ * Double Team: a doll with a foe in reach lunges at it with the Substitute's own Attack
+ * animation (assets/sprites/pokemon_base/substitute), and the blow lands on the sheet's hit
+ * frame -- the third, per its AnimData -- in front of it, once per swing.
+ */
+const DOLL_HIT_FRAME = 3;
+const DOLL_REACH = 60;
+function dollStrike(d, rec, s, dt) {
+  const a = getAttack('substitute_pmd');
+  if (d.atkT >= 0) {
+    d.atkT += dt;
+    let hitAt = 0.12;
+    if (a) { hitAt = 0; for (let i = 0; i < DOLL_HIT_FRAME && i < a.durs.length; i++) hitAt += a.durs[i] / 60; }
+    if (!d.struck && d.atkT >= hitAt) {
+      d.struck = true;
+      const r = s.r || 24;
+      const hx = d.x + Math.cos(d.atkA) * r * 0.8, hy = d.y + Math.sin(d.atkA) * r * 0.8;
+      const prev = getDamageSource();
+      setDamageSource(rec.proc);
+      damageCircle(hx, hy, r, s.dmg * (G.stats ? G.stats.power : 1), nextHitId(), { knockback: 110, canCrit: true });
+      setDamageSource(prev);
+      spawnSpr('punch', hx, hy - 6, scol(rec, 2), 1, d.atkA + Math.PI / 2);
+      spawnSpr('punch_flash', hx, hy - 6, scol(rec, 1));
+    }
+    if (d.atkT >= d.atkDur) d.atkT = -1;
+    return;
+  }
+  d.tick -= dt;
+  if (d.tick > 0) return;
+  const t = nearestFrom(d.x, d.y, DOLL_REACH, null);
+  if (t < 0) { d.tick = 0.2; return; }
+  const e = enemies[t];
+  d.tick = s.gap;
+  d.atkA = Math.atan2(e.y - d.y, e.x - d.x);
+  d.atkT = 0;
+  d.atkDur = a ? a.total : 0.4;
+  d.struck = false;
 }
 
 // --- Shared pieces ------------------------------------------------------------------
@@ -869,6 +939,17 @@ export function chipsFor(ov) {
   if (d.taunt) c.push('TAUNT');
   if (d.heal) c.push('HEALS');
   if (d.shoot) c.push('SHOOTS');
+  if (d.strike) c.push('STRIKES');
+  // The Dragon weapons' own mechanics, one word or two each.
+  const DRAGON_WORDS = {
+    wildfire: 'CREEPING FLAME', grudge: '% MAX HP', revenge: 'REVENGE', heartbeat: 'HEARTBEAT',
+    resonator: 'RESONATES', mirror: ov.dragon && ov.dragon.mirror && ov.dragon.mirror.swap ? 'SWAPS SIDES' : 'REFLECTS SHOTS',
+    finale: 'COMET FINALE', afterimage: 'AFTERIMAGE', static: 'SHOCK PRINTS', meteor: 'CRATER',
+    lane: 'YANK BACK', wake: 'DASH', crosshatch: 'X SCARS', gale: 'LONG RAKES', tail: 'TELEPORTS FOES',
+    debris: 'FOES AS MISSILES', merge: 'MERGE', bramble: 'ROOTS', fault: 'RIFTS', anchor: 'CHAINS',
+    aging: 'AGES FOES', gears: 'SAW GEARS', dilation: 'FASTER WEAPONS',
+  };
+  for (const k of Object.keys(ov.dragon || {})) if (DRAGON_WORDS[k]) c.push(DRAGON_WORDS[k]);
   _chips.set(ov, c);
   return c;
 }

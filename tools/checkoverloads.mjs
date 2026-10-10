@@ -19,18 +19,24 @@ const { SPRFX } = await imp('src/data/sprfx.js');
 const KNOWN = new Set([
   'id', 'tag', 'name', 'color', 'colors', 'desc', 'signature', 'chips',
   'stats', 'pattern', 'volley', 'size', 'grow', 'homing', 'hit', 'kill', 'expire', 'every',
-  'zone', 'orbit', 'turret', 'emit', 'link', 'chainFork', 'sweepFull', 'decoy', 'fx',
+  'zone', 'orbit', 'turret', 'emit', 'link', 'chainFork', 'sweepFull', 'decoy', 'fx', 'dragon',
   // signatures
   'boomerang', 'orbitOut', 'ricochet', 'erase', 'accel', 'snowball', 'wake', 'mine', 'echo',
   'gravity', 'magnet', 'stacks', 'doom', 'contagion', 'bond', 'charm', 'polarity', 'overkill',
   'freezeAfter', 'thief', 'rod', 'heat', 'tide', 'momentum', 'stillness', 'pinch', 'soul', 'guard',
   'haste', 'warp', 'critBurst', 'metronome', 'gamble',
 ]);
+// Every shared signature and mechanic key -- what a Dragon overload must NOT reuse.
+const KNOWN_SHARED = ['pattern', 'size', 'grow', 'homing', 'hit', 'kill', 'expire', 'every', 'zone', 'boomerang',
+  'orbitOut', 'ricochet', 'erase', 'accel', 'snowball', 'wake', 'mine', 'echo', 'gravity', 'magnet', 'stacks', 'doom',
+  'contagion', 'bond', 'charm', 'polarity', 'overkill', 'freezeAfter', 'thief', 'rod', 'heat', 'tide', 'momentum',
+  'stillness', 'pinch', 'soul', 'guard', 'haste', 'warp', 'critBurst', 'metronome', 'gamble'];
 // Mechanics that need a shot in flight, and the behaviours that fire one.
 const FLIGHT = ['boomerang', 'orbitOut', 'ricochet', 'accel', 'snowball', 'wake', 'gravity'];
 const SHOOTERS = new Set(['projectile', 'cone', 'bouncer', 'split', 'charge', 'swarm', 'companion', 'turret', 'orbit', 'sweep']);
 const ZONERS = new Set(['nova', 'pull', 'trail', 'aura']);
-const FIRES = new Set(['projectile', 'cone', 'bouncer', 'split', 'charge', 'chain', 'tether', 'link', 'rain', 'bloom', 'mine', 'nova', 'sweep', 'trail']);
+const DRAGON = ['rage', 'pulseOrb', 'dance', 'rush', 'rake', 'twister', 'rend', 'timelock'];
+const FIRES = new Set(['projectile', 'cone', 'bouncer', 'split', 'charge', 'chain', 'tether', 'link', 'rain', 'bloom', 'mine', 'nova', 'sweep', 'trail', ...DRAGON]);
 const MAX_USES = 9;
 
 const byId = Object.fromEntries(WEAPONS.map((w) => [w.id, w]));
@@ -77,6 +83,14 @@ for (const [wid, list] of Object.entries(OVERLOADS)) {
     if (o.turret && w.behavior !== 'turret') errors.push(`${at}: turret knobs on a "${w.behavior}" weapon`);
     if (o.emit && w.behavior !== 'companion') errors.push(`${at}: emit on a "${w.behavior}" weapon`);
     if (o.decoy && w.behavior !== 'decoy') errors.push(`${at}: decoy knobs on a "${w.behavior}" weapon`);
+    if (o.dragon && !DRAGON.includes(w.behavior)) errors.push(`${at}: dragon knobs on a "${w.behavior}" weapon`);
+    // The Dragon weapons' overloads are mechanics of their own: one `dragon` block each, and none
+    // of the shared signatures or the plain damage / projectile bumps the rest of the arsenal has.
+    if (DRAGON.includes(w.behavior)) {
+      if (!o.dragon || Object.keys(o.dragon).length !== 1) errors.push(`${at}: a dragon overload needs exactly one dragon mechanic`);
+      if (o.stats && (o.stats.damage || o.stats.amount)) errors.push(`${at}: a dragon overload may not bump damage or projectiles`);
+      for (const k of KNOWN_SHARED) if (o[k]) errors.push(`${at}: "${k}" is a shared signature; dragon overloads have their own`);
+    }
     if (o.freezeAfter && !(o.hit && o.hit.slow) && !w.slow) errors.push(`${at}: freezeAfter but nothing chills`);
     if (o.pattern && !['projectile', 'cone', 'bouncer', 'charge', 'split', 'bloom'].includes(w.behavior)) errors.push(`${at}: pattern on a "${w.behavior}" weapon`);
     if (!o.desc || o.desc.length < 20) errors.push(`${at}: description missing`);

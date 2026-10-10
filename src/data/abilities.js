@@ -222,6 +222,43 @@ export const ABILITIES = [
     // Gengar does not hand you a third ability -- it makes this one enormous.
     formUpgrade: { form: 'gengar', damage: +70, waves: +2 },
   },
+
+  // --- Axew -----------------------------------------------------------------
+  {
+    id: 'crunch', sound: ['crunch_1', 'crunch_2'], name: 'Crunch', slot: 0,
+    owner: 'axew', form: 'axew',
+    // The white bite from the FireRed move sheet; Lick's mouth if that file is missing.
+    icon: 'icon_crunch', iconFallback: 'icon_lick', palette: 'dark',
+    desc: 'Great jaws snap shut on the nearest foe. Everything caught in the bite is hurt, and what survives is stunned and weakened.',
+    effect: 'crunch',
+    // `channel` is how long the jaws take to close; the bite lands as they meet. The zone is
+    // the jaws' own size: they are drawn at radius * 2 across.
+    cooldown: 9, channel: 0.26, range: 170,
+    damage: 85, radius: 34, stun: 1.6, weaken: 3.0,
+    levels: [
+      {}, { damage: +30 }, { cooldownMul: 0.88 }, { damage: +40 }, { radius: +12, damage: +20 },
+    ],
+  },
+  {
+    id: 'draco_meteor', sound: false, name: 'Draco Meteor', slot: 1,
+    // Silent on the cast: every meteor sounds its own explosion as it lands, one after another.
+    impactSound: ['boom_small_1', 'boom_small_2'],
+    owner: 'axew', form: 'fraxure',
+    // The burning meteor from the FireRed move sheet; a flame if that file is missing.
+    icon: 'icon_draco', iconFallback: 'icon_flame', palette: 'dragon',
+    desc: 'Meteors rain down around you, one for every level. Each blasts the ground, sets what survives alight and spurs you on.',
+    effect: 'dracoMeteor',
+    // One meteor per level of the ability, `gap` apart, each `fall` seconds from the sky, landing
+    // between `near` and `far` px from you. The haste is the move's Special Attack drop turned
+    // round: you, not the foe, come out of it changed.
+    cooldown: 18, damage: 110, radius: 52, burn: 26, burnT: 4,
+    gap: 0.45, fall: 0.55, near: 50, far: 170, haste: 1.3, hasteT: 3,
+    levels: [
+      {}, { damage: +40 }, { cooldownMul: 0.9 }, { damage: +50 }, { radius: +14, burn: +10 },
+    ],
+    // Haxorus makes every meteor hit harder and wider -- never more of them: that is the level.
+    formUpgrade: { form: 'haxorus', damage: +80, radius: +10 },
+  },
 ];
 
 export const ABILITY_BY_ID = Object.fromEntries(ABILITIES.map((a) => [a.id, a]));
@@ -249,7 +286,7 @@ export function abilitySpritePairs() {
     const key = `${a.icon}:${a.palette}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push([a.icon, a.palette]);
+    out.push([a.icon, a.palette, 0, a.iconFallback || null]);
   }
   for (const entry of ABILITY_FX_SPRITES) out.push(entry);
   return out;

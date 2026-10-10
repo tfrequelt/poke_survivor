@@ -7,6 +7,10 @@ import { moveAxis } from './input.js';
 import { dist2, clampToBounds } from './util.js';
 import { enemies, cellRange, cellStart, cellItems, GW } from './world.js';
 import { damagePlayer, burnPlayer } from './combat.js';
+
+/** Set by main.js: Rough Skin's counter-hit, under its own damage source. */
+let roughSkinHook = null;
+export function setRoughSkinHook(fn) { roughSkinHook = fn; }
 import { STATUS } from './data/legends.js';
 import { ensureStats } from './stats.js';
 import { dirFromAngle } from './assets.js';
@@ -54,6 +58,9 @@ export function createPlayer(x = 0, y = 0) {
     freezeT: 0,
     burnT: 0,
     burnTick: 0,
+    poisonT: 0,
+    poisonTick: 0,
+    stringT: 0,
     // Silver Wing: `graceT` is the protected second running; it re-arms after `noContactT` seconds
     // clear of every enemy. Metal Coat: `barrier` blocks the next hit outright.
     graceT: 0,
@@ -158,6 +165,7 @@ function statusSlow(p) {
   let slow = 0;
   if (p.chillT > 0) slow = STATUS.chill.slow;
   if (p.paraT > 0) slow = Math.max(slow, STATUS.para.slow);
+  if (p.stringT > 0) slow = Math.max(slow, STATUS.string.slow);
   return 1 - slow;
 }
 
@@ -166,6 +174,7 @@ function tickStatuses(p, dt) {
   if (p.chillT > 0) p.chillT -= dt;
   if (p.paraT > 0) p.paraT -= dt;
   if (p.freezeT > 0) p.freezeT -= dt;
+  if (p.stringT > 0) p.stringT -= dt;
   if (p.burnT > 0) {
     p.burnT -= dt;
     p.burnTick -= dt;
@@ -176,11 +185,22 @@ function tickStatuses(p, dt) {
   } else {
     p.burnTick = 0;
   }
+  // Poison pays out exactly the way a burn does, on its own clock.
+  if (p.poisonT > 0) {
+    p.poisonT -= dt;
+    p.poisonTick -= dt;
+    if (p.poisonTick <= 0) {
+      p.poisonTick = 0.5;
+      burnPlayer(STATUS.poison.dps * 0.5);
+    }
+  } else {
+    p.poisonTick = 0;
+  }
 }
 
 /** Clear every status. A revive and a new floor both start clean. */
 export function clearStatuses(p) {
-  p.chillT = 0; p.paraT = 0; p.freezeT = 0; p.burnT = 0; p.burnTick = 0;
+  p.chillT = 0; p.paraT = 0; p.freezeT = 0; p.burnT = 0; p.burnTick = 0; p.poisonT = 0; p.poisonTick = 0; p.stringT = 0;
 }
 
 /** Seconds of invulnerability after getting back up. Far longer than an ordinary hit's. */
@@ -234,10 +254,12 @@ function contactDamage(p, dt) {
           if (p.graceReady) { p.graceReady = false; p.graceT = GRACE_TIME; }
           continue;
         }
-        const dmg = (e.weakenT > 0 ? e.dmg * 0.7 : e.dmg) * (G.stats.contactMult || 1);
+        const dmg = (e.weakenT > 0 ? e.dmg * 0.7 : e.dmg) * (G.stats.contactMult || 1) * (e.aged ? 0.7 : 1);
         if (damagePlayer(dmg)) {
           e.contactCd = CONTACT_CD;
           if (e.legend && onLegendTouch) onLegendTouch(e);
+          // Haxorus's Rough Skin: whatever touched you is cut on the scales.
+          if (G.roughSkin && roughSkinHook) roughSkinHook(e);
         }
       }
     }

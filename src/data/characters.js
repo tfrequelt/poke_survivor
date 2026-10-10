@@ -159,7 +159,38 @@ export const CHARACTERS = [
         note: 'Night Shade swallows the ground whole.' },
     ],
   },
+  // The secret seventh. Locked until the Wild Beast success is claimed (beat a legendary in
+  // under 20 seconds), and the only partner on the select screen's second page. A bruiser: slow,
+  // armoured and heavy-handed, built to stand in the crowd and chew through it.
+  {
+    id: 'axew', titleAnim: 'Pose', name: 'Axew', shape: 'axew', palette: 'dragon', fallback: 'quad_small',
+    color: '#7a5af0', typeLabel: 'DRAGON', types: ['dragon'],
+    locked: 'wild_beast',
+    blurb: 'Tusks first, questions later.',
+    trait: 'Mold Breaker: hits ignore 4 armour, and cut through a quarter of any shield.',
+    weapon: 'dragon_rage', ability: 'crunch',
+    stats: {
+      maxHp: 120, moveSpeed: 54, armor: 2, magnet: 50, power: 1.15,
+      attackSpeed: 0.95, area: 1.00, duration: 1.00, projSpeed: 0.95, range: 0.85,
+      crit: 0.05, regen: 0.20, cooldown: 1.00, contactMult: 0.90,
+    },
+    evolutions: [
+      { atLevel: 10, id: 'fraxure', name: 'Fraxure', shape: 'fraxure', palette: 'dragon', fallback: 'quad_small',
+        types: ['dragon'],
+        grant: { maxHp: +60, power: +0.12, armor: +1, moveSpeed: +4 },
+        note: 'Axe Kick: critical hits knock foes back hard. Draco Meteor unlocked.' },
+      { atLevel: 20, id: 'haxorus', name: 'Haxorus', shape: 'haxorus', palette: 'dragon', fallback: 'quad_small',
+        types: ['dragon'],
+        grant: { maxHp: +70, power: +0.18, crit: +0.08, armor: +1 },
+        note: 'Rough Skin: anything that touches you takes damage. Draco Meteor hits harder.' },
+    ],
+  },
 ];
+
+/** Whether a partner can be picked: the locked ones wait for their success to be claimed. */
+export function partnerUnlocked(c, save) {
+  return !c.locked || !!(save && save.partners && save.partners[c.id]);
+}
 
 export const CHARACTER_BY_ID = Object.fromEntries(CHARACTERS.map((c) => [c.id, c]));
 

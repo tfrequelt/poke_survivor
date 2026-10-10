@@ -69,6 +69,8 @@ const OTHER_RIPS = [
   ['game_boy_advance', 'pokemonrubysapphire', '8190', 'POKEMON RUBY/SAPPHIRE', 'bush and pot props'],
   ['ds_dsi', 'pokemonheartgoldsoulsilver', '28036', 'POKEMON HEARTGOLD/SOULSILVER', 'Rare Candy'],
   ['pc_computer', 'gravitycircuit', '500769', 'GRAVITY CIRCUIT', 'overload particle effects'],
+  // A custom sheet of FireRed's move sprites, ripped by wormintheworks, who asks to be credited.
+  ['custom_edited', 'pokemoncustoms', '18433', 'POKEMON FIRERED MOVES BY WORMINTHEWORKS', 'Crunch and Draco Meteor icons'],
 ];
 
 export const CREDITS = [

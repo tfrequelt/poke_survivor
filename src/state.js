@@ -219,6 +219,9 @@ export function resetRunState() {
   G.shiny = false;
   G.endLockUntil = 0;
   G.endPortrait = '';
+  // Rowlet's line, from Dartrix on: Sharpshoot, bonus crit chance (0-100, in %) that every crit
+  // builds; whether it is unlocked, and when it last grew (for the HUD's flash).
+  G.sharp = 0; G.sharpOn = false; G.sharpAt = -1;
   G.bounds = null;
   G.statsDirty = true;
   G.mods.length = 0;

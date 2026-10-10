@@ -51,6 +51,8 @@ export const PALETTES = {
   // Frost, not water: almost white at the top with a cold blue core, so an ice shard reads as
   // ice against the sea on the beach stage rather than as another bubble.
   ice:      ['.', '#1d4a70', '#4a9fd0', '#9ad8f4', '#eaffff', '#101018', '#ffffff', '#ffffff', '#2f6f9c'],
+  // Dragon: a deep indigo with a violet body and a hot gold accent, Axew's tusks and Dragon Rage.
+  dragon:   ['.', '#1c1050', '#3e2a9c', '#7a5af0', '#c8b8ff', '#101018', '#ffb347', '#ffffff', '#2a1a70'],
   // The present: a white box with a red ribbon, so slot 4 is the paper and 2/3 are the ribbon.
   gift:     ['.', '#3a2028', '#c02030', '#e84050', '#ffffff', '#101018', '#ffe0e4', '#ffffff', '#8a1020'],
 

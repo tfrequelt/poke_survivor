@@ -140,7 +140,8 @@ function candidates() {
     const n = pickCount(a.id);
     if (n >= a.levels.length || G.banished.has(a.id)) continue;
     out.push({
-      kind: 'ability', id: a.id, name: a.name, desc: a.desc, slot: a.slot,
+      kind: 'ability', id: a.id, name: a.name, slot: a.slot,
+      desc: n + 1 === a.levels.length ? `${a.desc} MAXED: a brand-new look.` : a.desc,
       isNew: n === 0, level: n + 1, max: a.levels.length,
       // Weighted well above everything else so a new ability surfaces fast without being forced.
       weight: n === 0 ? 30 : 11,
@@ -225,6 +226,8 @@ function levelDesc(def, currentLevel) {
   if (!lv) return 'Improves this weapon.';
   const bits = [];
   for (const [key, say] of LEVEL_WORDS) if (lv[key]) bits.push(say(lv[key], def));
+  // A weapon's own upgrade, which the shared words cannot describe (a dance step, a carry).
+  if (lv.say) bits.unshift(lv.say);
   return bits.length ? bits.join(', ') : 'Improves this weapon.';
 }
 

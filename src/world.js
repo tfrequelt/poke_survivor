@@ -24,7 +24,7 @@ export const CAP = {
   zones: 140,
   shapes: 48,
   items: 40,
-  sprFx: 240,
+  sprFx: 320,
 };
 
 // --- Entity factories -------------------------------------------------------
@@ -59,6 +59,15 @@ const newEnemy = () => ({
   // counted toward a freeze, and the freeze itself.
   ovStacks: 0, ovStackSrc: -1, doomT: 0, doomDmg: 0, doomSrc: 0, bondT: 0,
   charmT: 0, charmSrc: 0, charmMul: 1, polSign: 0, polT: 0, chillN: 0, frozenT: 0,
+  // Support powers (enemies.js updateSpecial): the cast clock and its windup; Barrier (seconds
+  // left, and the clock time the last one ended); a Magnet Field shield and its clock; Tailwind
+  // (seconds left, and the speed multiplier to take back off); and Sturdy, unspent.
+  specT: 0, specWind: 0, protT: 0, protLast: -99, shieldHp: 0, shieldT: 0, tailT: 0, tailMul: 1, sturdy: false, survAt: 0,
+  // A serial per spawn: something holding an enemy (a twister, a time ring) checks it, since the
+  // pool hands the same object to a new enemy once the old one is gone.
+  sn: 0,
+  // Aged by a Roar of Time ring (its Aging overload): slower and weaker for the rest of its life.
+  aged: false,
   // Which totem's trial this enemy belongs to (its index on the floor), or -1.
   trial: -1,
   // Going round a pond (see paths.js): `detour` is set while the straight line to the player
@@ -119,6 +128,8 @@ const newProjectile = () => ({
   // pierced (snowball), its polarity, whether it has joined the orbit, a shared timer (wake,
   // gravity, magnet, orbit re-hits), its launch damage (accel), and its sprite-trail clock.
   ovRet: 0, ovRic: 0, ovErase: 0, ovSnow: 0, ovPol: 0, ovOrb: 0, ovT: 0, ovBase: 0, ovS: 0, ovEcho: 0, ovAccF: 1,
+  // A String Shot strand: drawn as a white silk line rather than the enemy-shot sprite.
+  strand: 0,
 });
 
 const newOrb = () => ({ alive: false, x: 0, y: 0, vx: 0, vy: 0, value: 1, tier: 0, sprId: 0, age: 0, pulling: false });
@@ -220,7 +231,7 @@ export function spawn(kind) {
   if (kind === 'projectiles') {
     e.hostile = false; e.src = damageSource; e.dmg0 = 0; e.look = 0; e.status = 0; e.bossT = 0;
     e.grow = 0; e.vis = 1; e.pt = 0;
-    e.ovRet = 0; e.ovRic = 0; e.ovErase = 0; e.ovSnow = 0; e.ovPol = 0; e.ovOrb = 0; e.ovT = 0; e.ovBase = 0; e.ovS = 0; e.ovEcho = 0; e.ovAccF = 1;
+    e.ovRet = 0; e.ovRic = 0; e.ovErase = 0; e.ovSnow = 0; e.ovPol = 0; e.ovOrb = 0; e.ovT = 0; e.ovBase = 0; e.ovS = 0; e.ovEcho = 0; e.ovAccF = 1; e.strand = 0;
   }
   // A zone is credited to whatever was running when it was laid, which is the only way a pool
   // of fire left behind by a shot can still count towards the weapon that fired it.
@@ -292,6 +303,9 @@ const newDecoy = () => ({
   alive: false, x: 0, y: 0, hp: 0, maxHp: 0, dir: 0, t: 0, dyingT: 0, flash: 0,
   // For an overloaded Substitute: whether its fall has been handled, and its own pulse clock.
   downed: false, tick: 0,
+  // Double Team's strike: seconds into its Attack animation (-1 = not attacking), its length,
+  // the angle it lunges at, and whether this swing has landed yet.
+  atkT: -1, atkDur: 0, atkA: 0, struck: false,
 });
 export const decoys = Array.from({ length: DECOY_MAX }, newDecoy);
 /** Run time at which a doll was last destroyed; the next one waits a full cooldown after it. */

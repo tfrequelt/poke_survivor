@@ -502,7 +502,8 @@ export const WEAPONS = [
     id: 'seed_bomb', name: 'Seed Bomb', type: 'grass',
     desc: 'Lobs seeds that take root, wait, and then go off underneath the crowd.',
     behavior: 'bloom', aim: 'nearest', motion: 'arc',
-    sprite: 'proj_seed', palette: 'grass',
+    // The two seeds of items_2.png, one or the other at random for every seed thrown.
+    sprite: 'proj_seed_a', spriteAlt: 'proj_seed_b', spriteFallback: 'proj_seed', palette: 'grass',
     damage: 38, cooldown: 2.1, amount: 2, speed: 210, area: 1, pierce: 0, duration: 1.5,
     r: 6, range: 190, spread: 0.42, knockback: 50, usesAmount: true,
     fuse: 1.5, blastRadius: 46, impact: 9, impactColor: '#c4f29a',
@@ -799,7 +800,8 @@ export const WEAPONS = [
     id: 'toxic_spikes', name: 'Toxic Spikes', type: 'poison',
     desc: 'Lays a ring of barbs around where you are standing and leaves them there.',
     behavior: 'orbit', aim: 'nearest', motion: 'anchor',
-    sprite: 'proj_thorn', palette: 'poison',
+    // Its own spike (assets/pmd/toxic_spike.png); the drawn thorn if the file is missing.
+    sprite: 'proj_toxic_spike', spriteFallback: 'proj_thorn', palette: 'poison',
     damage: 20, cooldown: 2.8, amount: 5, speed: 0, area: 1, pierce: 9999, duration: 4.0,
     r: 7, range: 0, spread: 0, knockback: 8, usesAmount: true,
     orbitRadius: 48, orbitSpeed: 0, spin: 1.2, impact: 5, impactColor: '#e8b0f8',
@@ -1076,6 +1078,157 @@ WEAPONS.push(
   },
 );
 
+WEAPONS.push(
+  // =========================================================================
+  // DRAGON -- Axew's line. Eight moves off dragon_moves.png, each its own delivery: none of them
+  // is a projectile weapon, an aura or a line in a new colour. All eight are run by dragon.js
+  // (the `rage` ... `timelock` behaviours plug into the registry at boot), which also draws them
+  // from the sheet's own animations.
+  // =========================================================================
+  {
+    id: 'dragon_rage', name: 'Dragon Rage', owner: 'axew', type: 'dragon',
+    // The overload card shows the move as it looks in play (a frame of its sheet animation), not the atlas icon.
+    card: { seq: 'fx_rage_ball', frame: 0, scale: 1.6, tint: true },
+    desc: 'A spinning fireball that bursts into a pillar of flame. Fixed damage: armour and types do not touch it.',
+    behavior: 'rage', aim: 'nearest', motion: 'anchor',
+    sprite: 'orb', palette: 'dragon',
+    damage: 40, cooldown: 2.0, amount: 1, speed: 200, area: 1, pierce: 0, duration: 1.1,
+    r: 6, range: 210, spread: 0.35, knockback: 30, usesAmount: true,
+    // The pillar: its radius, and how long it stands.
+    burstR: 22, burstT: 0.55,
+    levels: [
+      {}, { amount: +1 }, { damage: +8 }, { cooldownMul: 0.9 },
+      { amount: +1 }, { damage: +10 }, { cooldownMul: 0.88 }, { areaMul: 1.25, damage: +8 },
+      { damage: +12 }, { amount: +1, damage: +14 }
+    ],
+  },
+  {
+    id: 'dragon_pulse', name: 'Dragon Pulse', type: 'dragon',
+    // The overload card shows the move as it looks in play (a frame of its sheet animation), not the atlas icon.
+    card: { seq: 'fx_pulse_orb', frame: 3, scale: 1.1, tint: true },
+    desc: 'A slow, ringed orb that rolls through the crowd, throbbing out a shockwave every 0.3s as it goes.',
+    behavior: 'pulseOrb', aim: 'nearest', motion: 'anchor',
+    sprite: 'proj_vortex', palette: 'dragon',
+    damage: 8, cooldown: 2.8, amount: 1, speed: 58, area: 1, pierce: 0, duration: 2.7,
+    r: 26, range: 200, spread: 0.5, knockback: 30, usesAmount: true,
+    throb: 0.3,
+    levels: [
+      {}, { damage: +3 }, { amount: +1 }, { cooldownMul: 0.9 },
+      { damage: +3 }, { areaMul: 1.2 }, { amount: +1 }, { duration: +0.8, damage: +3 },
+      { cooldownMul: 0.86 }, { amount: +1, damage: +5 }
+    ],
+  },
+  {
+    id: 'dragon_dance', name: 'Dragon Dance', type: 'dragon',
+    // The overload card shows the move as it looks in play (a frame of its sheet animation), not the atlas icon.
+    card: { seq: 'fx_dance_ring', frame: 0, scale: 1.2, tint: true },
+    desc: 'Every cast is a dance step: sparks fly up from your feet and dive onto foes -- three, plus one for every step you are into the dance. Each step leaves you faster for a few seconds.',
+    behavior: 'dance', aim: 'nearest', motion: 'anchor',
+    sprite: 'proj_spark', palette: 'dragon',
+    // No `amount`: the dance itself makes the sparks (3 + steps), so a global +projectile has
+    // nothing to add to.
+    damage: 30, cooldown: 1.7, amount: 0, speed: 420, area: 1, pierce: 0, duration: 1,
+    r: 18, range: 220, spread: 0, knockback: 20, usesAmount: false,
+    // The speed a step gives, how long the steps last, and how many there can be. The levels grow
+    // these through their own keys (dragon.js folds them), with `say` for the card.
+    stepHaste: 0.06, stepT: 3, stepMax: 3,
+    levels: [
+      {}, { stepHaste: 0.01, say: '+1% speed per step' }, { damage: +8 }, { cooldownMul: 0.9 },
+      { stepMax: 1, say: '+1 dance step (+1 spark)' }, { stepT: 1, say: 'steps last 1s longer' },
+      { damage: +10 }, { areaMul: 1.25 }, { cooldownMul: 0.88 },
+      { stepMax: 1, stepHaste: 0.01, say: '+1 dance step (+1 spark), +1% speed per step' }
+    ],
+  },
+  {
+    id: 'dragon_rush', name: 'Dragon Rush', type: 'dragon',
+    // The overload card shows the move as it looks in play (a frame of its sheet animation), not the atlas icon.
+    card: { seq: 'fx_rush_slash', frame: 1, scale: 0.6, tint: true },
+    desc: 'One phantom crescent charges from behind you, through you and on ahead. What it strikes is pinned to its edge, carried along and slammed into the ground where it ends.',
+    behavior: 'rush', aim: 'facing', motion: 'anchor',
+    sprite: 'proj_blade', palette: 'dragon',
+    // Always one crescent: no `amount`, and the levels make it carry more and hit harder instead.
+    damage: 36, cooldown: 2.6, amount: 0, speed: 400, area: 1, pierce: 0, duration: 1,
+    r: 18, range: 230, spread: 0, knockback: 120, usesAmount: false,
+    // Rocks thrown off the charge (and their share of its damage), how many foes it can carry,
+    // and the slam that ends it (a share of its damage).
+    rocks: 3, rockDmg: 0.5, carry: 4, slamDmg: 1.6,
+    levels: [
+      {}, { damage: +9 }, { carry: 1, say: 'carries 1 more foe' }, { cooldownMul: 0.9 },
+      { rocks: 1, say: '+1 rock thrown' }, { damage: +11 }, { slamDmg: 0.4, say: 'harder slam' },
+      { reach: 40, damage: +6, say: 'charges 40px further' }, { cooldownMul: 0.88 },
+      { carry: 2, damage: +14, say: 'carries 2 more foes' }
+    ],
+  },
+  {
+    id: 'dragon_claw', name: 'Dragon Claw', type: 'dragon',
+    // The overload card shows the move as it looks in play (drawn as it is in the field), not the atlas icon.
+    card: { draw: 'rake', tint: true },
+    desc: 'Three claw rakes across the nearest foe, one after another, trailing sparks. The third always lands a critical hit.',
+    behavior: 'rake', aim: 'nearest', motion: 'anchor',
+    sprite: 'proj_claw', palette: 'dragon',
+    damage: 13, cooldown: 1.25, amount: 1, speed: 0, area: 1, pierce: 0, duration: 1,
+    r: 6, range: 120, spread: 0, knockback: 40, usesAmount: true,
+    // Rakes per strike, their length and the gap between them.
+    rakes: 3, rakeLen: 50, rakeGap: 0.08,
+    levels: [
+      {}, { damage: +4 }, { amount: +1 }, { cooldownMul: 0.9 },
+      { damage: +5 }, { areaMul: 1.25 }, { amount: +1 }, { damage: +6, cooldownMul: 0.9 },
+      { damage: +7 }, { amount: +1, damage: +9 }
+    ],
+  },
+  {
+    id: 'twister', name: 'Twister', type: 'dragon',
+    // The overload card shows the move as it looks in play (drawn as it is in the field), not the atlas icon.
+    card: { draw: 'twister', tint: true },
+    desc: 'A twister wanders the field on its own, sucking foes in, spinning them helpless in the air, then flinging them out in a heap.',
+    behavior: 'twister', aim: 'nearest', motion: 'anchor',
+    sprite: 'proj_cloud', palette: 'dragon',
+    damage: 8, cooldown: 4.4, amount: 1, speed: 46, area: 1, pierce: 0, duration: 3.6,
+    r: 34, range: 200, spread: 0, knockback: 230, usesAmount: true,
+    // How many it can hold aloft, and what the throw deals (a share of `damage`).
+    lift: 5, throwDmg: 1.3,
+    levels: [
+      {}, { damage: +3 }, { areaMul: 1.15 }, { cooldownMul: 0.9 },
+      { amount: +1 }, { damage: +3 }, { duration: +1.0 }, { areaMul: 1.2, damage: +3 },
+      { cooldownMul: 0.86 }, { amount: +1, damage: +5 }
+    ],
+  },
+  {
+    id: 'spacial_rend', name: 'Spacial Rend', type: 'dragon',
+    // The overload card shows the move as it looks in play (a frame of its sheet animation), not the atlas icon.
+    card: { seq: 'fx_rend_star', frame: 5, scale: 0.9, tint: true },
+    desc: 'Tears space open on a foe. The tear drags the crowd in, then six crescents slash outward and snap back, cutting both ways.',
+    behavior: 'rend', aim: 'nearest', motion: 'anchor',
+    sprite: 'proj_star', palette: 'dragon',
+    damage: 20, cooldown: 3.4, amount: 6, speed: 0, area: 1, pierce: 0, duration: 1,
+    r: 9, range: 230, spread: 0, knockback: 0, usesAmount: true,
+    // How far the crescents reach, and what the tear deals when it closes.
+    reach: 58, tearDmg: 1.5,
+    levels: [
+      {}, { damage: +6 }, { amount: +2 }, { cooldownMul: 0.9 },
+      { damage: +7 }, { areaMul: 1.2 }, { amount: +2 }, { damage: +8, cooldownMul: 0.9 },
+      { damage: +9 }, { amount: +2, damage: +12 }
+    ],
+  },
+  {
+    id: 'roar_of_time', name: 'Roar of Time', type: 'dragon',
+    // The overload card shows the move as it looks in play (a frame of its sheet animation), not the atlas icon.
+    card: { seq: 'fx_roar', frame: 3, scale: 0.65, tint: true },
+    desc: 'Stops time inside a ring of gears. Foes caught in it freeze, and everything they take is stored and released at once, half again as hard.',
+    behavior: 'timelock', aim: 'nearest', motion: 'anchor',
+    sprite: 'proj_ring', palette: 'dragon',
+    damage: 11, cooldown: 5.6, amount: 1, speed: 0, area: 1, pierce: 0, duration: 2.2,
+    r: 52, range: 190, spread: 0, knockback: 90, usesAmount: false,
+    // The ring's own ticks (banked, not dealt) and the share of the rest that is paid again.
+    tick: 0.4, release: 1.5, echo: 0.5,
+    levels: [
+      {}, { damage: +4 }, { areaMul: 1.15 }, { cooldownMul: 0.9 },
+      { damage: +4 }, { duration: +0.6 }, { areaMul: 1.15 }, { damage: +5, cooldownMul: 0.9 },
+      { damage: +6 }, { areaMul: 1.2, damage: +8 }
+    ],
+  },
+);
+
 // =============================================================================================
 // EIGHT MORE EVOLUTIONS -- one for every type that had none.
 //
@@ -1195,6 +1348,8 @@ for (const [fromId, item, ev] of MORE_EVOLUTIONS) {
 
 WEAPONS.push({
   id: 'substitute', name: 'Substitute', universal: true,
+  // The overload card shows the move as it looks in play (a frame of its sheet animation), not the atlas icon.
+  card: { seq: 'substitute', frame: 0, scale: 2 },
   desc: 'Leaves a doll of yourself behind. Anything nearer to it than to you goes for the doll.',
   behavior: 'decoy', aim: 'facing', motion: 'anchor',
   sprite: 'proj_ring', palette: 'normal',
@@ -1225,16 +1380,17 @@ export function weaponSpritePairs() {
   // Anything that must point where it flies gets baked rotations instead of a left/right flip.
   const ROTATED = new Set([
     'proj_leaf', 'proj_bone', 'proj_rock', 'proj_fang', 'proj_shard', 'proj_feather',
-    'proj_quill', 'proj_thorn', 'proj_claw', 'proj_blade', 'proj_fist', 'proj_boulder',
+    'proj_quill', 'proj_thorn', 'proj_claw', 'proj_blade', 'proj_fist', 'proj_boulder', 'proj_toxic_spike',
   ]);
-  const add = (sprite, palette) => {
+  const add = (sprite, palette, fallback) => {
     const key = `${sprite}:${palette}`;
     if (seen.has(key)) return;
     seen.add(key);
-    out.push([sprite, palette, ROTATED.has(sprite) ? 16 : 0]);
+    out.push([sprite, palette, ROTATED.has(sprite) ? 16 : 0, fallback || null]);
   };
   for (const w of WEAPONS) {
-    add(w.sprite, w.palette);
+    add(w.sprite, w.palette, w.spriteFallback);
+    if (w.spriteAlt) add(w.spriteAlt, w.palette, w.spriteFallback);
     if (w.emitSprite) add(w.emitSprite, w.emitPalette || w.palette);
   }
   return out;

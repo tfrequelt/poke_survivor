@@ -99,20 +99,46 @@ export function damageFor(key) {
   return id === undefined ? 0 : (srcDamage[id] || 0);
 }
 
-export function damageEnemy(e, amount, knockX = 0, knockY = 0, canCrit = true) {
+/**
+ * `critCtx.force` makes the next hits critical without a roll -- Dragon Claw's last rake. Set
+ * and cleared around the call by whoever wants it.
+ */
+export const critCtx = { force: false };
+
+/**
+ * `fixed` is Dragon Rage: the amount lands as it is, with no type matchup, no crit and no armour.
+ * A shield still takes it first.
+ */
+export function damageEnemy(e, amount, knockX = 0, knockY = 0, canCrit = true, fixed = false) {
   if (!e.alive) return false;
   // Type matchup first, so a crit, a mark and armour all apply to the matched damage.
   const src = getDamageSource();
   const ti = srcType[src];
   let eff = 1;
-  if (ti !== undefined && e.def && e.def.typeMul) { eff = e.def.typeMul[ti]; amount *= eff; }
+  if (!fixed && ti !== undefined && e.def && e.def.typeMul) { eff = e.def.typeMul[ti]; amount *= eff; }
   lastEffect = eff;
   const s = G.stats;
-  const crit = canCrit && s && s.crit > 0 && G.rngRun() < s.crit;
-  let raw = crit ? amount * (s.critMult || 1.5) : amount;
+  // Rowlet's Sharpshoot adds its bar straight onto the crit chance.
+  const cc = s ? s.crit + (G.sharp || 0) * 0.01 : 0;
+  const crit = !fixed && canCrit && (critCtx.force || (cc > 0 && G.rngRun() < cc));
+  let raw = crit ? amount * ((s && s.critMult) || 1.5) : amount;
   // An overload's mark: the enemy takes more from everything while it lasts.
-  if (e.markT > 0) raw *= 1 + e.markMul;
-  const dealt = Math.max(1, Math.round(raw) - e.armor);
+  if (e.markT > 0 && !fixed) raw *= 1 + e.markMul;
+  // Axew's Mold Breaker: armour counts for 4 less against everything it does.
+  const armor = fixed ? 0 : G.moldBreaker ? Math.max(0, e.armor - 4) : e.armor;
+  let dealt = Math.max(1, Math.round(raw) - armor);
+  // A Magnet Field shield takes the hit before the body does -- all but the quarter Mold Breaker
+  // drives straight through it.
+  if (e.shieldHp > 0) {
+    const through = G.moldBreaker ? Math.round(dealt * 0.25) : 0;
+    dealt = through + absorb(e, dealt - through);
+  }
+  // Fraxure and Haxorus's Axe Kick: a critical hit knocks the foe back hard, away from you.
+  if (crit && G.axeKick && G.player && !e.legend) {
+    const dx = e.x - G.player.x, dy = e.y - G.player.y;
+    const d = Math.hypot(dx, dy) || 1;
+    knockX += (dx / d) * 160; knockY += (dy / d) * 160;
+  }
 
   const before = e.hp;
   e.hp -= dealt;
@@ -133,11 +159,16 @@ export function damageEnemy(e, amount, knockX = 0, knockY = 0, canCrit = true) {
   const ov = srcOvl[src];
   if (ov !== undefined && hooks.onHit) hooks.onHit(e, dealt, ov, crit);
 
-  if (e.hp <= 0) {
-    killEnemy(e);
-    return true;
-  }
+  if (e.hp <= 0) return killEnemy(e);
   return false;
+}
+
+/** Run `dealt` through an enemy's shield; what is left is what reaches its health. */
+function absorb(e, dealt) {
+  const a = Math.min(e.shieldHp, dealt);
+  e.shieldHp -= a;
+  if (e.shieldHp <= 0) { e.shieldHp = 0; e.shieldT = 0; if (hooks.onShieldBreak) hooks.onShieldBreak(e); }
+  return dealt - a;
 }
 
 /**
@@ -170,15 +201,13 @@ export function damageOverTime(e, amount) {
   // A burn is its source's type too: fire burns rock badly, and grass better than anything.
   const ti = srcType[getDamageSource()];
   if (ti !== undefined && e.def && e.def.typeMul) amount *= e.def.typeMul[ti];
-  const dealt = Math.max(1, Math.round(amount));
+  let dealt = Math.max(1, Math.round(amount));
+  if (e.shieldHp > 0) dealt = absorb(e, dealt);
   const before = e.hp;
   e.hp -= dealt;
   G.damageDealt += dealt;
   credit(e, before);
-  if (e.hp <= 0) {
-    killEnemy(e);
-    return true;
-  }
+  if (e.hp <= 0) return killEnemy(e);
   return false;
 }
 
@@ -190,8 +219,17 @@ export function damageOverTime(e, amount) {
  * one out during a pierce sweep and the remaining indices point at the wrong enemies. So the body
  * stays in place until main.js sweeps at the end of the tick, and every loop skips `!alive`.
  */
-export function killEnemy(e) {
+export function killEnemy(e, force = false) {
   if (!e.alive) return false;
+  // Mr. Mime's Barrier, and a Gigalith's Sturdy: the blow leaves it standing at 1 HP. Every way
+  // an enemy can die comes through here, so executes and burns respect it too. Board wipes force.
+  if (!force && (e.protT > 0 || e.sturdy)) {
+    const kind = e.protT > 0 ? 'barrier' : 'sturdy';
+    if (kind === 'sturdy') e.sturdy = false;
+    e.hp = 1;
+    if (hooks.onSurvive) hooks.onSurvive(e, kind);
+    return false;
+  }
   e.alive = false;
   if (hooks.onKill) hooks.onKill(e);
   return true;
@@ -206,7 +244,7 @@ export function killAll(radius = 0) {
     const e = enemies[i];
     if (!e.alive || e.boss) continue;
     if (dist2(e.x, e.y, p.x, p.y) > r2) continue;
-    if (killEnemy(e)) n++;
+    if (killEnemy(e, true)) n++;
   }
   return n;
 }
@@ -421,6 +459,8 @@ export function statusPlayer(kind, mul = 1) {
   else if (name === 'burn') p.burnT = Math.max(p.burnT, secs);
   else if (name === 'para') p.paraT = Math.max(p.paraT, secs);
   else if (name === 'freeze') p.freezeT = Math.max(p.freezeT, secs);
+  else if (name === 'poison') p.poisonT = Math.max(p.poisonT, secs);
+  else if (name === 'string') p.stringT = Math.max(p.stringT, secs);
 }
 
 /**

@@ -169,6 +169,8 @@ export const SFX = {
   evolve:      { type: 'sweep', from: 300, to: 1500, dur: 0.50, wave: 'pulse50', gain: 0.18 },
   select:      { type: 'blip', freq: 880, dur: 0.05, wave: 'pulse50', gain: 0.10 },
   confirm:     { type: 'chord', notes: [660, 990], dur: 0.12, wave: 'pulse50', gain: 0.12 },
+  // A refusal: a locked partner, picked anyway.
+  deny:        { type: 'chord', notes: [196, 185], dur: 0.22, wave: 'pulse12', gain: 0.12 },
 
 
   // The prize wheel. The supplied sample is the real one; this is the fallback.

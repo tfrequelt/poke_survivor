@@ -139,6 +139,22 @@ export function addShake(amount) {
 export function camLeft()  { return Math.round(G.cam.x - HALF_W + shakeX); }
 export function camTop()   { return Math.round(G.cam.y - HALF_H + shakeY); }
 
+/**
+ * The player's own screen position, steady.
+ *
+ * toScreenX rounds the camera and leaves the player's fraction to the blit, and the two roundings
+ * beat against each other while the camera trails: the player flickers a pixel back and forth
+ * every few frames, on both axes at once when walking diagonally. Measured from the camera's
+ * exact position instead, the gap between the two only changes when the camera's lag does, so the
+ * partner holds still on screen while the world scrolls past it. Returns a shared object.
+ */
+const _ps = { x: 0, y: 0 };
+export function playerScreen(p) {
+  _ps.x = Math.round(p.x - (G.cam.x - HALF_W + shakeX));
+  _ps.y = Math.round(p.y - (G.cam.y - HALF_H + shakeY));
+  return _ps;
+}
+
 /** World -> screen. Both are in the same unit, so this is a translation only. */
 export const toScreenX = (wx) => wx - camLeft();
 export const toScreenY = (wy) => wy - camTop();

@@ -16,6 +16,8 @@
 /** The attacking types, in the order the per-enemy multiplier tables are laid out. */
 export const ATTACK_TYPES = [
   'normal', 'fire', 'water', 'electric', 'grass', 'ice', 'poison', 'ground', 'flying', 'ghost', 'dark',
+  // Axew's line. Last, so every table laid out before it keeps its indices.
+  'dragon',
 ];
 export const TYPE_INDEX = Object.fromEntries(ATTACK_TYPES.map((t, i) => [t, i]));
 
@@ -33,6 +35,7 @@ const CHART = {
   flying:   { electric: 0.5, grass: 2, fighting: 2, bug: 2, rock: 0.5, steel: 0.5 },
   ghost:    { normal: 0, psychic: 2, ghost: 2, dark: 0.5 },
   dark:     { fighting: 0.5, psychic: 2, ghost: 2, dark: 0.5, fairy: 0.5 },
+  dragon:   { dragon: 2, steel: 0.5, fairy: 0 },
 };
 
 const SOFT = { 2: 1.5, 0.5: 0.6, 0: 0.5 };
@@ -58,17 +61,20 @@ export const SPECIES_TYPES = {
   pidgeot: ['normal', 'flying'], spearow: ['normal', 'flying'], fearow: ['normal', 'flying'],
   applin: ['grass', 'dragon'], appletun: ['grass', 'dragon'], flapple: ['grass', 'dragon'],
   tauros: ['normal'], swablu: ['normal', 'flying'], altaria: ['dragon', 'flying'],
+  mr_mime: ['psychic', 'fairy'],
   // Damp Cave
   zubat: ['poison', 'flying'], crobat: ['poison', 'flying'], roggenrola: ['rock'], boldore: ['rock'],
   gigalith: ['rock'], diglett: ['ground'], dugtrio: ['ground'], aron: ['steel', 'rock'],
   lairon: ['steel', 'rock'], aggron: ['steel', 'rock'], geodude: ['rock', 'ground'],
   graveler: ['rock', 'ground'], skarmory: ['steel', 'flying'],
   tyrunt: ['rock', 'dragon'], tyrantrum: ['rock', 'dragon'],
+  baltoy: ['ground', 'psychic'], claydol: ['ground', 'psychic'],
   // Beach Cave
   poliwag: ['water'], poliwhirl: ['water'], poliwrath: ['water', 'fighting'],
   marill: ['water', 'fairy'], azumarill: ['water', 'fairy'], zigzagoon: ['normal'], linoone: ['normal'],
   poochyena: ['dark'], mightyena: ['dark'], sandygast: ['ghost', 'ground'], palossand: ['ghost', 'ground'],
   clauncher: ['water'], clawitzer: ['water'],
+  wingull: ['water', 'flying'], pelipper: ['water', 'flying'],
   // The secret floors
   articuno: ['ice', 'flying'], moltres: ['fire', 'flying'], zapdos: ['electric', 'flying'],
   regirock: ['rock'], regice: ['ice'], registeel: ['steel'],
@@ -88,7 +94,7 @@ export const ABILITY_TYPES = {
   protect_bubble: 'water', earthquake: 'ground', homing_leaf: 'grass', spectral_arrow: 'ghost',
   flamethrower: 'fire', fire_spin: 'fire', present: 'normal', blizzard: 'ice',
   hyperbeam: 'normal', thunderbolt: 'electric', hydro_pump: 'water', dark_pulse: 'dark',
-  shadow_orb: 'ghost', night_shade: 'ghost',
+  shadow_orb: 'ghost', night_shade: 'ghost', crunch: 'dark', draco_meteor: 'dragon',
 };
 
 /**

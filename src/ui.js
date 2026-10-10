@@ -18,7 +18,8 @@ import { ATTACK_TYPES, rosterMatchups, SUPER, RESISTED } from './data/types.js';
 import { ENEMIES } from './data/enemies.js';
 import { legend } from './legends.js';
 import { clamp, hash2, formatTime, formatNum } from './util.js';
-import { getPortrait, getImage, getAnim, dungeonFont, dirFromAngle } from './assets.js';
+import { getPortrait, getImage, getAnim, getSequence, dungeonFont, dirFromAngle } from './assets.js';
+import { recoloured } from './recolour.js';
 import { CREDITS } from './data/credits.js';
 import { WORLD_MAP } from './data/stages.js';
 import { panel, wrap, WIN_SELECTED, messageWindow, slider , drawDamagePanel, shortNum} from './win.js';
@@ -32,7 +33,7 @@ import { damageBreakdown, damageFor } from './combat.js';
 import { WEAPON_BY_ID } from './data/weapons.js';
 import { SUCCESSES, rewardLabel, TIERS, PERKS, RANKS } from './data/successes.js';
 import { successState, unlockedCount, unlockedThisRun, successProgress, explorerRank } from './successes.js';
-import { spriteBase } from './sprites.js';
+import { spriteBase, ATLAS, FRAMES } from './sprites.js';
 import { saveData } from './save.js';
 import { STAGES } from './data/stages.js';
 
@@ -104,6 +105,8 @@ const TYPE_COLORS = {
   // No starter is either of these, so the table only needed nine until the weapons started
   // wearing the same badges -- and the weapon roster covers all eleven types.
   FIRE: '#f08030', ICE: '#98d8d8',
+  // Axew's line, the secret seventh partner, and its eight weapons.
+  DRAGON: '#7a5af0',
   // Not a type: the badge on Substitute, which every Pokemon may draft.
   ANY: '#d8d8e8',
 };
@@ -325,6 +328,57 @@ function drawPips(o, rightX, y, color) {
 const OVL_W = 194, OVL_H = 236, OVL_Y = 54, OVL_GAP = 11;
 const TAG_COLOR = { AMPLIFY: '#ffd166', TRANSFORM: '#7af0e8', WILD: '#ff9ad8' };
 
+/**
+ * A weapon as it looks in play, for its overload card: a frame of its sheet animation (`card.seq`),
+ * or for a move that is drawn rather than ripped, a small version of that drawing. `card.tint`
+ * draws it in the overload's palette, the way the overloaded move itself is drawn. False if the
+ * art is missing, so the card falls back to the atlas icon.
+ */
+function drawCardIcon(card, ov, cx, cy, t) {
+  const ovl = card.tint && ov && ov.colors ? ov : null;
+  if (card.seq) {
+    const seq = getSequence(card.seq);
+    if (!seq) return false;
+    const src = ovl ? recoloured(seq.canvas, ovl) : seq.canvas;
+    const w = Math.round(seq.w * card.scale), h = Math.round(seq.h * card.scale);
+    const f = Math.min(seq.frames - 1, card.frame || 0);
+    ctx.drawImage(src, f * seq.w, 0, seq.w, seq.h, Math.round(cx - w / 2), Math.round(cy - h / 2), w, h);
+    return true;
+  }
+  if (card.draw === 'rake') {
+    // Three bowed claw strokes, the last one the gold critical, as the rakes are drawn in play.
+    const main = ovl ? ovl.colors[0] : '#7a5af0', mid = ovl ? ovl.colors[1] : '#ffb347', crit = ovl ? ovl.colors[2] : '#ffd166';
+    for (let j = 0; j < 3; j++) {
+      const off = (j - 1) * 9;
+      const x0 = cx - 20 + off, y0 = cy - 16, x1 = cx + 14 + off, y1 = cy + 18;
+      for (const [col, wd] of [[j === 2 ? crit : main, j === 2 ? 5 : 4], [j === 2 ? '#ffffff' : mid, 2], ['#ffffff', 1]]) {
+        ctx.strokeStyle = col; ctx.lineWidth = wd;
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.quadraticCurveTo(x0 + 2, (y0 + y1) / 2 + 4, x1, y1);
+        ctx.stroke();
+      }
+    }
+    return true;
+  }
+  if (card.draw === 'twister') {
+    // The funnel of leaves and pebbles, turning, as the twister is drawn in play.
+    const seq = getSequence('fx_twister_bits');
+    if (!seq) return false;
+    const src = ovl ? recoloured(seq.canvas, ovl) : seq.canvas;
+    const H = 46;
+    for (let i = 0; i < 18; i++) {
+      const u = i / 18, h = u * H, rad = 4 + h * 0.4;
+      const ang = t * 6 + i * 2.39;
+      const x = cx + Math.cos(ang) * rad, y = cy + 26 - h + Math.sin(ang) * rad * 0.28;
+      const f = i % seq.frames;
+      ctx.drawImage(src, f * seq.w, 0, seq.w, seq.h, Math.round(x - seq.w / 2), Math.round(y - seq.h / 2), seq.w, seq.h);
+    }
+    return true;
+  }
+  return false;
+}
+
 function drawOverloadPick() {
   const t = performance.now() / 1000;
   ctx.fillStyle = 'rgba(6,6,16,0.9)';
@@ -378,7 +432,9 @@ function drawOverloadPick() {
     ctx.drawImage(glowCanvas(ov.color), cx - gr, gy - gr, gr * 2, gr * 2);
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
-    if (w) {
+    if (w && w.def.card && drawCardIcon(w.def.card, ov, cx, gy + 2 + Math.sin(t * 3 + i) * 2, t + i)) {
+      // Drawn from the move's own animation, in the overload's colours where the move takes them.
+    } else if (w) {
       // Turning slowly, so a rotated sprite shows off its shape; a flat one bobs instead.
       const rot = w.def.sprDirs > 2;
       const frame = rot ? ((t * 4 + i * 5) | 0) % w.def.sprDirs : 1;
@@ -770,7 +826,7 @@ export function drawSuccesses(cursor) {
     }
 
     // The prize, bottom right; what to do about it, bottom left.
-    const prize = rewardLabel(sc.reward);
+    const prize = rewardLabel(sc.reward, state === 'claimed', sc.secret);
     drawText(ctx, prize, x + SC_W - 10 - textWidth(prize), y + SC_H - 15,
       state === 'claimed' ? 'dim' : 'gold');
     const status = state === 'locked' ? 'LOCKED'
@@ -872,24 +928,89 @@ function cardLayout(n, maxW, gap) {
   return { w, gap: g, startX: Math.round((VW - (n * w + (n - 1) * g)) / 2) };
 }
 
-export function drawSelect(starters, t) {
+/** Partners per page of the select screen. The seventh, Axew, opens the second page. */
+export const SELECT_PAGE = 6;
+
+/**
+ * A partner reduced to its outline: its sprite (the portraits are opaque squares, so it cannot be
+ * one of those) in solid black with a violet rim, for the card of a partner still locked. Built
+ * once per frame id.
+ */
+const silhouettes = new Map();
+function silhouetteOf(id) {
+  let c = silhouettes.get(id);
+  if (c !== undefined) return c;
+  const f = FRAMES[id];
+  if (!f) { silhouettes.set(id, null); return null; }
+  c = document.createElement('canvas');
+  c.width = f.w + 2; c.height = f.h + 2;
+  const g = c.getContext('2d');
+  // The rim: the shape one pixel out each way, in violet...
+  for (const [dx, dy] of [[0, 1], [2, 1], [1, 0], [1, 2]]) g.drawImage(ATLAS, f.sx, f.sy, f.w, f.h, dx, dy, f.w, f.h);
+  g.globalCompositeOperation = 'source-in';
+  g.fillStyle = '#c8b8ff';
+  g.fillRect(0, 0, c.width, c.height);
+  // ...and the body over it, filled black.
+  const body = document.createElement('canvas');
+  body.width = f.w; body.height = f.h;
+  const bg = body.getContext('2d');
+  bg.drawImage(ATLAS, f.sx, f.sy, f.w, f.h, 0, 0, f.w, f.h);
+  bg.globalCompositeOperation = 'source-in';
+  bg.fillStyle = '#07060e';
+  bg.fillRect(0, 0, f.w, f.h);
+  g.globalCompositeOperation = 'source-over';
+  g.drawImage(body, 1, 1);
+  silhouettes.set(id, c);
+  return c;
+}
+
+/** A small padlock, 9 x 10, its top-left at (x, y). */
+function drawLock(x, y, color) {
+  ctx.fillStyle = '#0d0d18';
+  ctx.fillRect(x - 1, y + 3, 11, 8);
+  ctx.fillStyle = color;
+  ctx.fillRect(x + 2, y, 5, 1);
+  ctx.fillRect(x + 1, y + 1, 1, 3); ctx.fillRect(x + 7, y + 1, 1, 3);
+  ctx.fillRect(x, y + 4, 9, 6);
+  ctx.fillStyle = '#0d0d18';
+  ctx.fillRect(x + 4, y + 6, 1, 2);
+}
+
+/**
+ * `starters` is every partner, `unlocked` whether each can be picked. They are shown six to a
+ * page; the page is the one the cursor is on.
+ */
+export function drawSelect(starters, t, unlocked) {
   ctx.fillStyle = '#12202a';
   ctx.fillRect(0, 0, VW, VH);
 
   drawTextCentered(ctx, 'CHOOSE YOUR PARTNER', VW / 2, 26, 'gold');
 
-  const L = cardLayout(starters.length, SELECT_W, GAP);
+  const pages = Math.max(1, Math.ceil(starters.length / SELECT_PAGE));
+  const page = Math.min(pages - 1, Math.floor(ui.cursor / SELECT_PAGE));
+  const first = page * SELECT_PAGE;
+  const onPage = Math.min(SELECT_PAGE, starters.length - first);
+  // Every page lays its cards out as a full page would, so a card is the same width on both;
+  // a short page is then centred.
+  const L = cardLayout(SELECT_PAGE, SELECT_W, GAP);
+  const startX = Math.round((VW - (onPage * L.w + (onPage - 1) * L.gap)) / 2);
   const chars = Math.floor((L.w - 20) / 6);       // the font is 5px plus 1px of spacing
 
-  for (let i = 0; i < starters.length; i++) {
+  for (let j = 0; j < onPage; j++) {
+    const i = first + j;
     const c = starters[i];
-    const x = L.startX + i * (L.w + L.gap);
+    const x = startX + j * (L.w + L.gap);
     const selected = i === ui.cursor;
+    const open = !unlocked || unlocked[i];
+    const px = x + L.w / 2;
+    if (!open) {
+      drawLockedCard(c, x, L.w, px, selected, t, chars, j);
+      continue;
+    }
     panel(x, SELECT_Y, L.w, SELECT_H, selected ? { accent: '#ffffff', ...WIN_SELECTED } : { accent: c.color });
 
     // The portrait, not the walking sprite -- a face reads far better on a selection card.
     const port = getPortrait(c.id);
-    const px = x + L.w / 2;
     if (port) {
       // Scale to fill the card width, capped at 2x so a large portrait cannot overflow.
       const k = Math.max(1, Math.min(2, Math.floor((L.w - 24) / port.w)));
@@ -938,7 +1059,7 @@ export function drawSelect(starters, t) {
       y += 9;
     }
 
-    drawTextCentered(ctx, `${i + 1}`, px, SELECT_Y + SELECT_H - 13, selected ? 'gold' : 'dim');
+    drawTextCentered(ctx, `${j + 1}`, px, SELECT_Y + SELECT_H - 13, selected ? 'gold' : 'dim');
     // A ribbon for every stage this partner has won, a grey one where it has not yet.
     const rib = saveData().ribbons;
     for (let s = 0; s < STAGES.length; s++) {
@@ -953,7 +1074,149 @@ export function drawSelect(starters, t) {
     if (selected) drawCursorArrow(px, SELECT_Y - 11);
   }
 
-  drawTextCentered(ctx, `1-${starters.length} / ARROWS + ENTER      BACKSPACE BACK`, VW / 2, VH - 18, 'dim');
+  // Which page, and an arrow on each edge that has another page beyond it.
+  if (pages > 1) {
+    const label = `PAGE ${page + 1} / ${pages}`;
+    drawText(ctx, label, VW - 12 - textWidth(label), 26, 'dim');
+    const bob = Math.round(Math.sin(t * 5) * 1.5);
+    const cy = SELECT_Y + SELECT_H / 2;
+    if (page < pages - 1) drawPageArrow(VW - 6 + bob, cy, 1);
+    if (page > 0) drawPageArrow(5 - bob, cy, -1);
+  }
+
+  drawTextCentered(ctx, `1-${onPage} / ARROWS + ENTER      BACKSPACE BACK`, VW / 2, VH - 18, 'dim');
+}
+
+/** A chevron pointing left (-1) or right (1), its tip at (x, y). */
+function drawPageArrow(x, y, dir) {
+  for (let i = 0; i < 6; i++) {
+    ctx.fillStyle = '#0d0d18';
+    ctx.fillRect(x - dir * (i + 1) - (dir < 0 ? 1 : 0), y - i - 1, 2, i * 2 + 3);
+  }
+  for (let i = 0; i < 5; i++) {
+    ctx.fillStyle = i < 2 ? '#ffffff' : '#ffd166';
+    ctx.fillRect(x - dir * (i + 1), y - i, 1, i * 2 + 1);
+  }
+}
+
+/**
+ * A partner still to be earned: its portrait as a silhouette, no name, no numbers, and a hint at
+ * what wakes it. The violet rim breathes so the card reads as a mystery, not as a missing image.
+ */
+function drawLockedCard(c, x, w, px, selected, t, chars, j) {
+  panel(x, SELECT_Y, w, SELECT_H, selected ? { accent: '#c8b8ff', ...WIN_SELECTED } : { accent: '#3a2a70' });
+  const port = getPortrait(c.id);
+  const py = SELECT_Y + 8;
+  // The frame a portrait would sit in, lit violet, with the partner's black outline inside it.
+  const k = port ? Math.max(1, Math.min(2, Math.floor((w - 24) / port.w))) : 1;
+  const bw = port ? port.w * k : 48, bh = port ? port.h * k : 48;
+  ctx.fillStyle = '#0d0d18';
+  ctx.fillRect(px - bw / 2 - 2, py - 2, bw + 4, bh + 4);
+  ctx.fillStyle = selected ? '#6a56c0' : '#3a2e78';
+  ctx.fillRect(px - bw / 2 - 1, py - 1, bw + 2, bh + 2);
+  ctx.fillStyle = selected ? '#9a86e8' : '#5a4a98';
+  ctx.fillRect(px - bw / 2 - 1, py - 1, bw + 2, Math.round((bh + 2) * 0.5));
+  const sil = c.sprId >= 0 ? silhouetteOf(c.sprId + walkFrame(c, 0)) : null;
+  if (sil) {
+    const s = Math.max(1, Math.min(2, Math.floor((bh - 4) / sil.height)));
+    ctx.globalAlpha = 0.85 + Math.sin(t * 3) * 0.15;
+    ctx.drawImage(sil, Math.round(px - (sil.width * s) / 2), Math.round(py + bh - 2 - sil.height * s), sil.width * s, sil.height * s);
+    ctx.globalAlpha = 1;
+  }
+  drawLock(Math.round(px + bw / 2 - 12), py + 3, selected ? '#ffd166' : '#c8b8ff');
+  drawTextCentered(ctx, '???', px, SELECT_Y + 94, 'dim');
+  // The badge row and the stat rows, every value hidden.
+  drawTypeBadges('???', px, SELECT_Y + 105);
+  let y = SELECT_Y + 120;
+  for (const row of STAT_ROWS) {
+    drawText(ctx, row.label, x + 8, y, 'dim');
+    ctx.fillStyle = '#2a2a40';
+    ctx.fillRect(x + 32, y + 1, w - 40, 4);
+    drawText(ctx, '?', x + 32 + (w - 40) / 2 - 2, y - 1, 'dim');
+    y += 10;
+  }
+  y += 8;
+  const hint = wrap('A WILD BEAST AWAITS...', chars);
+  for (const line of hint) { drawTextCentered(ctx, line, px, y, selected ? 'gold' : 'dim'); y += 10; }
+  y += 4;
+  for (const line of wrap('FELL A SECRET LEGEND IN RECORD TIME, THEN CLAIM WHAT IT LEAVES.', chars)) {
+    drawText(ctx, line, x + 8, y, 'dim');
+    y += 9;
+  }
+  drawTextCentered(ctx, `${j + 1}`, px, SELECT_Y + SELECT_H - 13, 'dim');
+  if (selected) drawCursorArrow(px, SELECT_Y - 11);
+}
+
+// --- The new-partner reveal ----------------------------------------------------------------
+//
+// Opened over the Successes screen when a success whose prize is a partner is claimed: a dark
+// wash, then a gold-framed window that scales in with the partner's happy portrait at 3x, sparks
+// drifting around it, and the news. `t` is seconds since it opened.
+
+export const REVEAL_LOCK = 0.6;
+
+export function drawPartnerReveal(c, t) {
+  if (!c) return;
+  const k = clamp(t / 0.35, 0, 1);
+  const ease = 1 - (1 - k) * (1 - k);
+  ctx.fillStyle = `rgba(4,3,12,${0.78 * ease})`;
+  ctx.fillRect(0, 0, VW, VH);
+
+  const W = Math.round(300 * (0.6 + 0.4 * ease)), H = Math.round(250 * (0.6 + 0.4 * ease));
+  const x = Math.round((VW - W) / 2), y = Math.round((VH - H) / 2);
+  ctx.globalAlpha = ease;
+  panel(x, y, W, H, { accent: '#ffd166', ...WIN_SELECTED });
+  outline(x - 2, y - 2, W + 4, H + 4, '#ffd166');
+  outline(x - 3, y - 3, W + 6, H + 6, 'rgba(255,209,102,0.35)');
+  if (k < 1) { ctx.globalAlpha = 1; return; }
+  ctx.globalAlpha = 1;
+
+  drawTextCentered(ctx, 'NEW PARTNER!', VW / 2, y + 10, 'gold');
+
+  // The portrait, three times over, in a frame that pulses through the partner's colours.
+  const port = getPortrait(`${c.id}_happy1`) || getPortrait(c.id);
+  const cy = y + 26;
+  if (port) {
+    const s = 3;
+    const pw = port.w * s, ph = port.h * s;
+    const fx = Math.round(VW / 2 - pw / 2), fy = cy;
+    const pulse = 0.5 + Math.sin(t * 6) * 0.5;
+    ctx.fillStyle = '#0d0d18';
+    ctx.fillRect(fx - 4, fy - 4, pw + 8, ph + 8);
+    ctx.fillStyle = pulse > 0.5 ? c.color : '#ffd166';
+    ctx.fillRect(fx - 3, fy - 3, pw + 6, ph + 6);
+    ctx.fillStyle = '#0d0d18';
+    ctx.fillRect(fx - 1, fy - 1, pw + 2, ph + 2);
+    ctx.drawImage(port.canvas, 0, 0, port.w, port.h, fx, fy, pw, ph);
+    // A glint sweeping across it every couple of seconds.
+    const g = ((t * 0.6) % 1) * (pw + 40) - 20;
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = '#ffffff';
+    for (let i = 0; i < ph; i++) {
+      const gx = Math.round(fx + g - i * 0.5);
+      if (gx >= fx && gx + 3 <= fx + pw) ctx.fillRect(gx, fy + i, 3, 1);
+    }
+    ctx.globalAlpha = 1;
+    // Sparks orbiting the frame.
+    for (let i = 0; i < 14; i++) {
+      const a = t * 1.3 + (i / 14) * Math.PI * 2;
+      const rx = pw / 2 + 16 + Math.sin(t * 3 + i) * 4, ry = ph / 2 + 12;
+      const sx = Math.round(VW / 2 + Math.cos(a) * rx), sy = Math.round(fy + ph / 2 + Math.sin(a) * ry);
+      const tw = (Math.sin(t * 9 + i * 1.7) + 1) / 2;
+      ctx.fillStyle = i % 3 === 0 ? '#ffffff' : i % 3 === 1 ? '#ffd166' : c.color;
+      ctx.fillRect(sx, sy, 1, 1);
+      if (tw > 0.6) { ctx.fillRect(sx - 1, sy, 3, 1); ctx.fillRect(sx, sy - 1, 1, 3); }
+    }
+  }
+
+  const ty = y + H - 46;
+  drawTextCentered(ctx, `${c.name.toUpperCase()} JOINS YOUR TEAM`, VW / 2, ty, 'white');
+  drawTypeBadges(c.typeLabel, VW / 2, ty + 12);
+  if (t > REVEAL_LOCK) {
+    ctx.globalAlpha = 0.6 + Math.sin(t * 5) * 0.4;
+    drawTextCentered(ctx, 'ENTER TO CONTINUE', VW / 2, y + H - 16, 'gold');
+    ctx.globalAlpha = 1;
+  }
 }
 
 // --- Stage select -----------------------------------------------------------

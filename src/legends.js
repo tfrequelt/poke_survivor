@@ -44,6 +44,8 @@ export const legend = {
   phase: 1,
   state: 'idle',          // 'intro' | 'idle' | 'busy' | 'dead'
   introT: 0,
+  // The clock time the fight went live (the entrance over), or -1: Wild Beast times from here.
+  fightAt: -1,
   next: 0,                // clock time of the next move
   busyUntil: 0,
   lastMove: '',
@@ -171,6 +173,7 @@ export function clearLegend() {
   L.def = null;
   L.e = null;
   L.state = 'idle';
+  L.fightAt = -1;
   L.weather = '';
   L.weatherT = 0;
   L.dash = null;
@@ -295,6 +298,7 @@ function intro(dt) {
     L.state = 'idle';
     L.motion = 'free';
     L.next = G.clock + FIRST_MOVE;
+    L.fightAt = G.clock;
     e.harmless = false;
     // Whatever landed on it while it was still in the sky does not count: weapons aim at the
     // ground it is about to land on, and a boss that arrives already hurt is a worse entrance.
