@@ -59,6 +59,8 @@ export function initPickupSprites() {
 }
 
 export const tierScale = (t) => TIERS[t].scale;
+/** The gold coin's atlas frame, as it lies on the ground (Pay Day throws the same coins). */
+export const coinSprite = () => COIN_SPR;
 
 /** How many orb tiers there are, so the renderer can normalise against it rather than guess. */
 export const TIER_COUNT = TIERS.length;

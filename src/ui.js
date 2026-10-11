@@ -345,6 +345,17 @@ function drawCardIcon(card, ov, cx, cy, t) {
     ctx.drawImage(src, f * seq.w, 0, seq.w, seq.h, Math.round(cx - w / 2), Math.round(cy - h / 2), w, h);
     return true;
   }
+  if (card.atlas) {
+    // A move whose look is its own atlas art (Pay Day's ground coin, Seed Bomb's two seeds):
+    // that sprite, scaled up, in its own colours.
+    let id = -1;
+    try { id = spriteBase(card.atlas, card.palette); } catch (e) { return false; }
+    const f = FRAMES[id];
+    if (!f) return false;
+    const k = card.scale || 2;
+    ctx.drawImage(ATLAS, f.sx, f.sy, f.w, f.h, Math.round(cx - (f.w * k) / 2), Math.round(cy - (f.h * k) / 2), f.w * k, f.h * k);
+    return true;
+  }
   if (card.draw === 'rake') {
     // Three bowed claw strokes, the last one the gold critical, as the rakes are drawn in play.
     const main = ovl ? ovl.colors[0] : '#7a5af0', mid = ovl ? ovl.colors[1] : '#ffb347', crit = ovl ? ovl.colors[2] : '#ffd166';

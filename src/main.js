@@ -104,7 +104,19 @@ import {
   drawSummary, drawShop, shopRows, drawWheel,
  drawVictoryChoice, drawSuccesses, TITLE_MENU, drawDungeonText, SELECT_PAGE, drawPartnerReveal, REVEAL_LOCK,} from './ui.js';
 import { wheel, startWheel, updateWheel, chooseSwap } from './wheel.js';
-import { DRAGON_BEHAVIOR, updateDragon, resetDragon } from './dragon.js';
+import { updateMoves, resetMoves } from './moves/core.js';
+import { DRAGON_BEHAVIOR } from './moves/dragon.js';
+import { WATER_BEHAVIOR } from './moves/water.js';
+import { GROUND_BEHAVIOR } from './moves/ground.js';
+import { NORMAL_BEHAVIOR } from './moves/normal.js';
+import { ELECTRIC_BEHAVIOR } from './moves/electric.js';
+import { GRASS_BEHAVIOR } from './moves/grass.js';
+import { FLYING_BEHAVIOR } from './moves/flying.js';
+import { GHOST_BEHAVIOR } from './moves/ghost.js';
+import { POISON_BEHAVIOR } from './moves/poison.js';
+import { FIRE_BEHAVIOR } from './moves/fire.js';
+import { ICE_BEHAVIOR } from './moves/ice.js';
+import { DARK_BEHAVIOR } from './moves/dark.js';
 import { seqTick, updateSeqFx, resetSeqFx } from './seqfx.js';
 import { CHARACTERS, CHARACTER_BY_ID, characterSpritePairs, partnerUnlocked } from './data/characters.js';
 import { enemySpritePairs } from './data/enemies.js';
@@ -208,9 +220,20 @@ async function boot() {
   atlasStats = buildAtlas();
 
   initEnemyDefs();
-  // The Dragon type's behaviours live in dragon.js; the registry has to know them before the
+  // The move framework's behaviours (moves/*.js); the registry has to know them before the
   // definitions are resolved.
   extendBehaviors(DRAGON_BEHAVIOR);
+  extendBehaviors(WATER_BEHAVIOR);
+  extendBehaviors(GROUND_BEHAVIOR);
+  extendBehaviors(NORMAL_BEHAVIOR);
+  extendBehaviors(ELECTRIC_BEHAVIOR);
+  extendBehaviors(GRASS_BEHAVIOR);
+  extendBehaviors(FLYING_BEHAVIOR);
+  extendBehaviors(GHOST_BEHAVIOR);
+  extendBehaviors(POISON_BEHAVIOR);
+  extendBehaviors(FIRE_BEHAVIOR);
+  extendBehaviors(ICE_BEHAVIOR);
+  extendBehaviors(DARK_BEHAVIOR);
   initWeaponDefs();
   initOverloads(motionOf);
   initBag(motionOf);
@@ -718,7 +741,7 @@ function startRun(character, q, stageId) {
   resetDamageTally();
   resetRunSuccesses();
   resetOverloads();
-  resetDragon();
+  resetMoves();
   resetSeqFx();
   // Perks from claimed Expedition Records, read once per run.
   G.perks = { ...saveData().perks };
@@ -2049,7 +2072,7 @@ function stepSim(dt) {
   updateAbilities(dt);
   updateZones(dt);
   updateProjectiles(dt);
-  updateDragon(dt);
+  updateMoves(dt);
   updatePlayer(dt);
   updateRelics(dt);
   updatePickups(dt, (v) => { grantXp(v); sfx('xp'); }, (v) => { grantCoins(v); sfx('coin'); });

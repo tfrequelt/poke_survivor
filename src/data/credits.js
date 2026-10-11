@@ -38,6 +38,7 @@ const RIPS = [
  */
 const EXPLORERS_RIPS = [
   ['pokemonmysterydungeonexplorersofsky', '131094', 'SUBSTITUTE', 'substitute weapon'],
+  ['pokemonmysterydungeonexplorersofsky', '85692', 'MOVE EFFECTS', 'ghost, poison, fire, ice and dark weapons'],
   ['pokemonmysterydungeonexplorersofsky', '59283', 'DUNGEON MAPS', 'stage select map'],
   ['pokemonmysterydungeonexplorersofsky', '84937', 'DUNGEON FONT', 'floor title card'],
   ['pokemonmysterydungeonexplorersofsky', '86310', 'ICE TILESET', 'bundled'],
@@ -64,13 +65,18 @@ const OTHER_RIPS = [
   ['mobile', 'rockbotthemachinewars', '159762', 'ROCKBOT: THE MACHINE WARS', "Present's blast"],
   ['mobile', 'graalonlineera', '147250', 'GRAAL ONLINE ERA', 'water particles'],
   ['game_boy_advance', 'pokemonfireredleafgreen', '28883', 'POKEMON FIRERED/LEAFGREEN', 'R/S moves'],
-  ['pc_computer', 'soulsaveronlineghostonline', '578741', 'SOULSAVER ONLINE / GHOST ONLINE', "Spectral Arrow's arrow"],
+  ['pc_computer', 'soulsaveronlineghostonline', '578741', 'SOULSAVER ONLINE / GHOST ONLINE', "arrows, coins, seeds, feathers, the drill"],
   ['game_boy_advance', 'pokemonfireredleafgreen', '3870', 'POKEMON FIRERED/LEAFGREEN', 'rock prop'],
   ['game_boy_advance', 'pokemonrubysapphire', '8190', 'POKEMON RUBY/SAPPHIRE', 'bush and pot props'],
   ['ds_dsi', 'pokemonheartgoldsoulsilver', '28036', 'POKEMON HEARTGOLD/SOULSILVER', 'Rare Candy'],
   ['pc_computer', 'gravitycircuit', '500769', 'GRAVITY CIRCUIT', 'overload particle effects'],
   // A custom sheet of FireRed's move sprites, ripped by wormintheworks, who asks to be credited.
-  ['custom_edited', 'pokemoncustoms', '18433', 'POKEMON FIRERED MOVES BY WORMINTHEWORKS', 'Crunch and Draco Meteor icons'],
+  ['custom_edited', 'pokemoncustoms', '18433', 'POKEMON FIRERED MOVES BY WORMINTHEWORKS', 'ability icons, Solar Beam, needles'],
+  // pokemon_moves_misc.png: "100% custom Pokemon attack sheet made by JoshR_691", who asks for major credit.
+  ['custom_edited', 'pokemoncustoms', '18433', 'CUSTOM POKEMON ATTACK SHEET BY JOSHR_691', 'weapon animations'],
+  // Added for the reworked arsenal and kept for the batches to come.
+  ['ds_dsi', 'pokemondiamondpearl', '21068', 'POKEMON DIAMOND/PEARL', 'attack sheets (bundled)'],
+  ['ds_dsi', 'pokemonranger3guardiansigns', '41335', 'POKEMON RANGER: GUARDIAN SIGNS', 'attack strips (bundled)'],
 ];
 
 export const CREDITS = [
@@ -131,6 +137,10 @@ export const CREDITS = [
     line: `spriters-resource.com/${section}/${game}/asset/${id}`,
     color: 'blue',
   })),
+  { line: '' },
+  // The move-effect sheet the reworked weapons are drawn from; its ripper asks for credit.
+  { line: 'Pokemon Ruby & Sapphire move effects', color: 'dim' },
+  { line: '(weapon animations) ripped by NESLUG.', color: 'dim' },
   { line: '' },
 
   { heading: 'SOUND EFFECTS' },

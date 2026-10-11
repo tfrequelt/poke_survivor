@@ -68,6 +68,8 @@ const newEnemy = () => ({
   sn: 0,
   // Aged by a Roar of Time ring (its Aging overload): slower and weaker for the rest of its life.
   aged: false,
+  // Soaked (Rain Dance's Soak): seconds left. Electric hits a soaked foe much harder.
+  wetT: 0,
   // Which totem's trial this enemy belongs to (its index on the floor), or -1.
   trial: -1,
   // Going round a pond (see paths.js): `detour` is set while the straight line to the player
@@ -94,6 +96,11 @@ const newEnemy = () => ({
 
 const newProjectile = () => ({
   alive: false, x: 0, y: 0, vx: 0, vy: 0,
+  // The sheet animation the shot is drawn from (its weapon's `anim`), or null for the atlas
+  // sprite. Reset by spawn().
+  anim: null,
+  // Scratch space for an overload mechanic riding the shot (mechs.js). Reset by spawn().
+  mx: 0,
   r: 3, dmg: 0, pierce: 0, life: 0, maxLife: 0,
   motion: 0, sprBase: 0, nd: 2, angle: 0,
   // Whose shot this is. A hostile shot is skipped by the enemy-grid collision entirely and is
@@ -172,6 +179,10 @@ const newZone = () => ({
   boom: 0, knock: 140,
   // An overload's time bubble: enemy shots inside it crawl. Reset by spawn().
   warp: 0,
+  // The sheet animation the zone plays over its ground (its weapon's `zoneAnim`), or null.
+  anim: null,
+  // Scratch space for an overload mechanic riding the zone (mechs.js). Reset by spawn().
+  mx: 0,
 });
 
 // A sprite effect: one animation of the particles sheet (data/sprfx.js), playing once. `color`
@@ -232,10 +243,11 @@ export function spawn(kind) {
     e.hostile = false; e.src = damageSource; e.dmg0 = 0; e.look = 0; e.status = 0; e.bossT = 0;
     e.grow = 0; e.vis = 1; e.pt = 0;
     e.ovRet = 0; e.ovRic = 0; e.ovErase = 0; e.ovSnow = 0; e.ovPol = 0; e.ovOrb = 0; e.ovT = 0; e.ovBase = 0; e.ovS = 0; e.ovEcho = 0; e.ovAccF = 1; e.strand = 0;
+    e.anim = null; e.mx = 0;
   }
   // A zone is credited to whatever was running when it was laid, which is the only way a pool
   // of fire left behind by a shot can still count towards the weapon that fired it.
-  else if (kind === 'zones') { e.src = damageSource; e.boom = 0; e.knock = 140; e.warp = 0; }
+  else if (kind === 'zones') { e.src = damageSource; e.boom = 0; e.knock = 140; e.warp = 0; e.anim = null; e.mx = 0; }
   LIVE[kind].push(e);
   return e;
 }

@@ -32,9 +32,20 @@ import { hash2 } from './util.js';
 import { liveTraps } from './traps.js';
 import { canSwim } from './player.js';
 import { waterAtWorld } from './terrain.js';
-import { dragonActors, dragonLive, DK, rendReach } from './dragon.js';
+import { blitSeq, drawMovesGround, drawMoves, TAU_E, vr, va } from './moves/gfx.js';
+import './moves/draw_dragon.js';
+import './moves/draw_water.js';
+import './moves/draw_ground.js';
+import './moves/draw_normal.js';
+import './moves/draw_electric.js';
+import './moves/draw_grass.js';
+import './moves/draw_flying.js';
+import './moves/draw_ghost.js';
+import './moves/draw_poison.js';
+import './moves/draw_fire.js';
+import './moves/draw_ice.js';
+import './moves/draw_dark.js';
 import { seqFx, SEQ } from './seqfx.js';
-import { recoloured } from './recolour.js';
 import {
   drawPortal, drawLegendBoss, legendShadowScale, drawLegendGround, drawLegendAir, drawLegendShot,
   drawLegendWeather, drawPlayerStatus, drawPoisonMark,
@@ -83,12 +94,12 @@ export function drawEntities() {
   drawLegendGround(camOffX, camOffY);
   drawPickups(camOffX, camOffY);
   drawItems(camOffX, camOffY);
-  drawDragonGround(camOffX, camOffY);
+  drawMovesGround(camOffX, camOffY);
   drawShadows(camOffX, camOffY);
   drawSortedActors(camOffX, camOffY);
   drawLegendAir(camOffX, camOffY);
   drawProjectiles(camOffX, camOffY);
-  drawDragon(camOffX, camOffY);
+  drawMoves(camOffX, camOffY);
   drawThrown(camOffX, camOffY);
   drawNightShade(camOffX, camOffY);
   drawTsunami(camOffX, camOffY);
@@ -337,7 +348,7 @@ function drawFireRing(z, sx, sy, fade) {
   const seq = getSequence('fx_blastburn');
   if (!seq) return;
   const i = ((z.maxLife - z.life) * 14 | 0) % seq.frames;
-  const d = z.r * 2;
+  const d = vr(z.r) * 2;
   const h = d * (seq.h / seq.w);
   ctx.globalAlpha = fade;
   ctx.drawImage(seq.canvas, i * seq.w, 0, seq.w, seq.h,
@@ -684,7 +695,9 @@ function drawZones(ox, oy) {
     const zrec = srcOvl[z.src];
     const zc = zrec !== undefined ? ovlColor(zrec.def, G.clock) : z.color;
     if (sx < -z.r || sy < -z.r || sx > VW + z.r || sy > VH + z.r) continue;
-    const fade = Math.min(1, z.life / 0.4);
+    // Drawn at its visual radius, fainter the further it reaches (moves/core.js vr, va).
+    const zr = vr(z.r);
+    const fade = Math.min(1, z.life / 0.4) * va(z.r);
     const pulse = 1 + Math.sin(G.tick * 0.08 + z.x) * 0.04;
 
     if (z.kind === ZONE.FIRE) {
@@ -697,32 +710,32 @@ function drawZones(ox, oy) {
       ctx.globalAlpha = 0.34 * fade;
       ctx.fillStyle = zc;
       ctx.beginPath();
-      ctx.ellipse(sx, sy, z.r * pulse, z.r * 0.6 * pulse, 0, 0, Math.PI * 2);
+      ctx.ellipse(sx, sy, zr * pulse, zr * 0.6 * pulse, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 0.45 * fade;
       ctx.fillStyle = '#0b0714';
       ctx.beginPath();
-      ctx.ellipse(sx, sy, z.r * 0.62, z.r * 0.37, 0, 0, Math.PI * 2);
+      ctx.ellipse(sx, sy, zr * 0.62, zr * 0.37, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 0.5 * fade;
       ctx.strokeStyle = '#6a4a9a';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.ellipse(sx, sy, z.r * pulse, z.r * 0.6 * pulse, 0, 0, Math.PI * 2);
+      ctx.ellipse(sx, sy, zr * pulse, zr * 0.6 * pulse, 0, 0, Math.PI * 2);
       ctx.stroke();
     } else if (z.kind === ZONE.NOVA || z.kind === ZONE.NOVA_STATIC) {
       // An expanding front: a bright leading edge with a fading wash inside it.
       ctx.globalAlpha = 0.18 * fade;
       ctx.fillStyle = zc;
       ctx.beginPath();
-      ctx.ellipse(sx, sy, z.r, z.r * 0.6, 0, 0, Math.PI * 2);
+      ctx.ellipse(sx, sy, zr, zr * 0.6, 0, 0, Math.PI * 2);
       ctx.fill();
       for (let pass = 0; pass < 2; pass++) {
         ctx.globalAlpha = (pass ? 0.9 : 0.4) * fade;
         ctx.strokeStyle = pass ? '#ffffff' : zc;
         ctx.lineWidth = pass ? 1 : 3;
         ctx.beginPath();
-        ctx.ellipse(sx, sy, z.r, z.r * 0.6, 0, 0, Math.PI * 2);
+        ctx.ellipse(sx, sy, zr, zr * 0.6, 0, 0, Math.PI * 2);
         ctx.stroke();
       }
     } else if (z.kind === ZONE.VORTEX) {
@@ -731,7 +744,7 @@ function drawZones(ox, oy) {
       ctx.globalAlpha = 0.3 * fade;
       ctx.fillStyle = zc;
       ctx.beginPath();
-      ctx.ellipse(sx, sy, z.r, z.r * 0.6, 0, 0, Math.PI * 2);
+      ctx.ellipse(sx, sy, zr, zr * 0.6, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 0.8 * fade;
       ctx.strokeStyle = '#ffffff';
@@ -741,7 +754,7 @@ function drawZones(ox, oy) {
         for (let t = 0; t <= 12; t++) {
           const f = t / 12;
           const a = spin + (arm / 3) * Math.PI * 2 + f * 2.6;
-          const rr = z.r * (1 - f);
+          const rr = zr * (1 - f);
           const px = sx + Math.cos(a) * rr, py = sy + Math.sin(a) * rr * 0.6;
           if (t === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
         }
@@ -752,22 +765,47 @@ function drawZones(ox, oy) {
       ctx.globalAlpha = 0.16 * fade;
       ctx.fillStyle = zc;
       ctx.beginPath();
-      ctx.ellipse(sx, sy, z.r, z.r * 0.6, 0, 0, Math.PI * 2);
+      ctx.ellipse(sx, sy, zr, zr * 0.6, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 0.7 * fade;
       ctx.strokeStyle = '#fff05a';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.ellipse(sx, sy, z.r * pulse, z.r * 0.6 * pulse, 0, 0, Math.PI * 2);
+      ctx.ellipse(sx, sy, zr * pulse, zr * 0.6 * pulse, 0, 0, Math.PI * 2);
       ctx.stroke();
     } else {
       ctx.globalAlpha = 0.35 * fade;
       ctx.fillStyle = zc;
       ctx.beginPath();
-      ctx.ellipse(sx, sy, z.r, z.r * 0.6, 0, 0, Math.PI * 2);
+      ctx.ellipse(sx, sy, zr, zr * 0.6, 0, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.globalAlpha = 1;
+    if (z.anim) drawZoneAnim(z, sx, sy, fade, zrec);
+  }
+}
+
+/**
+ * A zone's own sheet animation over its ground: { seq, fps, fit (scale it to the zone's width,
+ * default), scale, bottom (stand it on the point), n (scatter n copies across the zone), alpha }.
+ */
+function drawZoneAnim(z, sx, sy, fade, zrec) {
+  const an = z.anim;
+  const seq = getSequence(an.seq);
+  if (!seq) return;
+  // An overload's palette; otherwise the animation's own fixed `tint`, as for a shot's anim.
+  const ov = zrec !== undefined && zrec.def.colors ? zrec.def
+    : an.tint ? (an._tov || (an._tov = { id: `tint:${an.seq}:${an.tint.join()}`, colors: an.tint })) : null;
+  const age = z.maxLife - z.life;
+  const f0 = ((age * (an.fps || 10)) | 0);
+  const n = an.n || 1;
+  for (let i = 0; i < n; i++) {
+    // Copies scattered over the zone on a fixed pattern, each on its own beat.
+    const ang = i * 2.39, d = n > 1 ? vr(z.r) * 0.6 * Math.sqrt((i + 0.5) / n) : 0;
+    const x = sx + Math.cos(ang) * d, y = sy + Math.sin(ang) * d * 0.6;
+    // Fitted to the zone, but never blown up past 1.6x the strip's own size.
+    const sc = n > 1 ? (an.scale || 1) : (an.fit === false ? (an.scale || 1) : Math.min(1.6, (vr(z.r) * 2) / seq.w) * (an.scale || 1));
+    blitSeq(seq, (f0 + i * 3) % seq.frames, x, y, sc, 0, (an.alpha || 0.85) * fade, !!an.bottom, ov);
   }
 }
 
@@ -1569,6 +1607,9 @@ function drawProjectiles(ox, oy) {
       continue;
     }
 
+    // A shot drawn from a sheet animation, in its overload's palette when it has one.
+    if (pr.anim && drawAnimShot(pr, sx, sy)) continue;
+
     // Rotated sprites index by baked angle; the rest just flip on heading.
     const d = pr.nd > 2 ? angleSlot(pr.angle, pr.nd) : (pr.vx >= 0 ? 1 : 0);
     if (pr.z > 1) {
@@ -1587,451 +1628,10 @@ function drawProjectiles(ox, oy) {
 }
 
 
-// --- The Dragon type, and sequence effects ---------------------------------------------------
+// --- The move framework's actors, and sequence effects ---------------------------------------
 //
-// dragon.js's actors, drawn from dragon_moves.png's own animations, and the one-shot sequence
-// effects of seqfx.js. Ground things (the time ring, the tear, lanes, craters, scars, prints,
-// rifts, vines) go under the actors; everything else over the projectiles.
-//
-// An overloaded dragon weapon is drawn in its overload's palette: each animation strip is
-// recoloured once per overload (recolour.js).
-
-/**
- * One frame of a sequence strip, centred on (sx, sy) -- or standing on it -- scaled and turned,
- * in `ov`'s palette when an overload is given.
- */
-function blitSeq(seq, f, sx, sy, scale = 1, rot = 0, alpha = 1, bottom = false, ov = null) {
-  const w = seq.w * scale, h = seq.h * scale;
-  const fi = f < 0 ? 0 : f >= seq.frames ? seq.frames - 1 : f;
-  const src = ov && ov.colors ? recoloured(seq.canvas, ov) : seq.canvas;
-  if (alpha !== 1) ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
-  if (rot) {
-    ctx.save();
-    ctx.translate(Math.round(sx), Math.round(sy));
-    ctx.rotate(rot);
-    ctx.drawImage(src, fi * seq.w, 0, seq.w, seq.h, -w / 2, bottom ? -h : -h / 2, w, h);
-    ctx.restore();
-  } else {
-    ctx.drawImage(src, fi * seq.w, 0, seq.w, seq.h,
-      Math.round(sx - w / 2), Math.round(bottom ? sy - h : sy - h / 2), Math.round(w), Math.round(h));
-  }
-  if (alpha !== 1) ctx.globalAlpha = 1;
-}
-
-/** An overloaded actor's colour in one of its three slots, or the fallback. */
-const ovc = (a, slot, fallback) => (a.ov && a.ov.colors ? a.ov.colors[slot] : fallback);
-
-const TAU_E = Math.PI * 2;
-
-function drawDragonGround(ox, oy) {
-  if (!dragonLive()) return;
-  for (let i = 0; i < dragonActors.length; i++) {
-    const a = dragonActors[i];
-    if (!a.on) continue;
-    const sx = a.x + ox, sy = a.y + oy;
-    if (a.kind !== DK.LANE && (sx < -90 || sy < -90 || sx > VW + 90 || sy > VH + 90)) continue;
-    switch (a.kind) {
-      case DK.LOCK: drawTimeRing(a, sx, sy); break;
-      case DK.REND: drawRend(a, sx, sy, ox, oy); break;
-      case DK.TWISTER:
-        ctx.globalAlpha = 0.18;
-        ctx.fillStyle = '#101820';
-        ctx.beginPath();
-        ctx.ellipse(sx, sy + 2, a.r * 0.55, a.r * 0.22, 0, 0, TAU_E);
-        ctx.fill();
-        ctx.globalAlpha = 1;
-        break;
-      case DK.CRATER: drawCrater(a, sx, sy); break;
-      case DK.LANE: drawLane(a, ox, oy); break;
-      case DK.SCAR: drawScar(a, sx, sy); break;
-      case DK.PRINT: drawPrint(a, sx, sy); break;
-      case DK.VINE: drawVine(a, sx, sy); break;
-      case DK.FAULT: drawFault(a, ox, oy); break;
-    }
-  }
-}
-
-function drawDragon(ox, oy) {
-  if (!dragonLive()) return;
-  for (let i = 0; i < dragonActors.length; i++) {
-    const a = dragonActors[i];
-    if (!a.on || a.t < 0) continue;
-    const sx = a.x + ox, sy = a.y + oy;
-    if (sx < -70 || sy < -110 || sx > VW + 70 || sy > VH + 70) continue;
-    switch (a.kind) {
-      case DK.RAGE: {
-        const seq = getSequence('fx_rage_ball');
-        if (!seq) break;
-        drawShadow(ctx, sx, sy + 8, 0.5);
-        blitSeq(seq, ((a.t * 18) | 0) % seq.frames, sx, sy, 0.8 * a.area, 0, 1, false, a.ov);
-        break;
-      }
-      case DK.PILLAR: {
-        const seq = getSequence('fx_rage_burst');
-        if (!seq) break;
-        // A creeping pillar plays its rise once, then keeps burning on the middle frames.
-        const f = a.n
-          ? (a.t < 0.25 ? (a.t / 0.25 * 3) | 0 : 2 + (((a.t * 14) | 0) % 4))
-          : ((a.t / a.life) * seq.frames) | 0;
-        const fade = a.n ? Math.min(1, (a.life - a.t) / 0.25) : 1;
-        blitSeq(seq, f, sx, sy + 4, a.r / 15, 0, fade, true, a.ov);
-        break;
-      }
-      case DK.PULSE: drawPulse(a, sx, sy); break;
-      case DK.SPARK: {
-        const seq = getSequence(a.idx ? 'fx_spark_c' : 'fx_spark_o');
-        if (!seq) break;
-        drawShadow(ctx, sx, sy + 2, a.crit ? 0.9 : 0.35);
-        const diving = a.phase === 2;
-        const f = diving ? 0 : ((a.t * 16) | 0) % seq.frames;
-        const sc = a.crit ? 2.2 : diving ? 0.9 : 0.7;
-        if (a.crit) {
-          // The Grand Finale comet: a glow under it, in its colour.
-          ctx.globalCompositeOperation = 'lighter';
-          ctx.globalAlpha = 0.5;
-          ctx.drawImage(glowCanvas(ovc(a, 0, '#ffd166')), sx - 18, sy - a.z - 18, 36, 36);
-          ctx.globalCompositeOperation = 'source-over';
-          ctx.globalAlpha = 1;
-        }
-        blitSeq(seq, f, sx, sy - a.z, sc, diving ? a.a + Math.PI / 2 : 0, 1, false, a.ov);
-        break;
-      }
-      case DK.RUSH: {
-        const seq = getSequence('fx_rush_slash');
-        if (!seq) break;
-        blitSeq(seq, ((a.t * 16) | 0) % seq.frames, sx, sy - 8, 0.8 * a.area, a.a, 1, false, a.ov);
-        break;
-      }
-      case DK.ROCK: {
-        const seq = getSequence('fx_rush_rocks');
-        if (!seq) break;
-        drawShadow(ctx, sx, sy + 2, 0.4);
-        blitSeq(seq, 0, sx, sy - a.z, 0.42, a.t * 9, 1, false, a.ov);
-        break;
-      }
-      case DK.RAKE: drawRake(a, sx, sy); break;
-      case DK.TWISTER: drawTwister(a, sx, sy); break;
-      case DK.AFTER: drawAfter(a, sx, sy); break;
-      case DK.DEBRIS: {
-        // The flung foe's flight: speed lines streaming behind it.
-        const sp = Math.hypot(a.vx, a.vy) || 1, ux = a.vx / sp, uy = a.vy / sp;
-        ctx.strokeStyle = ovc(a, 1, '#d8c8a8');
-        ctx.lineWidth = 1;
-        ctx.globalAlpha = 0.8;
-        ctx.beginPath();
-        for (let k = -1; k <= 1; k++) {
-          const px = sx - uy * k * 4, py = sy - 6 + ux * k * 4;
-          ctx.moveTo(px - ux * 4, py - uy * 4);
-          ctx.lineTo(px - ux * (14 + Math.abs(k) * 4), py - uy * (14 + Math.abs(k) * 4));
-        }
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-        break;
-      }
-      case DK.GEAR: {
-        const seq = getSequence('fx_roar');
-        if (!seq) break;
-        const fade = Math.min(1, (a.life - a.t) / 0.3);
-        blitSeq(seq, 0, sx, sy - 6, (a.r * 2.4) / 48, a.a, fade, false, a.ov);
-        break;
-      }
-    }
-  }
-}
-
-/** A Dragon Pulse orb and its throb ring swelling off it (a second, wider one on a heartbeat). */
-function drawPulse(a, sx, sy) {
-  const seq = getSequence('fx_pulse_orb');
-  const k = (G.clock - a.step) / 0.25;
-  if (a.step > 0 && k >= 0 && k < 1) {
-    const rr = a.r * (a.idx === 2 ? 1.15 : 1);
-    ctx.globalAlpha = (1 - k) * 0.8;
-    ctx.strokeStyle = k < 0.4 ? '#ffffff' : ovc(a, a.idx === 2 ? 2 : 0, '#c8b8ff');
-    ctx.lineWidth = a.idx === 2 ? 3 : 2;
-    ctx.beginPath();
-    ctx.ellipse(sx, sy, rr * (0.35 + 0.65 * k), rr * (0.35 + 0.65 * k) * 0.75, 0, 0, TAU_E);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-  }
-  if (seq) blitSeq(seq, (((a.t * 14) | 0) + a.phase) % seq.frames, sx, sy, Math.max(0.6, Math.min(a.r, 60) / 30), 0, 1, false, a.ov);
-}
-
-/**
- * A claw rake: a hooked stroke drawing itself, then fading -- white-hot at its core, violet at
- * its edge, gold on the set's critical last rake (or in the overload's colours).
- */
-function drawRake(a, sx, sy) {
-  const draw = Math.min(1, a.t / 0.07);
-  const fade = a.t < 0.07 ? 1 : 1 - (a.t - 0.07) / (a.life - 0.07);
-  if (fade <= 0) return;
-  const ux = Math.cos(a.a), uy = Math.sin(a.a);
-  const len = a.k * draw;
-  const ex = sx + ux * len, ey = sy - 6 + uy * len;
-  // The bow: the middle of the stroke pushed out to one side by a fifth of its length.
-  const bow = Math.min(a.k * 0.2, 18);
-  const cx = sx + ux * len * 0.5 - uy * bow, cy = sy - 6 + uy * len * 0.5 + ux * bow;
-  const stroke = (color, width, alpha) => {
-    ctx.globalAlpha = alpha;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = width;
-    ctx.beginPath();
-    ctx.moveTo(sx, sy - 6);
-    ctx.quadraticCurveTo(cx, cy, ex, ey);
-    ctx.stroke();
-  };
-  stroke(a.crit ? ovc(a, 2, '#ffd166') : ovc(a, 0, '#7a5af0'), a.crit ? 5 : 4, fade * 0.5);
-  stroke(a.crit ? '#ffffff' : ovc(a, 1, '#ffb347'), 2, fade);
-  stroke('#ffffff', 1, fade);
-  ctx.globalAlpha = 1;
-}
-
-/**
- * Twister: a funnel of the sheet's leaves and pebbles in a helix, widening as it climbs, with
- * faint wind bands around it. No sprite of a tornado: the debris IS the tornado.
- */
-function drawTwister(a, sx, sy) {
-  const seq = getSequence('fx_twister_bits');
-  const H = 56 * a.area * Math.max(1, a.r / (34 * a.area));
-  const fade = Math.min(1, a.t / 0.25, (a.life - a.t) / 0.35);
-  ctx.globalAlpha = 0.28 * fade;
-  ctx.strokeStyle = ovc(a, 1, '#e8f4ff');
-  ctx.lineWidth = 1;
-  for (let b = 0; b < 4; b++) {
-    const h = (b + 0.5) * (H / 4);
-    const rx = 5 + h * 0.42, ph = a.t * 7 + b;
-    ctx.beginPath();
-    ctx.ellipse(sx + Math.sin(ph) * 2, sy - h, rx, rx * 0.28, 0, 0, TAU_E);
-    ctx.stroke();
-  }
-  ctx.globalAlpha = fade;
-  if (!seq) return;
-  const n = 18;
-  for (let i = 0; i < n; i++) {
-    const u = i / n;
-    const h = u * H;
-    const rad = 4 + h * 0.4;
-    const ang = a.t * 9 + i * 2.39;
-    const x = sx + Math.cos(ang) * rad + Math.sin(a.t * 3 + u * 4) * 3;
-    const y = sy - h + Math.sin(ang) * rad * 0.28;
-    blitSeq(seq, i % seq.frames, x, y, 0.9, ang, 1, false, a.ov);
-  }
-  ctx.globalAlpha = 1;
-}
-
-/** Spacial Rend: the tear opening, then crescents slashing out and back, and its chains. */
-function drawRend(a, sx, sy, ox, oy) {
-  const star = getSequence('fx_rend_star');
-  const cres = getSequence('fx_crescent');
-  if (!star) return;
-  const open = Math.min(1, a.t / 0.6);
-  const closing = a.t > a.life - 0.15 ? (a.life - a.t) / 0.15 : 1;
-  const f = Math.min(star.frames - 1, (open * star.frames) | 0);
-  const pulse = a.t > 0.6 ? 1 + Math.sin(a.t * 30) * 0.06 : 1;
-  blitSeq(star, f, sx, sy, 1.4 * a.area * pulse, a.t * 2, closing, false, a.ov);
-  // Spatial Anchor's chains: a beaded line from the tear to each foe it holds.
-  if (a.held.length) {
-    ctx.fillStyle = ovc(a, 1, '#ffffff');
-    for (let j = 0; j < a.held.length; j++) {
-      const e = a.held[j];
-      if (!e.alive || e.sn !== a.heldSn[j]) continue;
-      const ex = e.x + ox, ey = e.y + oy - 6;
-      const n = Math.max(2, (Math.hypot(ex - sx, ey - sy) / 5) | 0);
-      for (let q = 1; q < n; q++) {
-        if ((q + ((a.t * 12) | 0)) % 3 === 0) continue;
-        ctx.fillRect(Math.round(sx + (ex - sx) * (q / n)), Math.round(sy + (ey - sy) * (q / n)), 1, 1);
-      }
-    }
-  }
-  if (!cres) return;
-  const { k, leg } = rendReach(a);
-  if (leg < 0) return;
-  for (let i = 0; i < a.n; i++) {
-    const ang = a.a + (i / a.n) * TAU_E + k * 0.6;
-    const x = sx + Math.cos(ang) * a.k * k, y = sy + Math.sin(ang) * a.k * k * 0.8;
-    blitSeq(cres, (i + ((a.t * 16) | 0)) % cres.frames, x, y, 1.5 * a.area, ang + (leg ? Math.PI : 0), 1, false, a.ov);
-  }
-}
-
-/** Roar of Time: the gear ring, turning, with a clock hand sweeping backwards. */
-function drawTimeRing(a, sx, sy) {
-  const seq = getSequence('fx_roar');
-  const open = Math.min(1, a.t / 0.2);
-  const fade = Math.min(1, (a.life - a.t) / 0.2);
-  const s = (a.r * 2) / 78 * (0.7 + 0.3 * open);
-  ctx.globalAlpha = 0.18 * fade;
-  ctx.fillStyle = ovc(a, 0, '#5ab6ff');
-  ctx.beginPath();
-  ctx.ellipse(sx, sy, a.r, a.r * 0.8, 0, 0, TAU_E);
-  ctx.fill();
-  ctx.globalAlpha = 1;
-  if (seq) blitSeq(seq, seq.frames - 1, sx, sy, s, -a.t * 0.8, 0.75 * fade, false, a.ov);
-  if (seq) blitSeq(seq, 0, sx, sy, s * 0.55, a.t * 1.6, 0.6 * fade, false, a.ov);
-  // The hand: sweeping the wrong way round, as time is held.
-  const ha = -a.t * 4 - Math.PI / 2;
-  ctx.globalAlpha = 0.9 * fade;
-  ctx.strokeStyle = ovc(a, 2, '#ffffff');
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(sx, sy);
-  ctx.lineTo(sx + Math.cos(ha) * a.r * 0.6, sy + Math.sin(ha) * a.r * 0.48);
-  ctx.stroke();
-  ctx.globalAlpha = 1;
-  // What it holds: a cold glint over each frozen foe.
-  for (let j = 0; j < a.held.length && j < 24; j++) {
-    const e = a.held[j];
-    if (!e.alive || e.sn !== a.heldSn[j]) continue;
-    const ex = e.x - a.x + sx, ey = e.y - a.y + sy;
-    const tw = (Math.sin(a.t * 10 + j) + 1) / 2;
-    ctx.fillStyle = tw > 0.5 ? '#ffffff' : ovc(a, 1, '#9adcff');
-    ctx.fillRect(Math.round(ex) - 1, Math.round(ey - e.r - 10), 3, 1);
-    ctx.fillRect(Math.round(ex), Math.round(ey - e.r - 11), 1, 3);
-  }
-}
-
-// The overloads' marks on the ground. Short-lived and few at a time, so they are drawn shapes.
-
-/** Meteor Charge's crater: a dark bowl with fissures cracking outward as it ages. */
-function drawCrater(a, sx, sy) {
-  const k = Math.min(1, a.t / 0.3), fade = Math.min(1, (a.life - a.t) / 0.3);
-  ctx.globalAlpha = 0.45 * fade;
-  ctx.fillStyle = '#1a1008';
-  ctx.beginPath();
-  ctx.ellipse(sx, sy, a.r * 0.6, a.r * 0.36, 0, 0, TAU_E);
-  ctx.fill();
-  ctx.globalAlpha = 0.9 * fade;
-  ctx.strokeStyle = ovc(a, 1, '#f0b070');
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  for (let i = 0; i < 7; i++) {
-    const ang = a.a + i * 0.9;
-    const len = a.r * (0.55 + 0.45 * k) * (0.7 + ((i * 37) % 10) / 30);
-    let x = sx + Math.cos(ang) * a.r * 0.4, y = sy + Math.sin(ang) * a.r * 0.24;
-    ctx.moveTo(x, y);
-    for (let s = 1; s <= 3; s++) {
-      const u = (s / 3) * len;
-      const j = (s & 1 ? 1 : -1) * 3;
-      x = sx + Math.cos(ang) * u - Math.sin(ang) * j;
-      y = sy + (Math.sin(ang) * u + Math.cos(ang) * j) * 0.6;
-      ctx.lineTo(x, y);
-    }
-  }
-  ctx.stroke();
-  ctx.globalAlpha = 1;
-}
-
-/** Phantom Lane: a translucent band along the charge's path, shimmering. */
-function drawLane(a, ox, oy) {
-  const fade = Math.min(1, a.t / 0.15, (a.life - a.t) / 0.4);
-  const x0 = a.ox + ox, y0 = a.oy + oy, x1 = a.x + ox, y1 = a.y + oy;
-  ctx.globalAlpha = (0.22 + Math.sin(a.t * 12) * 0.06) * fade;
-  ctx.strokeStyle = ovc(a, 0, '#9a6aff');
-  ctx.lineWidth = a.r * 2;
-  ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
-  ctx.globalAlpha = 0.6 * fade;
-  ctx.strokeStyle = ovc(a, 1, '#c8b0ff');
-  ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
-  ctx.lineCap = 'butt';
-  // Ghost motes drifting back toward the start.
-  ctx.fillStyle = '#ffffff';
-  for (let i = 0; i < 6; i++) {
-    const u = 1 - (((a.t * 0.8) + i / 6) % 1);
-    ctx.globalAlpha = 0.7 * fade * u;
-    ctx.fillRect(Math.round(x0 + (x1 - x0) * u), Math.round(y0 + (y1 - y0) * u + Math.sin(i * 2 + a.t * 6) * 3), 1, 1);
-  }
-  ctx.globalAlpha = 1;
-}
-
-/** Crosshatch's X scar, glowing and fading. */
-function drawScar(a, sx, sy) {
-  const fade = Math.min(1, (a.life - a.t) / 0.4);
-  const r = a.r;
-  ctx.globalAlpha = (0.65 + Math.sin(a.t * 14) * 0.2) * fade;
-  for (const [col, wd] of [[ovc(a, 0, '#e05a20'), 3], [ovc(a, 2, '#ffffff'), 1]]) {
-    ctx.strokeStyle = col;
-    ctx.lineWidth = wd;
-    ctx.beginPath();
-    for (const d of [a.a + Math.PI / 4, a.a - Math.PI / 4]) {
-      ctx.moveTo(sx - Math.cos(d) * r, sy - 4 - Math.sin(d) * r * 0.7);
-      ctx.lineTo(sx + Math.cos(d) * r, sy - 4 + Math.sin(d) * r * 0.7);
-    }
-    ctx.stroke();
-  }
-  ctx.globalAlpha = 1;
-}
-
-/** Static Steps' footprint: two toes and a heel, crackling now and then. */
-function drawPrint(a, sx, sy) {
-  const fade = Math.min(1, (a.life - a.t) / 0.5);
-  const col = a.idx ? ovc(a, 1, '#7ac8ff') : ovc(a, 0, '#ff8a20');
-  ctx.globalAlpha = 0.85 * fade;
-  ctx.fillStyle = col;
-  const ux = Math.cos(a.a - Math.PI / 2), uy = Math.sin(a.a - Math.PI / 2);
-  ctx.fillRect(Math.round(sx - ux * 2) - 1, Math.round(sy - uy * 2), 2, 2);
-  ctx.fillRect(Math.round(sx + ux * 2 - uy * 2), Math.round(sy + uy * 2 + ux * 2) - 1, 1, 1);
-  ctx.fillRect(Math.round(sx + ux * 2 + uy * 2), Math.round(sy + uy * 2 - ux * 2) - 1, 1, 1);
-  if (((a.t * 9) | 0) % 3 === 0) {
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(Math.round(sx) + ((a.t * 31) % 5 | 0) - 2, Math.round(sy) - 3, 1, 2);
-  }
-  ctx.globalAlpha = 1;
-}
-
-/** Bramble Wind: thorny vines coiling up out of the ground around the rooted foe. */
-function drawVine(a, sx, sy) {
-  if (!a.done) return;
-  const grow = Math.min(1, (a.t - 0.3) / 0.2), fade = Math.min(1, (a.life - a.t) / 0.3);
-  ctx.globalAlpha = fade;
-  ctx.lineWidth = 2;
-  for (let i = 0; i < 5; i++) {
-    const ang = i * 1.26 + 0.3;
-    const bx = sx + Math.cos(ang) * a.r * 0.6, by = sy + Math.sin(ang) * a.r * 0.35;
-    const h = (10 + (i % 3) * 4) * grow;
-    ctx.strokeStyle = i & 1 ? ovc(a, 0, '#3a9a28') : ovc(a, 1, '#7fe08a');
-    ctx.beginPath();
-    ctx.moveTo(bx, by);
-    ctx.quadraticCurveTo(bx + Math.sin(a.t * 3 + i) * 5, by - h * 0.6, bx + (sx - bx) * 0.4, by - h);
-    ctx.stroke();
-    ctx.fillStyle = ovc(a, 2, '#ffe070');
-    ctx.fillRect(Math.round(bx + (sx - bx) * 0.2) + 1, Math.round(by - h * 0.5), 1, 1);
-  }
-  ctx.globalAlpha = 1;
-}
-
-/** Fault Lines: the rift polygon, flickering. */
-function drawFault(a, ox, oy) {
-  const n = a.pts.length >> 1;
-  if (n < 2) return;
-  const fade = Math.min(1, a.t / 0.1, (a.life - a.t) / 0.3);
-  for (const [col, wd, al] of [[ovc(a, 0, '#e04a98'), 3, 0.5], [ovc(a, 2, '#ffffff'), 1, 0.95]]) {
-    ctx.globalAlpha = al * fade * (0.8 + Math.sin(a.t * 25) * 0.2);
-    ctx.strokeStyle = col;
-    ctx.lineWidth = wd;
-    ctx.beginPath();
-    for (let i = 0; i <= n; i++) {
-      const j = i % n;
-      const x = a.pts[j * 2] + ox, y = a.pts[j * 2 + 1] + oy;
-      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x + (i < n ? (G.rngFx() - 0.5) * 2 : 0), y);
-    }
-    ctx.stroke();
-  }
-  ctx.globalAlpha = 1;
-}
-
-/** Afterimage: a translucent copy of you, in the overload's light, bobbing to the beat. */
-function drawAfter(a, sx, sy) {
-  if (a.spr < 0) return;
-  const fade = Math.min(1, a.t / 0.1, (a.life - a.t) / 0.5);
-  const bob = Math.round(Math.sin(a.t * 12) * 1.5);
-  ctx.globalAlpha = 0.45 * fade;
-  drawSprite(ctx, a.spr, sx, sy + bob);
-  ctx.globalCompositeOperation = 'lighter';
-  ctx.globalAlpha = 0.35 * fade;
-  ctx.drawImage(glowCanvas(ovc(a, 0, '#5ae0ff')), sx - 14, sy - 26 + bob, 28, 28);
-  ctx.globalCompositeOperation = 'source-over';
-  ctx.globalAlpha = 1;
-}
+// The actors are drawn by each type's draw_<type>.js through moves/gfx.js; seqfx.js's one-shot
+// sequence effects (and Axew's abilities' jaws and meteors) are drawn here.
 
 /** The seqfx.js effects. */
 function drawSeqFx(ox, oy) {
@@ -2126,6 +1726,36 @@ function drawOverloadGlows(ox, oy) {
     ctx.drawImage(glowCanvas(ovlColor(rec.def, G.clock)), sx - r, sy - r, r * 2, r * 2);
   }
   if (on) { ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; }
+}
+
+/**
+ * A shot from its weapon's `anim`: { seq, fps, frame (a fixed frame), rot (turn to the heading,
+ * `rotOff` added for art drawn pointing another way), scale, flip (mirror when flying left) }.
+ * False if the sheet is missing, so the atlas sprite is drawn instead.
+ */
+function drawAnimShot(pr, sx, sy) {
+  const an = pr.anim;
+  const seq = getSequence(an.seq);
+  if (!seq) return false;
+  const f = an.frame !== undefined ? an.frame : ((pr.life * (an.fps || 12)) | 0) % seq.frames;
+  const rec = srcOvl[pr.src];
+  // An overload's palette; otherwise the animation's own fixed `tint`, if it was ripped in the
+  // wrong colour for its move (a blue orb doing an electric ball's job).
+  const ov = rec !== undefined && rec.def.colors ? rec.def
+    : an.tint ? (an._tov || (an._tov = { id: `tint:${an.seq}:${an.tint.join()}`, colors: an.tint })) : null;
+  const sc = (an.scale || 1) * pr.vis;
+  const rot = an.rot ? pr.angle + (an.rotOff || 0) : (an.spin ? pr.life * an.spin : 0);
+  if (pr.z > 1) drawShadow(ctx, sx, sy, Math.max(0.4, 1 - pr.z / 220));
+  if (an.flip && pr.vx < 0 && !rot) {
+    ctx.save();
+    ctx.translate(Math.round(sx), 0);
+    ctx.scale(-1, 1);
+    blitSeq(seq, f, 0, sy - pr.z, sc, 0, 1, false, ov);
+    ctx.restore();
+  } else {
+    blitSeq(seq, f, sx, sy - pr.z, sc, rot, 1, false, ov);
+  }
+  return true;
 }
 
 function drawParticles(ox, oy) {

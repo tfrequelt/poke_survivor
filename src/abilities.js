@@ -12,7 +12,8 @@ import {
   enemies, zones, spawn, despawn, nextHitId,
   cellRange, cellStart, cellItems, GW,
  setDamageSource,} from './world.js';
-import { damageCircle, damageLine, damageRing, damageEnemy, damageSourceId, setSrcType } from './combat.js';
+import { damageCircle, damageLine, damageRing, damageEnemy, damageSourceId, setSrcType, srcOvl } from './combat.js';
+import { mechsOf } from './mechs.js';
 import { ABILITY_TYPES } from './data/types.js';
 import { ABILITIES, ABILITY_BY_ID } from './data/abilities.js';
 import { spriteBase, spriteDirs } from './sprites.js';
@@ -1204,6 +1205,12 @@ function updateZonesInner(dt) {
     const z = zones[i];
     setDamageSource(z.src);
     z.life -= dt;
+    // An overload mechanic riding the zone its weapon laid (mechs.js).
+    const zr = srcOvl[z.src];
+    if (zr !== undefined && zr.def._mxZone) {
+      const mx = mechsOf(zr.def);
+      for (let m = 0; m < mx.length; m++) if (mx[m].h.zone) mx[m].h.zone(z, zr, dt, mx[m].cfg);
+    }
     if (z.life <= 0) {
       // A zone with a `boom` erupts as it closes: an overload's collapsing vortex or delayed blast.
       if (z.boom > 0) {

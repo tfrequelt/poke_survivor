@@ -525,6 +525,55 @@ streaking down, left of the bite (30x30 at (319,154)). Both are keyed off the sh
 20px ability slot with `"smooth": true`, an averaged downscale (nearest neighbour drops whole rows
 of teeth at that size). Without the file they fall back to the drawn Lick and flame icons.
 
+**`pokemon_moves_misc.png`** is a custom Pokémon attack sheet made by JoshR_691
+(spriters-resource.com/custom_edited/pokemoncustoms/asset/18433), who asks for major credit. The
+reworked weapons cut animations from it (its colour key is the pale green `#c7e1d1`): `fx_dirt`
+(Dig's mound), `fx_tri` (Tri Attack), `fx_notes` (Hyper Voice), `fx_web` (Electroweb),
+`fx_panel_y` (Electric Terrain's lit tiles), `fx_ybolt` (Thunder, Live Wire's card), `fx_vine`
+(Grass Knot), `fx_sun` (Solar Beam) and `fx_puff` (Seed Bomb's blast, Pollen).
+
+**The Normal, Electric, Grass and Flying sequences** (batches 2 and 3), by sheet:
+- `moves_ruby_sapphire.png` (Neslug, black or pale-cyan keys): `fx_rs_star` (Swift), `fx_rs_claws`
+  (Fury Swipes), `fx_rs_orb` (Giga Impact), `fx_rs_leaf` (Razor Leaf, Leaf Arrow's hits),
+  `fx_sprout` (Leech Seed, Seedling, Sapling), `fx_rs_blade` (Wood Hammer's card), `fx_rs_gust`
+  (Whirlwind, Tailwind), `fx_wings` (Sky Guard, Sky Attack);
+- `arrows.png`: `fx_coin` (Pay Day), `fx_seeds` (Seed Bomb, Leech Seed), `fx_leafarrow`,
+  `fx_shadowarrow` (Spirit Shackle), `fx_drill` (Drill Peck), `fx_feather` (Feather Dance),
+  `fx_swirl` (Whirlwind), `fx_cloud` (cut for later);
+- `fire_red_abilities.png` (wormintheworks, green key): `fx_solar` and `fx_solar_beam` (Solar
+  Beam), `fx_needle` (Pin Missile);
+- `thunderbolt.png`: `fx_eball` (Electro Ball, ripped blue and drawn yellow through the
+  animation's fixed `tint`), `fx_spark` (Spark Chain, Volt Coil's bolts);
+- `dark_moves.png`: `fx_beatup` (Hyper Voice's Round); `explosion.png`: `fx_giga` (Giga Impact).
+
+**`explores_of_sky_moves/`** is Explorers of Sky's move effects
+(spriters-resource.com/ds_dsi/pokemonmysterydungeonexplorersofsky/asset/85692): 258 numbered
+effects in `move_VFX/<effect>/<animation>/<frame>.png`, 8-bit RGBA, often eight direction folders
+per effect, and frames numbered from 0 with gaps. They have no names, so the useful ones are
+listed here by number as they are used. A manifest entry names an effect's frames with `dir` +
+`files`, and **`python tools/packeos.py`** stitches every such entry into one strip in
+`assets/pmd/eos_strips/` (the loader then reads the strip's `cells`: one request instead of up to
+forty). Run it again after adding or changing an `fx_eos_*` entry.
+
+| Sequence | Effect | Used by |
+|---|---|---|
+| `fx_eos_log`, `fx_eos_logbreak` | 0148 | Wood Hammer's log, and its splinters where it stops |
+| `fx_eos_smoke` | 0056 | Storm Cell's thundercloud, Toxic Trail (tinted), Clear Smog, Ash Cloud |
+| `fx_eos_ghost` | 0046 | Curse's face, Haunt's ghost |
+| `fx_eos_roots` | 0080 | Thorn Knot's thorns |
+| `fx_eos_shadoworb`, `fx_eos_shadowsphere`, `fx_eos_darkburst`, `fx_eos_blackhole` | 0029, 0203, 0196, 0201 | Shadow Ball, Shadow Storm, their bursts, Black Hole |
+| `fx_eos_vortex`, `fx_eos_eye`, `fx_eos_hexfire`, `fx_eos_wisp`, `fx_eos_rock`, `fx_eos_pebbles` | 0176, 0065, 0170, 0088, 0182, 0110 | Spectral Aura, Mean Look, Hex, Possess, Poltergeist's rock and shatter |
+| `fx_eos_goo`, `fx_eos_acid`, `fx_eos_smog`, `fx_eos_gunk`, `fx_eos_toxswirl` | 0144, 0145, 0218, 0014, 0186 | Sludge Bomb, Acid Spray and Toxic, Clear Smog, Gunk Shot |
+| `fx_eos_ember`, `fx_eos_flame`, `fx_eos_fireburst`, `fx_eos_wisporb`, `fx_eos_firering` | 0126, 0189, 0005, 0237, 0009 | Ember, its fires, Fire Blast, Will-o-Wisp, Heat Wave |
+| `fx_eos_column`, `fx_eos_lavabomb`, `fx_eos_meteor`, `fx_eos_blast`, `fx_eos_boom`, `fx_eos_smallflame` | 0036, 0034, 0101, 0024, 0253, 0070 | Eruption, Meteor Fall, Blaze Trail, fire impacts |
+| `fx_eos_snow`, `fx_eos_icicle`, `fx_eos_icecrystal`, `fx_eos_hail`, `fx_eos_snowball`, `fx_eos_icering`, `fx_eos_shards`, `fx_eos_crystal` | 0023, 0127, 0141, 0257, 0175, 0020, 0173, 0013 | Powder Snow, Icicle Crash, Hail Cloud, Avalanche, Frost Veil, Sheer Cold, Frost Chain |
+| `fx_eos_fist`, `fx_eos_punchstar`, `fx_eos_grin`, `fx_eos_claws`, `fx_eos_crescent`, `fx_eos_void`, `fx_eos_shade`, `fx_eos_slashes` | 0221, 0243, 0064, 0219, 0100, 0092, 0184, 0179 | Sucker Punch, Torment and Foul Play, Night Slash, Dark Void, Feint Attack |
+
+**`diamond_pearl_moves/`** (spriters-resource.com/ds_dsi/pokemondiamondpearl/asset/21068, named
+attack sheets) and **`pokemon_rangers_moves/`** (spriters-resource.com/ds_dsi/
+pokemonranger3guardiansigns/asset/41335, 256 numbered vertical strips with magenta anchor ticks)
+are credited and bundled, not yet cut.
+
 **Overload cards** show a weapon as it looks in play when its look is a sheet animation rather
 than its atlas icon: a weapon definition's `card` names the frame (`seq`, `frame`, `scale`) or a
 small drawing of the move (`draw: 'rake' | 'twister'`), and `tint` draws it in the overload's

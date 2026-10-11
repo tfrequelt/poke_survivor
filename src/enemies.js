@@ -442,6 +442,7 @@ export function spawnEnemy(def, x, y, opts) {
   e.def = def;
   e.sn = ++spawnSerial;
   e.aged = false;
+  e.wetT = 0;
   e.x = x; e.y = y; e.vx = 0; e.vy = 0;
   // A walker that would appear in a pond appears on its shore instead. Every spawn comes through
   // here -- the ring, formations, pincers, mini-bosses -- so this one check covers them all.
@@ -602,6 +603,7 @@ export function updateEnemies(dt, separationOn) {
     if (e.slowT > 0) { e.slowT -= dt; if (e.slowT <= 0) e.slow = 0; }
     if (e.weakenT > 0) e.weakenT -= dt;
     if (e.markT > 0) { e.markT -= dt; if (e.markT <= 0) e.markMul = 0; }
+    if (e.wetT > 0) e.wetT -= dt;
     if (e.confuseT > 0) e.confuseT -= dt;
 
     // Burn pays out in instalments on the same quarter-second cadence the ground zones use, so

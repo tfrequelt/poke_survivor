@@ -42,7 +42,7 @@ export const CHARACTERS = [
     color: '#b8bdc4', typeLabel: 'NORMAL', types: ['normal'],
     blurb: 'Fast and adaptable. Never stops moving.',
     trait: 'Adaptability: +8% XP, and new-weapon cards appear more often.',
-    weapon: 'swift_star', ability: 'shockwave_ring',
+    weapon: 'swift', ability: 'shockwave_ring',
     stats: {
       maxHp: 100, moveSpeed: 68, armor: 0, magnet: 45, power: 1.00,
       attackSpeed: 1.00, area: 1.00, duration: 1.00, projSpeed: 1.00,
@@ -95,7 +95,7 @@ export const CHARACTERS = [
     color: '#f08828', typeLabel: 'FIRE', types: ['fire'],
     blurb: 'Fragile, fast, and always alight.',
     trait: 'Flash Fire: its burns ignore armour completely.',
-    weapon: 'ember_spit', ability: 'flamethrower',
+    weapon: 'ember', ability: 'flamethrower',
     stats: {
       maxHp: 88, moveSpeed: 66, armor: 0, magnet: 48, power: 1.12,
       attackSpeed: 1.12, area: 1.00, duration: 1.00, projSpeed: 1.12,

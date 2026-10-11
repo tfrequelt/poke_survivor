@@ -116,6 +116,8 @@ export function damageEnemy(e, amount, knockX = 0, knockY = 0, canCrit = true, f
   const ti = srcType[src];
   let eff = 1;
   if (!fixed && ti !== undefined && e.def && e.def.typeMul) { eff = e.def.typeMul[ti]; amount *= eff; }
+  // Soaked (Rain Dance's Soak): lightning finds a wet foe far easier.
+  if (e.wetT > 0 && ti === TYPE_INDEX.electric) amount *= 1.4;
   lastEffect = eff;
   const s = G.stats;
   // Rowlet's Sharpshoot adds its bar straight onto the crit chance.
@@ -427,6 +429,8 @@ export function damagePlayer(amount) {
     return false;
   }
   const s = G.stats;
+  // Mud Shot's Clay Coat: a layer of clay takes half of a hit, and cracks away.
+  if (p.clay > 0) { amount *= 0.5; p.clay--; }
   const dealt = Math.max(1, Math.round(amount - (s.armor || 0)));
   p.hp -= dealt;
   p.iframes = IFRAMES;

@@ -562,14 +562,16 @@ export const seqSheets = new Map();
 
 export const getSequence = (name) => seqSheets.get(name);
 
-/** One PNG per frame: `dir` + `prefix` + a zero-padded number. */
+/**
+ * One PNG per frame: `dir` + `prefix` + a zero-padded number from 1 -- or, for a rip whose frames
+ * are numbered from 0 with gaps (Explorers of Sky's move effects), `files`: the names in order.
+ */
 async function seqFromFiles(entry) {
   const pad = entry.pad || 0;
-  const n = entry.frames;
   const urls = [];
-  for (let i = 1; i <= n; i++) {
-    urls.push(`${entry.dir}/${entry.prefix || ''}${String(i).padStart(pad, '0')}.png`);
-  }
+  if (entry.files) for (const f of entry.files) urls.push(`${entry.dir}/${f}.png`);
+  else for (let i = 1; i <= entry.frames; i++) urls.push(`${entry.dir}/${entry.prefix || ''}${String(i).padStart(pad, '0')}.png`);
+  const n = urls.length;
 
   // All frames must be the same size, or the strip's source offsets stop lining up.
   const imgs = await Promise.all(urls.map(decodeDrawable));

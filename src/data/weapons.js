@@ -28,6 +28,10 @@ export const WEAPONS = [
   // =========================================================================
   {
     id: 'mud_shot', name: 'Mud Shot', owner: 'wooper', type: 'ground',
+    archetype: 'shot',
+    anim: { seq: 'fx_rs_mud', scale: 0.32 },
+    hitAnim: { seq: 'fx_rs_splash', dur: 0.3, fps: 10, scale: 0.8 },
+    card: { seq: 'fx_rs_mud', frame: 0, scale: 0.85, tint: true },
     desc: 'A heavy glob that thuds into the ground and leaves a slowing puddle.',
     behavior: 'projectile', aim: 'nearest', motion: 'arc',
     sprite: 'proj_bubble', palette: 'water',
@@ -44,21 +48,29 @@ export const WEAPONS = [
     evolution: { into: 'quagmire', needPassive: 'mystic_water' },
   },
   {
-    id: 'bubble_beam', name: 'Bubble Beam', type: 'water',
-    desc: 'Bubbles wind outward in a widening spiral. Standing in the middle is a mistake.',
-    behavior: 'projectile', aim: 'nearest', motion: 'spiral',
+    id: 'bubble', name: 'Bubble', type: 'water',
+    archetype: 'engulf',
+    desc: 'Bubbles drift out and engulf the first foe they touch, carrying it off helpless until they pop on everything near.',
+    behavior: 'bubble', aim: 'nearest', motion: 'anchor',
     sprite: 'proj_bubble', palette: 'water',
-    damage: 11, cooldown: 1.15, amount: 3, speed: 150, area: 1, pierce: 2, duration: 1.7,
-    r: 5, range: 200, spread: 2.09, knockback: 10, usesAmount: true,
-    freq: 3.4, pulse: 0.25, trail: 12, trailColor: '#bfe9ff', impact: 5, impactColor: '#a8e4ff',
+    // The look in play, and on its overload cards: Ruby/Sapphire's Bubble.
+    card: { seq: 'fx_rs_bubble', frame: 0, scale: 2.2, tint: true },
+    // Two bubbles at most: they swell around what they hold, and a screenful would be unreadable.
+    damage: 36, cooldown: 2.2, amount: 1, speed: 70, area: 1, pierce: 0, duration: 3.2,
+    r: 9, range: 200, spread: 0.6, knockback: 0, usesAmount: false,
+    // How long it holds its catch, and how many it can hold.
+    hold: 1.6, carry: 1,
     levels: [
-      {}, { amount: +1 }, { damage: +4 }, { cooldownMul: 0.9 },
-      { amount: +1 }, { damage: +6 }, { pierce: +2 }, { amount: +2, damage: +7 },
-      { damage: +9 }, { amount: +2, damage: +12 }
+      {}, { damage: +6 }, { amount: +1, say: '+1 bubble' }, { cooldownMul: 0.9 },
+      { hold: 0.4, say: 'holds its catch 0.4s longer' }, { damage: +7 }, { carry: 1, say: 'each bubble holds 1 more foe' },
+      { areaMul: 1.25, damage: +6 }, { cooldownMul: 0.88 }, { damage: +10, hold: 0.4, say: 'holds its catch 0.4s longer' }
     ],
   },
   {
     id: 'tidal_surge', name: 'Tidal Surge', type: 'water',
+    archetype: 'nova',
+    zoneAnim: { seq: 'fx_caustic', n: 7, scale: 1.1, fps: 14, alpha: 0.9 },
+    card: { seq: 'fx_rs_splash', frame: 0, scale: 2, tint: true },
     desc: 'A ring of water rolls out from you and shoves the whole crowd off your back.',
     behavior: 'nova', aim: 'nearest', motion: 'orbitPlayer',
     sprite: 'proj_ring', palette: 'water',
@@ -73,6 +85,9 @@ export const WEAPONS = [
   },
   {
     id: 'whirlpool', name: 'Whirlpool', type: 'water',
+    archetype: 'vortex',
+    zoneAnim: { seq: 'fx_rs_whirl', fps: 10, fit: false, scale: 1.6, alpha: 0.9 },
+    card: { seq: 'fx_rs_whirl', frame: 1, scale: 1.8, tint: true },
     desc: 'Opens a vortex under the crowd and drags it all into one grinding heap.',
     behavior: 'pull', aim: 'nearest', motion: 'anchor',
     sprite: 'proj_vortex', palette: 'water',
@@ -87,6 +102,9 @@ export const WEAPONS = [
   },
   {
     id: 'aqua_jet', name: 'Aqua Jet', type: 'water',
+    archetype: 'charge',
+    anim: { seq: 'fx_waterdrop', rot: true, scale: 0.9 },
+    card: { seq: 'fx_rs_swirl', frame: 1, scale: 1.8, tint: true },
     desc: 'Builds pressure while you stand still and releases it the moment you move.',
     behavior: 'charge', aim: 'nearest', motion: 'straight',
     sprite: 'proj_shard', palette: 'water',
@@ -102,6 +120,10 @@ export const WEAPONS = [
   },
   {
     id: 'rain_dance', name: 'Rain Dance', type: 'water',
+    archetype: 'rain',
+    anim: { seq: 'fx_rs_drop', fps: 6, scale: 1.1 },
+    hitAnim: { seq: 'fx_rs_splash', dur: 0.3, fps: 10, scale: 0.7 },
+    card: { seq: 'fx_rs_drop', frame: 1, scale: 2.4, tint: true },
     desc: 'Calls down a squall that patters across a whole patch of ground.',
     behavior: 'rain', aim: 'nearest', motion: 'fall',
     sprite: 'proj_droplet', palette: 'water',
@@ -116,6 +138,9 @@ export const WEAPONS = [
   },
   {
     id: 'brine_fang', name: 'Brine Fang', type: 'water',
+    archetype: 'companion',
+    anim: { seq: 'fx_shark', scale: 0.55, flip: true },
+    card: { seq: 'fx_shark', frame: 0, scale: 0.9, tint: true },
     desc: 'A water sprite hunts on its own and worries whatever it catches.',
     behavior: 'companion', aim: 'nearest', motion: 'weave',
     sprite: 'proj_hound', palette: 'water',
@@ -135,6 +160,9 @@ export const WEAPONS = [
   // =========================================================================
   {
     id: 'rock_orbit', name: 'Rock Orbit', type: 'ground',
+    archetype: 'orbit',
+    anim: { seq: 'fx_ancient', fps: 6, spin: 3, scale: 1.2 },
+    card: { seq: 'fx_ancient', frame: 1, scale: 3.6, tint: true },
     desc: 'Stones circle you, crushing whatever they sweep through.',
     behavior: 'orbit', aim: 'nearest', motion: 'orbitPlayer',
     sprite: 'proj_rock', palette: 'rock',
@@ -149,21 +177,29 @@ export const WEAPONS = [
     ],
   },
   {
-    id: 'bonemerang', name: 'Bonemerang', type: 'ground',
-    desc: 'Flies out, stalls, and comes back through everything a second time.',
-    behavior: 'projectile', aim: 'nearest', motion: 'boomerang',
+    id: 'earth_power', name: 'Earth Power', type: 'ground',
+    archetype: 'eruptLine',
+    desc: 'The ground splits open in a line toward the nearest foe, spire after spire erupting a beat apart and throwing up whatever stands on them.',
+    behavior: 'earthPower', aim: 'nearest', motion: 'anchor',
     sprite: 'proj_bone', palette: 'ground',
-    damage: 20, cooldown: 1.7, amount: 1, speed: 260, area: 1, pierce: 3, duration: 1.8,
-    r: 6, range: 200, spread: 0.34, knockback: 22, usesAmount: true,
-    spin: 13, trail: 14, trailColor: '#c49a5e', impact: 5, impactColor: '#9a6c36',
+    card: { seq: 'fx_quake', frame: 4, scale: 0.55, tint: true },
+    // One line: the spires are tall sprites, and several lines at once would bury the screen.
+    damage: 44, cooldown: 1.6, amount: 1, speed: 0, area: 1, pierce: 0, duration: 1,
+    r: 18, range: 170, spread: 0.45, knockback: 40, usesAmount: false,
+    gap: 0.07, spacing: 18,
     levels: [
-      {}, { amount: +1 }, { damage: +8 }, { cooldownMul: 0.9 },
-      { pierce: +2 }, { damage: +10 }, { cooldownMul: 0.88 }, { amount: +1, damage: +14 },
-      { damage: +19 }, { amount: +1, damage: +24 }
+      {}, { damage: +8 }, { reach: 30, say: 'the line runs 30px further' }, { cooldownMul: 0.9 },
+      { stunPlus: 0.2, say: 'spires stun 0.2s longer' }, { damage: +10 }, { areaMul: 1.2 }, { damage: +10, reach: 30, say: 'the line runs 30px further' },
+      { cooldownMul: 0.88 }, { damage: +14, stunPlus: 0.2, say: 'spires stun 0.2s longer' }
     ],
   },
   {
     id: 'sand_tomb', name: 'Sand Tomb', type: 'ground',
+    archetype: 'mine',
+    anim: { seq: 'fx_ancient', frame: 3, scale: 1 },
+    // The buried rock bursts in a small grey blast of stone dust.
+    hitAnim: { spr: 'boom', color: '#a8a098', scale: 1.1, dust: '#c8c0b0' },
+    card: { seq: 'fx_ancient', frame: 3, scale: 3.4, tint: true },
     desc: 'Buries traps around you. They do nothing at all until something walks onto one.',
     behavior: 'mine', aim: 'nearest', motion: 'anchor',
     sprite: 'proj_mine', palette: 'ground',
@@ -178,6 +214,9 @@ export const WEAPONS = [
   },
   {
     id: 'bulldoze', name: 'Bulldoze', type: 'ground',
+    archetype: 'sweep',
+    anim: { seq: 'fx_break', fps: 18, rot: true, scale: 0.45 },
+    card: { seq: 'fx_break', frame: 1, scale: 0.8, tint: true },
     desc: 'A shockwave swung in a wide arc. Everything in front of you goes flying.',
     behavior: 'sweep', aim: 'nearest', motion: 'sweepArc',
     sprite: 'proj_blade', palette: 'ground',
@@ -191,17 +230,20 @@ export const WEAPONS = [
     ],
   },
   {
-    id: 'magnitude', name: 'Magnitude', type: 'ground',
-    desc: 'A tremor rolls away from you and erupts wherever it happens to stop.',
-    behavior: 'bloom', aim: 'nearest', motion: 'drift',
+    id: 'dig', name: 'Dig', type: 'ground',
+    archetype: 'burrow',
+    desc: 'A mound of earth tunnels under the ground to a foe and bursts up beneath it -- then on to the next.',
+    behavior: 'dig', aim: 'nearest', motion: 'anchor',
     sprite: 'proj_boulder', palette: 'ground',
-    damage: 24, cooldown: 3.2, amount: 2, speed: 150, area: 1, pierce: 0, duration: 1.6,
-    r: 8, range: 180, spread: 0.5, knockback: 70, usesAmount: true,
-    fuse: 1.6, blastRadius: 52, spin: 3, impact: 10, impactColor: '#9a6c36',
+    card: { seq: 'fx_dirt', frame: 4, scale: 2.4, tint: true },
+    damage: 28, cooldown: 2.6, amount: 1, speed: 150, area: 1, pierce: 0, duration: 1,
+    r: 10, range: 200, spread: 0, knockback: 70, usesAmount: true,
+    // Foes it surfaces under before it is done.
+    hops: 2,
     levels: [
-      {}, { amount: +1 }, { damage: +8 }, { cooldownMul: 0.9 },
-      { amount: +1 }, { damage: +10 }, { areaMul: 1.2 }, { amount: +1, damage: +15 },
-      { damage: +20 }, { amount: +1, damage: +26 }
+      {}, { damage: +9 }, { hops: 1, say: 'surfaces under 1 more foe' }, { cooldownMul: 0.9 },
+      { amount: +1, say: '+1 digger' }, { damage: +11 }, { hops: 1, say: 'surfaces under 1 more foe' },
+      { areaMul: 1.25, damage: +10 }, { cooldownMul: 0.88 }, { amount: +1, damage: +14, say: '+1 digger' }
     ],
   },
 
@@ -209,66 +251,75 @@ export const WEAPONS = [
   // NORMAL -- fast, clean, no gimmicks to learn
   // =========================================================================
   {
-    id: 'swift_star', name: 'Swift Star', owner: 'eevee', type: 'normal',
-    desc: 'Stars that lurch, then snap toward whatever is closest. They never miss.',
-    behavior: 'projectile', aim: 'nearest', motion: 'accelerate',
+    id: 'swift', name: 'Swift', owner: 'eevee', type: 'normal',
+    archetype: 'converge',
+    desc: 'Stars burst out wide to either side, hang a heartbeat, then all converge on one foe from every direction at once.',
+    behavior: 'swift', aim: 'nearest', motion: 'anchor',
     sprite: 'proj_star', palette: 'normal',
-    damage: 9, cooldown: 0.85, amount: 2, speed: 240, area: 1, pierce: 1, duration: 1.3,
-    r: 4, range: 190, spread: 0.45, knockback: 8, usesAmount: true,
-    spin: 9, trail: 26, trailColor: '#e4e8ee', impact: 4, impactColor: '#ffffff',
+    card: { seq: 'fx_rs_star', frame: 0, scale: 3.2, tint: true },
+    damage: 10, cooldown: 1.1, amount: 3, speed: 330, area: 1, pierce: 1, duration: 1,
+    r: 5, range: 200, spread: 0, knockback: 8, usesAmount: true,
     levels: [
-      {}, { amount: +1 }, { damage: +3 }, { cooldownMul: 0.9 },
-      { amount: +1 }, { damage: +4 }, { cooldownMul: 0.88 }, { amount: +1, pierce: +1 },
-      { damage: +5 }, { amount: +1, damage: +7 }
+      {}, { amount: +1, say: '+1 star' }, { damage: +3 }, { cooldownMul: 0.9 },
+      { amount: +1, say: '+1 star' }, { damage: +4 }, { cooldownMul: 0.88 }, { amount: +1, damage: +3, say: '+1 star' },
+      { damage: +5 }, { amount: +1, damage: +6, say: '+1 star' }
     ],
     evolution: { into: 'star_barrage', needPassive: 'silk_scarf' },
   },
   {
-    id: 'comet_punch', name: 'Comet Punch', type: 'normal',
-    desc: 'A flurry of wild jabs. None of them travel far and all of them land.',
-    behavior: 'cone', aim: 'nearest', motion: 'zigzag',
+    id: 'pay_day', name: 'Pay Day', type: 'normal',
+    archetype: 'coins',
+    desc: 'A spray of coins flung at the crowd. Now and then a foe they strike shakes loose a real one.',
+    behavior: 'payDay', aim: 'nearest', motion: 'anchor',
     sprite: 'proj_fist', palette: 'normal',
-    damage: 12, cooldown: 1.0, amount: 5, speed: 260, area: 1, pierce: 0, duration: 0.42,
-    r: 6, range: 100, spread: 0.24, knockback: 26, usesAmount: true,
-    amp: 150, freq: 14, impact: 5, impactColor: '#ffffff',
+    card: { atlas: 'coin', palette: 'gold', scale: 2.6 },
+    damage: 9, cooldown: 1.1, amount: 6, speed: 230, area: 1, pierce: 0, duration: 0.75,
+    r: 5, range: 150, spread: 0.35, knockback: 10, usesAmount: true,
+    dropChance: 0.05,
     levels: [
-      {}, { amount: +2 }, { damage: +4 }, { cooldownMul: 0.9 },
-      { amount: +2 }, { damage: +6 }, { cooldownMul: 0.86 }, { amount: +3, damage: +9 },
-      { damage: +12 }, { amount: +3, damage: +15 }
+      {}, { amount: +2, say: '+2 coins' }, { damage: +3 }, { cooldownMul: 0.9 },
+      { amount: +2, say: '+2 coins' }, { damage: +4 }, { cooldownMul: 0.88 }, { amount: +2, damage: +4, say: '+2 coins' },
+      { damage: +5 }, { amount: +2, damage: +6, say: '+2 coins' }
     ],
   },
   {
     id: 'tri_attack', name: 'Tri Attack', type: 'normal',
-    desc: 'One bolt that shatters into three the instant it touches anything.',
-    behavior: 'split', aim: 'nearest', motion: 'wave',
+    archetype: 'triangle',
+    desc: 'A spinning triangle that widens as it drifts. Its edges cut; its corners burn, freeze and paralyse.',
+    behavior: 'triAttack', aim: 'nearest', motion: 'anchor',
     sprite: 'proj_shard', palette: 'normal',
-    damage: 24, cooldown: 1.45, amount: 1, speed: 280, area: 1, pierce: 0, duration: 1.3,
-    r: 5, range: 240, spread: 0.3, knockback: 14, usesAmount: false,
-    shards: 3, amp: 34, freq: 9, spin: 8, trail: 16, trailColor: '#e4e8ee',
-    impact: 6, impactColor: '#ffffff',
+    card: { seq: 'fx_tri', frame: 0, scale: 1.3, tint: true },
+    // One triangle: its sprite is wide, so the levels make it bite harder and last longer instead.
+    damage: 15, cooldown: 2.4, amount: 1, speed: 55, area: 1, pierce: 0, duration: 2.4,
+    r: 6, range: 200, spread: 0, knockback: 0, usesAmount: false,
+    triR: 34,
     levels: [
-      {}, { shards: +1 }, { damage: +8 }, { cooldownMul: 0.9 },
-      { shards: +1 }, { damage: +11 }, { cooldownMul: 0.86 }, { shards: +2, damage: +16 },
-      { damage: +22 }, { shards: +2, damage: +27 }
+      {}, { damage: +5 }, { areaMul: 1.15 }, { cooldownMul: 0.9 },
+      { duration: +0.6 }, { damage: +6 }, { cooldownMul: 0.88 }, { areaMul: 1.2, damage: +6 },
+      { damage: +8 }, { duration: +0.6, damage: +10 }
     ],
   },
   {
-    id: 'hyper_fang', name: 'Hyper Fang', type: 'normal',
-    desc: 'Bites clean through one target and springs at the next, harder every time.',
-    behavior: 'bouncer', aim: 'nearest', motion: 'homing',
-    sprite: 'proj_fang', palette: 'normal',
-    damage: 20, cooldown: 1.8, amount: 1, speed: 300, area: 1, pierce: 0, duration: 0.7,
-    r: 6, range: 210, spread: 0.3, knockback: 20, usesAmount: true,
-    bounces: 3, bounceGain: 0.35, homingTurn: 7,
-    trail: 18, trailColor: '#e4e8ee', impact: 6, impactColor: '#ffffff',
+    id: 'hyper_voice', name: 'Hyper Voice', type: 'normal',
+    archetype: 'soundRings',
+    desc: 'Rings of sound roll out ahead one after another, widening as they go and leaving foes confused.',
+    behavior: 'hyperVoice', aim: 'nearest', motion: 'anchor',
+    sprite: 'proj_ring', palette: 'normal',
+    card: { seq: 'fx_beatup', frame: 3, scale: 0.9, tint: true },
+    damage: 14, cooldown: 1.9, amount: 1, speed: 0, area: 1, pierce: 0, duration: 0.85,
+    r: 6, range: 200, spread: 0, knockback: 40, usesAmount: false,
+    rings: 3, cone: 0.6, confuse: 1.2,
     levels: [
-      {}, { bounces: +1 }, { damage: +7 }, { cooldownMul: 0.9 },
-      { bounces: +1 }, { damage: +9 }, { cooldownMul: 0.86 }, { bounces: +2, damage: +14 },
-      { damage: +19 }, { bounces: +2, damage: +24 }
+      {}, { damage: +4 }, { rings: 1, say: '+1 ring' }, { cooldownMul: 0.9 },
+      { damage: +5 }, { damage: +4 }, { cooldownMul: 0.88 }, { rings: 1, damage: +5, say: '+1 ring' },
+      { damage: +7 }, { damage: +9, rings: 1, say: '+1 ring' }
     ],
   },
   {
     id: 'fury_swipes', name: 'Fury Swipes', type: 'normal',
+    archetype: 'swarm',
+    anim: { seq: 'fx_rs_claws', fps: 12, rot: true, scale: 0.6 },
+    card: { seq: 'fx_rs_claws', frame: 1, scale: 1.7, tint: true },
     desc: 'A cloud of claws swarms one target and does not let go.',
     behavior: 'swarm', aim: 'nearest', motion: 'weave',
     sprite: 'proj_claw', palette: 'normal',
@@ -283,6 +334,10 @@ export const WEAPONS = [
   },
   {
     id: 'giga_impact', name: 'Giga Impact', type: 'normal',
+    archetype: 'charge',
+    anim: { seq: 'fx_rs_orb', fps: 12, scale: 0.9 },
+    hitAnim: { seq: 'fx_giga', dur: 0.4, fps: 20, scale: 0.9 },
+    card: { seq: 'fx_giga', frame: 3, scale: 1.6, tint: true },
     desc: 'Winds up while you hold still, then leaps and lands on something.',
     behavior: 'charge', aim: 'nearest', motion: 'dive',
     sprite: 'proj_boulder', palette: 'normal',
@@ -302,6 +357,8 @@ export const WEAPONS = [
   // =========================================================================
   {
     id: 'spark_chain', name: 'Spark Chain', type: 'electric',
+    archetype: 'chain',
+    card: { seq: 'fx_spark', frame: 1, scale: 2.2, tint: true },
     desc: 'Lightning that leaps between enemies. The tighter the crowd, the better.',
     behavior: 'chain', aim: 'nearest', motion: 'straight',
     sprite: 'proj_spark', palette: 'electric',
@@ -315,21 +372,27 @@ export const WEAPONS = [
     ],
   },
   {
-    id: 'thunder_fang', name: 'Thunder Fang', type: 'electric',
-    desc: 'A live bolt that snaps side to side instead of flying straight.',
-    behavior: 'projectile', aim: 'nearest', motion: 'zigzag',
+    id: 'electroweb', name: 'Electroweb', type: 'electric',
+    archetype: 'net',
+    desc: 'A live net thrown onto the crowd. Foes in its mesh are tangled, and a blow to one shocks all the rest.',
+    behavior: 'electroweb', aim: 'nearest', motion: 'anchor',
     sprite: 'proj_fang', palette: 'electric',
-    damage: 17, cooldown: 0.95, amount: 2, speed: 300, area: 1, pierce: 2, duration: 0.95,
-    r: 5, range: 240, spread: 0.3, knockback: 12, usesAmount: true,
-    amp: 190, freq: 11, trail: 24, trailColor: '#fffaa8', impact: 5, impactColor: '#f8e038',
+    card: { seq: 'fx_web', frame: 0, scale: 1.5, tint: true },
+    // One net: it is the size of the crowd it catches, and two would cover the screen.
+    damage: 10, cooldown: 2.6, amount: 1, speed: 0, area: 1, pierce: 0, duration: 2.6,
+    r: 6, range: 190, spread: 0, knockback: 0, usesAmount: false,
+    webR: 30, tangle: 0.6, share: 0.45,
     levels: [
-      {}, { amount: +1 }, { damage: +6 }, { cooldownMul: 0.9 },
-      { amount: +1 }, { damage: +8 }, { pierce: +2 }, { amount: +1, damage: +12 },
-      { damage: +16 }, { amount: +1, damage: +20 }
+      {}, { damage: +3 }, { areaMul: 1.15 }, { cooldownMul: 0.9 },
+      { duration: +0.6 }, { damage: +4 }, { cooldownMul: 0.88 }, { areaMul: 1.2, damage: +4 },
+      { damage: +5 }, { duration: +0.8, damage: +7 }
     ],
   },
   {
     id: 'volt_coil', name: 'Volt Coil', type: 'electric',
+    archetype: 'turret',
+    emitAnim: { seq: 'fx_spark', fps: 16, scale: 0.6 },
+    card: { seq: 'fx_spark', frame: 2, scale: 2.2, tint: true },
     desc: 'Leave a coil behind and it keeps firing at whatever comes near it.',
     behavior: 'turret', aim: 'nearest', motion: 'anchor',
     sprite: 'proj_coil', palette: 'electric',
@@ -347,6 +410,11 @@ export const WEAPONS = [
   },
   {
     id: 'electro_ball', name: 'Electro Ball', type: 'electric',
+    archetype: 'bouncer',
+    // Ripped blue from the Thunderbolt sheet; drawn in electric yellow.
+    anim: { seq: 'fx_eball', fps: 10, scale: 0.8, tint: ['#c8a010', '#f8e038', '#fffad0'] },
+    hitAnim: { seq: 'fx_spark', dur: 0.25, fps: 16, scale: 0.9 },
+    card: { seq: 'fx_eball', frame: 0, scale: 1.8, tint: true },
     desc: 'A charged sphere that caroms off the crowd, gaining voltage with each hop.',
     behavior: 'bouncer', aim: 'nearest', motion: 'zigzag',
     sprite: 'proj_bubble', palette: 'electric',
@@ -361,21 +429,25 @@ export const WEAPONS = [
     ],
   },
   {
-    id: 'thunder_wave', name: 'Thunder Wave', type: 'electric',
-    desc: 'Drops a ring of current that spreads outward and locks legs as it goes.',
-    behavior: 'nova', aim: 'nearest', motion: 'anchor',
+    id: 'electric_terrain', name: 'Electric Terrain', type: 'electric',
+    archetype: 'tileGrid',
+    desc: 'The floor at your feet becomes a grid of tiles lighting up in travelling patterns. A lit tile shocks whatever stands on it.',
+    behavior: 'electricTerrain', aim: 'nearest', motion: 'anchor',
     sprite: 'proj_ring', palette: 'electric',
-    damage: 9, cooldown: 3.0, amount: 1, speed: 0, area: 1, pierce: 0, duration: 0.9,
-    r: 110, range: 0, spread: 0, knockback: 30, usesAmount: false,
-    slow: 0.55, zoneColor: '#f8e038',
+    card: { seq: 'fx_panel_y', frame: 3, scale: 0.8, tint: true },
+    damage: 12, cooldown: 4.2, amount: 1, speed: 0, area: 1, pierce: 0, duration: 4.0,
+    r: 6, range: 160, spread: 0, knockback: 0, usesAmount: false,
+    tiles: 5, tile: 22, stepT: 0.32,
     levels: [
-      {}, { damage: +3 }, { areaMul: 1.2 }, { cooldownMul: 0.88 },
-      { damage: +4 }, { areaMul: 1.2 }, { cooldownMul: 0.85 }, { damage: +7, areaMul: 1.25 },
-      { damage: +9 }, { areaMul: 1.25, damage: +12 }
+      {}, { damage: +4 }, { duration: +0.8 }, { cooldownMul: 0.9 },
+      { areaMul: 1.15 }, { damage: +5 }, { cooldownMul: 0.88 }, { duration: +0.8, damage: +5 },
+      { damage: +7 }, { areaMul: 1.15, damage: +9 }
     ],
   },
   {
     id: 'live_wire', name: 'Live Wire', type: 'electric',
+    archetype: 'tether',
+    card: { seq: 'fx_ybolt', frame: 0, scale: 0.7, tint: true },
     desc: 'A cable of current latched onto one enemy, burning everything standing on the line.',
     behavior: 'tether', aim: 'nearest', motion: 'straight',
     sprite: 'proj_quill', palette: 'electric',
@@ -394,6 +466,8 @@ export const WEAPONS = [
   // =========================================================================
   {
     id: 'night_daze', name: 'Night Daze', type: 'dark',
+    archetype: 'link',
+    card: { seq: 'fx_eos_slashes', frame: 4, scale: 1, tint: true },
     desc: 'A black line drawn to one enemy. Everything standing on it pays, and so do they.',
     behavior: 'link', aim: 'toughest', motion: 'straight',
     sprite: 'proj_eye', palette: 'dark',
@@ -408,21 +482,26 @@ export const WEAPONS = [
   },
   {
     id: 'sucker_punch', name: 'Sucker Punch', type: 'dark',
-    desc: 'Coils while you hold still and lunges the instant you break cover.',
-    behavior: 'charge', aim: 'nearest', motion: 'homing',
+    archetype: 'counter',
+    desc: 'A fist out of nowhere on any foe winding up an attack or a cast: it hits hard and knocks the move out of it.',
+    behavior: 'suckerPunch', aim: 'nearest', motion: 'anchor',
     sprite: 'proj_fist', palette: 'dark',
-    damage: 13, cooldown: 0.26, amount: 1, speed: 340, area: 1, pierce: 1, duration: 0.9,
-    r: 6, range: 230, spread: 0.26, knockback: 46, usesAmount: false,
-    maxCharge: 5, chargeGain: 0.3, homingTurn: 6,
-    trail: 22, trailColor: '#4a3a66', impact: 7, impactColor: '#d0b0ff',
+    card: { seq: 'fx_eos_fist', frame: 2, scale: 2.2, tint: true },
+    damage: 26, cooldown: 0.7, amount: 2, speed: 0, area: 1, pierce: 0, duration: 1,
+    r: 6, range: 170, spread: 0, knockback: 0, usesAmount: true,
+    counterMul: 2.2, jabMul: 1, daze: 0.4,
     levels: [
-      {}, { damage: +8 }, { pierce: +1 }, { cooldownMul: 0.9 },
-      { damage: +10 }, { pierce: +1 }, { cooldownMul: 0.86 }, { damage: +17 },
-      { damage: +23 }, { pierce: +1, damage: +29 }
+      {}, { damage: +6 }, { amount: +1, say: '+1 fist' }, { cooldownMul: 0.9 },
+      { damage: +7 }, { amount: +1, say: '+1 fist' }, { cooldownMul: 0.88 }, { damage: +8 },
+      { damage: +10 }, { amount: +1, damage: +12, say: '+1 fist' }
     ],
   },
   {
     id: 'foul_play', name: 'Foul Play', type: 'dark',
+    archetype: 'bouncer',
+    anim: { seq: 'fx_eos_grin', fps: 16, scale: 0.7 },
+    hitAnim: { seq: 'fx_eos_claws', dur: 0.3, fps: 20, scale: 0.5 },
+    card: { seq: 'fx_eos_grin', frame: 9, scale: 2, tint: true },
     desc: 'A skull that hurls itself from one victim to the next, meaner every time.',
     behavior: 'bouncer', aim: 'nearest', motion: 'straight',
     sprite: 'proj_skull', palette: 'dark',
@@ -438,6 +517,9 @@ export const WEAPONS = [
   },
   {
     id: 'dark_void', name: 'Dark Void', type: 'dark',
+    archetype: 'pull',
+    zoneAnim: { seq: 'fx_eos_void', fps: 6, fit: false, scale: 2.2, alpha: 0.85 },
+    card: { seq: 'fx_eos_void', frame: 0, scale: 2.6, tint: true },
     desc: 'A hole opens under your feet and everything nearby slides into it.',
     behavior: 'pull', aim: 'nearest', motion: 'orbitPlayer',
     sprite: 'proj_vortex', palette: 'dark',
@@ -451,32 +533,35 @@ export const WEAPONS = [
     ],
   },
   {
-    id: 'snarl', name: 'Snarl', type: 'dark',
-    desc: 'A lobbed howl that breaks over the front rank and leaves it reeling.',
-    behavior: 'cone', aim: 'nearest', motion: 'arc',
+    id: 'torment', name: 'Torment', type: 'dark',
+    archetype: 'torment',
+    desc: 'The toughest foe near you is tormented: a dark aura wells off it that sears its own allies.',
+    behavior: 'torment', aim: 'toughest', motion: 'anchor',
     sprite: 'proj_fang', palette: 'dark',
-    damage: 15, cooldown: 1.25, amount: 4, speed: 200, area: 1, pierce: 1, duration: 0.8,
-    r: 7, range: 150, spread: 0.3, knockback: 18, usesAmount: true,
-    impact: 6, impactColor: '#8a72b8',
+    card: { seq: 'fx_eos_grin', frame: 8, scale: 2, tint: true },
+    damage: 8, cooldown: 3.0, amount: 1, speed: 0, area: 1, pierce: 0, duration: 4,
+    r: 6, range: 200, spread: 0, knockback: 0, usesAmount: false,
+    auraR: 36,
     levels: [
-      {}, { amount: +1 }, { damage: +5 }, { cooldownMul: 0.9 },
-      { amount: +1 }, { damage: +7 }, { cooldownMul: 0.86 }, { amount: +2, damage: +11 },
-      { damage: +15 }, { amount: +2, damage: +19 }
+      {}, { damage: +3 }, { areaMul: 1.15 }, { cooldownMul: 0.9 },
+      { duration: +0.8 }, { damage: +4 }, { cooldownMul: 0.88 }, { damage: +4, areaMul: 1.15 },
+      { damage: +5 }, { damage: +7, duration: +0.8 }
     ],
   },
   {
-    id: 'nightmare', name: 'Nightmare', type: 'dark',
-    desc: 'Plants a hex that sits there doing nothing, then takes a terrible amount all at once.',
-    behavior: 'bloom', aim: 'nearest', motion: 'anchor',
+    id: 'feint_attack', name: 'Feint Attack', type: 'dark',
+    archetype: 'feint',
+    desc: 'Shadows flicker in behind several foes, stab them in the back, and shove them stumbling toward you.',
+    behavior: 'feintAttack', aim: 'nearest', motion: 'anchor',
     sprite: 'proj_seed', palette: 'dark',
-    damage: 24, cooldown: 3.8, amount: 1, speed: 0, area: 1, pierce: 0, duration: 2.2,
-    r: 6, range: 150, spread: 0.6, knockback: 40, usesAmount: true,
-    fuse: 2.2, blastRadius: 58, spin: 2,
-    impact: 12, impactColor: '#d0b0ff',
+    card: { seq: 'fx_eos_slashes', frame: 5, scale: 1, tint: true },
+    damage: 24, cooldown: 1.8, amount: 2, speed: 0, area: 1, pierce: 0, duration: 1,
+    r: 6, range: 180, spread: 0, knockback: 1, usesAmount: true,
+    lurk: 0.3, yank: 120,
     levels: [
-      {}, { amount: +1 }, { damage: +7 }, { cooldownMul: 0.9 },
-      { amount: +1 }, { damage: +9 }, { areaMul: 1.2 }, { amount: +1, damage: +14 },
-      { damage: +19 }, { amount: +1, damage: +24 }
+      {}, { damage: +6 }, { amount: +1, say: '+1 shadow' }, { cooldownMul: 0.9 },
+      { damage: +7 }, { amount: +1, say: '+1 shadow' }, { cooldownMul: 0.88 }, { damage: +8 },
+      { amount: +1, say: '+1 shadow' }, { damage: +12 }
     ],
   },
 
@@ -485,6 +570,10 @@ export const WEAPONS = [
   // =========================================================================
   {
     id: 'leaf_arrow', name: 'Leaf Arrow', owner: 'rowlet', type: 'grass',
+    archetype: 'shot',
+    anim: { seq: 'fx_leafarrow', rot: true, scale: 0.9 },
+    hitAnim: { seq: 'fx_rs_leaf', dur: 0.3, fps: 12, scale: 1 },
+    card: { seq: 'fx_leafarrow', frame: 0, scale: 1.6, tint: true },
     desc: 'A spinning blade that drifts on the wind and punches through a whole line.',
     behavior: 'projectile', aim: 'toughest', motion: 'wave',
     sprite: 'proj_leaf', palette: 'grass',
@@ -500,6 +589,10 @@ export const WEAPONS = [
   },
   {
     id: 'seed_bomb', name: 'Seed Bomb', type: 'grass',
+    archetype: 'bloom',
+    // Its look is its own atlas art: one of items_2.png's two seeds at random, every throw.
+    hitAnim: { seq: 'fx_puff', dur: 0.35, fps: 9, scale: 1.3, dust: '#c4f29a' },
+    card: { atlas: 'proj_seed_a', palette: 'grass', scale: 2.4 },
     desc: 'Lobs seeds that take root, wait, and then go off underneath the crowd.',
     behavior: 'bloom', aim: 'nearest', motion: 'arc',
     // The two seeds of items_2.png, one or the other at random for every seed thrown.
@@ -514,63 +607,69 @@ export const WEAPONS = [
     ],
   },
   {
-    id: 'vine_whip', name: 'Vine Whip', type: 'grass',
-    desc: 'Barbed vines race out along the ground, spreading wider the further they get.',
-    behavior: 'projectile', aim: 'nearest', motion: 'crawl',
-    sprite: 'proj_thorn', palette: 'grass',
-    damage: 15, cooldown: 1.1, amount: 2, speed: 260, area: 1, pierce: 9999, duration: 1.5,
-    r: 6, range: 170, spread: 0.36, knockback: 12, usesAmount: true,
-    slow: 0.3, trail: 14, trailColor: '#6cc840', impact: 5, impactColor: '#c4f29a',
-    levels: [
-      {}, { amount: +1 }, { damage: +5 }, { cooldownMul: 0.9 },
-      { amount: +1 }, { damage: +7 }, { areaMul: 1.2 }, { amount: +2, damage: +11 },
-      { damage: +15 }, { amount: +2, damage: +19 }
-    ],
-  },
-  {
-    id: 'petal_blizzard', name: 'Petal Blizzard', type: 'grass',
-    desc: 'Petals wind outward in a widening spiral and shred anything they brush.',
-    behavior: 'swarm', aim: 'nearest', motion: 'spiral',
-    sprite: 'proj_leaf', palette: 'grass',
-    damage: 8, cooldown: 2.0, amount: 6, speed: 170, area: 1, pierce: 9999, duration: 1.6,
-    r: 5, range: 240, spread: 0, knockback: 6, usesAmount: true,
-    freq: 5, spin: 12, trail: 10, trailColor: '#c4f29a', impact: 3, impactColor: '#6cc840',
-    levels: [
-      {}, { amount: +2 }, { damage: +3 }, { cooldownMul: 0.9 },
-      { amount: +2 }, { damage: +4 }, { cooldownMul: 0.86 }, { amount: +3, damage: +7 },
-      { damage: +9 }, { amount: +3, damage: +12 }
-    ],
-  },
-  {
-    id: 'spore_pod', name: 'Spore Pod', type: 'grass',
-    desc: 'A pod that drifts around whatever you last looked at, spitting spores at it.',
-    behavior: 'turret', aim: 'nearest', motion: 'weave',
+    id: 'leech_seed', name: 'Leech Seed', type: 'grass',
+    archetype: 'drain',
+    desc: 'Seeds that root in foes and drain them, mending you. When a host falls, its seed leaps to the next.',
+    behavior: 'leechSeed', aim: 'nearest', motion: 'anchor',
     sprite: 'proj_seed', palette: 'grass',
-    damage: 24, cooldown: 4.8, amount: 1, speed: 120, area: 1, pierce: 0, duration: 6.0,
-    r: 0, range: 220, spread: 0, knockback: 0, usesAmount: false,
-    orbitRadius: 36, orbitSpeed: 2.2, spin: 2.2,
-    emitGap: 0.55, emitRange: 150, emitSpeed: 230, emitLife: 0.8, emitDamage: 0.85,
-    emitR: 6, emitPierce: 1, emitTrail: 12,
-    emitSprite: 'proj_cloud', emitPalette: 'grass',
-    trailColor: '#c4f29a', impact: 5, impactColor: '#6cc840',
+    card: { seq: 'fx_sprout', frame: 3, scale: 1.4, tint: true },
+    damage: 7, cooldown: 2.2, amount: 2, speed: 0, area: 1, pierce: 0, duration: 4,
+    r: 6, range: 180, spread: 70, knockback: 0, usesAmount: true,
+    heal: 0.004, healCap: 0.02,
     levels: [
-      {}, { damage: +8 }, { cooldownMul: 0.9 }, { damage: +10 },
-      { duration: +2 }, { damage: +13 }, { cooldownMul: 0.85 }, { amount: +1, damage: +18 },
-      { damage: +24 }, { amount: +1, damage: +31 }
+      {}, { amount: +1, say: '+1 seed' }, { damage: +2 }, { cooldownMul: 0.9 },
+      { amount: +1, say: '+1 seed' }, { damage: +3 }, { duration: +1.5 }, { amount: +1, damage: +3, say: '+1 seed' },
+      { damage: +4 }, { damage: +5, duration: +1.5 }
     ],
   },
   {
-    id: 'grassy_terrain', name: 'Grassy Terrain', type: 'grass',
-    desc: 'Thick turf grows wherever you have been and tangles whatever follows you.',
-    behavior: 'trail', aim: 'nearest', motion: 'crawl',
-    sprite: 'proj_cloud', palette: 'grass',
-    damage: 13, cooldown: 0.6, amount: 1, speed: 0, area: 1, pierce: 0, duration: 3.4,
-    r: 22, range: 0, spread: 0, knockback: 0, usesAmount: false,
-    slow: 0.4, zoneColor: '#4aa32c',
+    id: 'solar_beam', name: 'Solar Beam', type: 'grass',
+    archetype: 'beam',
+    desc: 'Sunlight gathers over you for a moment -- you can see it swell -- then a great beam pierces a whole line.',
+    behavior: 'solarBeam', aim: 'nearest', motion: 'anchor',
+    sprite: 'proj_ring', palette: 'grass',
+    card: { seq: 'fx_sun', frame: 0, scale: 0.85, tint: true },
+    // One beam: it is the length of the screen already.
+    damage: 24, cooldown: 3.0, amount: 1, speed: 0, area: 1, pierce: 0, duration: 0.4,
+    r: 6, range: 220, spread: 0, knockback: 30, usesAmount: false,
+    gather: 1.0, beamW: 12,
     levels: [
-      {}, { damage: +4 }, { cooldownMul: 0.88 }, { areaMul: 1.2 },
-      { damage: +6 }, { cooldownMul: 0.86 }, { areaMul: 1.2 }, { damage: +10 },
-      { damage: +14 }, { areaMul: 1.25, damage: +17 }
+      {}, { damage: +6 }, { gatherCut: 0.15, say: 'gathers 0.15s faster' }, { cooldownMul: 0.9 },
+      { damage: +7 }, { areaMul: 1.2 }, { cooldownMul: 0.88 }, { gatherCut: 0.15, damage: +7, say: 'gathers 0.15s faster' },
+      { damage: +9 }, { damage: +11, areaMul: 1.15 }
+    ],
+  },
+  {
+    id: 'grass_knot', name: 'Grass Knot', type: 'grass',
+    archetype: 'trip',
+    desc: 'Knots spring up under the heaviest foes near you and trip them. The heavier the foe, the harder it falls.',
+    behavior: 'grassKnot', aim: 'nearest', motion: 'anchor',
+    sprite: 'proj_thorn', palette: 'grass',
+    card: { seq: 'fx_vine', frame: 3, scale: 1.2, tint: true },
+    damage: 18, cooldown: 2.0, amount: 1, speed: 0, area: 1, pierce: 0, duration: 1,
+    r: 6, range: 180, spread: 0, knockback: 0, usesAmount: true,
+    share: 0.08, bossShare: 0.02, stun: 0.8,
+    levels: [
+      {}, { damage: +5 }, { amount: +1, say: '+1 knot' }, { cooldownMul: 0.9 },
+      { damage: +6 }, { amount: +1, say: '+1 knot' }, { cooldownMul: 0.88 }, { damage: +7 },
+      { amount: +1, say: '+1 knot' }, { damage: +10 }
+    ],
+  },
+  {
+    id: 'wood_hammer', name: 'Wood Hammer', type: 'grass',
+    archetype: 'log',
+    desc: 'A great log crashes down on the thickest of the crowd, then rolls on through it, flattening.',
+    behavior: 'woodHammer', aim: 'nearest', motion: 'anchor',
+    sprite: 'proj_boulder', palette: 'grass',
+    card: { seq: 'fx_rs_blade', frame: 2, scale: 1.1, tint: true },
+    // One log: it is big, and the levels make it heavier rather than more of them.
+    damage: 34, cooldown: 3.2, amount: 1, speed: 0, area: 1, pierce: 0, duration: 1,
+    r: 6, range: 200, spread: 0, knockback: 60, usesAmount: false,
+    logR: 16, roll: 0.8, rollSpeed: 150,
+    levels: [
+      {}, { damage: +9 }, { areaMul: 1.15 }, { cooldownMul: 0.9 },
+      { damage: +10 }, { areaMul: 1.15 }, { cooldownMul: 0.88 }, { damage: +12 },
+      { damage: +14 }, { damage: +18, areaMul: 1.1 }
     ],
   },
 
@@ -578,21 +677,26 @@ export const WEAPONS = [
   // FLYING -- long reach, hard knockback, nothing gets close
   // =========================================================================
   {
-    id: 'gust', name: 'Gust', type: 'flying',
-    desc: 'A blade of wind that carries further than anything else you own.',
-    behavior: 'projectile', aim: 'nearest', motion: 'straight',
+    id: 'whirlwind', name: 'Whirlwind', type: 'flying',
+    archetype: 'blowback',
+    desc: 'A blast of wind that blows foes far away -- and a foe blown into another hurts them both.',
+    behavior: 'whirlwind', aim: 'nearest', motion: 'anchor',
     sprite: 'proj_feather', palette: 'flying',
-    damage: 16, cooldown: 0.95, amount: 2, speed: 330, area: 1, pierce: 2, duration: 1.4,
-    r: 5, range: 320, spread: 0.2, knockback: 40, usesAmount: true,
-    spin: 6, trail: 16, trailColor: '#f0f6ff', impact: 5, impactColor: '#b8cde0',
+    card: { seq: 'fx_swirl', frame: 0, scale: 1.4, tint: true },
+    damage: 32, cooldown: 1.6, amount: 1, speed: 0, area: 1, pierce: 0, duration: 1,
+    r: 6, range: 170, spread: 0, knockback: 1, usesAmount: false,
+    gustR: 16, travel: 0.5, blow: 300, crash: 1,
     levels: [
-      {}, { amount: +1 }, { damage: +5 }, { cooldownMul: 0.9 },
-      { amount: +1 }, { damage: +7 }, { pierce: +2 }, { amount: +1, damage: +11 },
-      { damage: +15 }, { amount: +1, damage: +19 }
+      {}, { damage: +5 }, { areaMul: 1.15 }, { cooldownMul: 0.9 },
+      { damage: +6 }, { blowPlus: 60, say: 'blows foes further' }, { cooldownMul: 0.88 }, { damage: +7, areaMul: 1.15 },
+      { damage: +9 }, { damage: +11, blowPlus: 60, say: 'blows foes further' }
     ],
   },
   {
     id: 'pin_missile', name: 'Pin Missile', type: 'flying',
+    archetype: 'cone',
+    anim: { seq: 'fx_needle', rot: true, rotOff: -0.785, scale: 0.4 },
+    card: { seq: 'fx_needle', frame: 0, scale: 1.3, tint: true },
     desc: 'A spray of quills. Cheap, constant, and it fills the space in front of you.',
     behavior: 'cone', aim: 'nearest', motion: 'straight',
     sprite: 'proj_quill', palette: 'flying',
@@ -606,35 +710,42 @@ export const WEAPONS = [
     ],
   },
   {
-    id: 'brave_bird', name: 'Brave Bird', type: 'flying',
-    desc: 'Launches over the crowd and comes down on the far side of it.',
-    behavior: 'projectile', aim: 'toughest', motion: 'dive',
+    id: 'feather_dance', name: 'Feather Dance', type: 'flying',
+    archetype: 'plume',
+    desc: 'Feathers drift down onto the crowd. A plumed foe is featherweight: everything knocks it three times as far.',
+    behavior: 'featherDance', aim: 'nearest', motion: 'anchor',
     sprite: 'proj_feather', palette: 'flying',
-    damage: 58, cooldown: 1.9, amount: 1, speed: 230, area: 1, pierce: 4, duration: 0.9,
-    r: 9, range: 210, spread: 0.3, knockback: 90, usesAmount: true,
-    amp: 30, spin: 5, trail: 20, trailColor: '#f0f6ff', impact: 9, impactColor: '#ffffff',
+    card: { seq: 'fx_feather', frame: 0, scale: 1.3, tint: true },
+    damage: 12, cooldown: 1.4, amount: 3, speed: 0, area: 1, pierce: 0, duration: 4,
+    r: 6, range: 170, spread: 0, knockback: 50, usesAmount: true,
     levels: [
-      {}, { amount: +1 }, { damage: +14 }, { cooldownMul: 0.9 },
-      { pierce: +2 }, { damage: +18 }, { cooldownMul: 0.86 }, { amount: +1, damage: +26 },
-      { damage: +35 }, { amount: +1, damage: +44 }
+      {}, { amount: +1, say: '+1 feather' }, { damage: +4 }, { cooldownMul: 0.9 },
+      { amount: +1, say: '+1 feather' }, { damage: +5 }, { duration: +1.5 }, { amount: +1, damage: +5, say: '+1 feather' },
+      { damage: +6 }, { amount: +1, damage: +8, say: '+1 feather' }
     ],
   },
   {
-    id: 'aerial_ace', name: 'Aerial Ace', type: 'flying',
-    desc: 'A talon that curves after its mark and simply does not miss.',
-    behavior: 'projectile', aim: 'nearest', motion: 'homing',
+    id: 'drill_peck', name: 'Drill Peck', type: 'flying',
+    archetype: 'drill',
+    desc: 'A drill bores through a whole line. It slows with every foe it goes through, and hits harder the deeper it gets.',
+    behavior: 'drillPeck', aim: 'nearest', motion: 'anchor',
     sprite: 'proj_claw', palette: 'flying',
-    damage: 18, cooldown: 1.25, amount: 2, speed: 240, area: 1, pierce: 1, duration: 1.7,
-    r: 5, range: 270, spread: 0.9, knockback: 16, usesAmount: true,
-    homingTurn: 6.5, spin: 0, trail: 18, trailColor: '#b8cde0', impact: 5, impactColor: '#f0f6ff',
+    card: { seq: 'fx_drill', frame: 0, scale: 1.6, tint: true },
+    damage: 38, cooldown: 1.5, amount: 1, speed: 320, area: 1, pierce: 0, duration: 1,
+    r: 7, range: 220, spread: 0, knockback: 10, usesAmount: false,
+    deeper: 0.15, drag: 0.86,
     levels: [
-      {}, { amount: +1 }, { damage: +6 }, { cooldownMul: 0.9 },
-      { amount: +1 }, { damage: +8 }, { pierce: +1 }, { amount: +1, damage: +13 },
-      { damage: +18 }, { amount: +1, damage: +22 }
+      {}, { damage: +7 }, { drillSpeed: 40, say: 'the drill bores faster' }, { cooldownMul: 0.9 },
+      { damage: +8 }, { areaMul: 1.15 }, { cooldownMul: 0.88 }, { damage: +9, drillSpeed: 40, say: 'the drill bores faster' },
+      { damage: +11 }, { damage: +14, areaMul: 1.1 }
     ],
+    evolution: { into: 'sky_attack', needPassive: 'pretty_wing' },
   },
   {
     id: 'sky_guard', name: 'Sky Guard', type: 'flying',
+    archetype: 'companion',
+    anim: { seq: 'fx_wings', scale: 0.32 },
+    card: { seq: 'fx_wings', frame: 0, scale: 0.9, tint: true },
     desc: 'A companion that patrols on its own and runs down whatever strays.',
     behavior: 'companion', aim: 'nearest', motion: 'homing',
     sprite: 'proj_hound', palette: 'flying',
@@ -648,17 +759,19 @@ export const WEAPONS = [
     ],
   },
   {
-    id: 'hurricane', name: 'Hurricane', type: 'flying',
-    desc: 'A gale that winds outward from you and throws the whole field around.',
-    behavior: 'cone', aim: 'nearest', motion: 'spiral',
+    id: 'tailwind', name: 'Tailwind', type: 'flying',
+    archetype: 'slipwind',
+    desc: 'As you run, wind streams off your back, battering whatever follows -- and it carries you a little faster.',
+    behavior: 'tailwind', aim: 'nearest', motion: 'anchor',
     sprite: 'proj_vortex', palette: 'flying',
-    damage: 10, cooldown: 1.7, amount: 4, speed: 140, area: 1, pierce: 9999, duration: 1.8,
-    r: 9, range: 200, spread: 1.6, knockback: 70, usesAmount: true,
-    freq: 2.6, spin: 9, impact: 5, impactColor: '#f0f6ff',
+    card: { seq: 'fx_rs_gust', frame: 1, scale: 1.6, tint: true },
+    damage: 9, cooldown: 0.22, amount: 1, speed: 0, area: 1, pierce: 0, duration: 0.9,
+    r: 6, range: 0, spread: 0, knockback: 60, usesAmount: false,
+    streamR: 12, streamSpeed: 110, haste: 1.15,
     levels: [
-      {}, { amount: +1 }, { damage: +5 }, { cooldownMul: 0.9 },
-      { amount: +1 }, { damage: +6 }, { areaMul: 1.2 }, { amount: +2, damage: +10 },
-      { damage: +14 }, { amount: +2, damage: +17 }
+      {}, { damage: +3 }, { areaMul: 1.15 }, { cooldownMul: 0.92 },
+      { damage: +3 }, { duration: +0.3 }, { cooldownMul: 0.9 }, { damage: +4, areaMul: 1.15 },
+      { damage: +5 }, { damage: +6, duration: +0.3 }
     ],
   },
 
@@ -667,6 +780,9 @@ export const WEAPONS = [
   // =========================================================================
   {
     id: 'pulse_aura', name: 'Spectral Aura', type: 'ghost',
+    archetype: 'aura',
+    anim: { seq: 'fx_eos_vortex', fps: 16, scale: 0.8 },
+    card: { seq: 'fx_eos_vortex', frame: 8, scale: 2, tint: true },
     desc: 'A field that simply hurts anything near you. No aiming, ever.',
     behavior: 'aura', aim: 'nearest', motion: 'orbitPlayer',
     sprite: 'proj_bubble', palette: 'ghost',
@@ -681,6 +797,10 @@ export const WEAPONS = [
   },
   {
     id: 'shadow_ball', name: 'Shadow Ball', type: 'ghost',
+    archetype: 'split',
+    anim: { seq: 'fx_eos_shadoworb', fps: 14, scale: 0.8 },
+    hitAnim: { seq: 'fx_eos_darkburst', dur: 0.3, fps: 32, scale: 0.45 },
+    card: { seq: 'fx_eos_shadoworb', frame: 2, scale: 2.6, tint: true },
     desc: 'A lobbed knot of shadow that bursts into smaller ones the moment it touches anything.',
     behavior: 'split', aim: 'nearest', motion: 'arc',
     sprite: 'proj_skull', palette: 'ghost',
@@ -694,59 +814,68 @@ export const WEAPONS = [
     ],
   },
   {
-    id: 'hex_lantern', name: 'Hex Lanterns', type: 'ghost',
-    desc: 'Lanterns that leave you entirely and circle whatever you are fighting instead.',
-    behavior: 'orbit', aim: 'nearest', motion: 'weave',
+    id: 'poltergeist', name: 'Poltergeist', type: 'ghost',
+    archetype: 'hurl',
+    desc: 'Rocks lift out of the ground round you, hover a moment, and are hurled at foes.',
+    behavior: 'poltergeist', aim: 'nearest', motion: 'anchor',
+    sprite: 'proj_rock', palette: 'ghost',
+    card: { seq: 'fx_eos_rock', frame: 0, scale: 1.4, tint: true },
+    damage: 34, cooldown: 2.0, amount: 1, speed: 260, area: 1, pierce: 0, duration: 1,
+    r: 8, range: 200, spread: 0, knockback: 60, usesAmount: true,
+    hover: 0.5,
+    levels: [
+      {}, { damage: +7 }, { amount: +1, say: '+1 rock' }, { cooldownMul: 0.9 },
+      { damage: +8 }, { amount: +1, say: '+1 rock' }, { cooldownMul: 0.88 }, { damage: +10 },
+      { amount: +1, say: '+1 rock' }, { damage: +14 }
+    ],
+  },
+  {
+    id: 'mean_look', name: 'Mean Look', type: 'ghost',
+    archetype: 'gaze',
+    desc: 'A great eye opens over the crowd. Nothing in its gaze can leave, and it stares harder the more it holds.',
+    behavior: 'meanLook', aim: 'nearest', motion: 'anchor',
     sprite: 'proj_eye', palette: 'ghost',
-    damage: 22, cooldown: 3.0, amount: 2, speed: 160, area: 1, pierce: 9999, duration: 3.6,
-    r: 6, range: 250, spread: 0, knockback: 10, usesAmount: true,
-    orbitRadius: 22, orbitSpeed: 5, spin: 5, impact: 5, impactColor: '#9af0d8',
+    card: { seq: 'fx_eos_eye', frame: 0, scale: 2.2, tint: true },
+    // One eye: it is a big sprite over a whole crowd. The levels hold it open longer.
+    damage: 5, cooldown: 4.5, amount: 1, speed: 0, area: 1, pierce: 0, duration: 3,
+    r: 6, range: 200, spread: 0, knockback: 0, usesAmount: false,
+    gazeR: 48, perHeld: 0.06,
     levels: [
-      {}, { amount: +1 }, { damage: +6 }, { cooldownMul: 0.9 },
-      { amount: +1 }, { damage: +8 }, { areaMul: 1.2 }, { amount: +2, damage: +12 },
-      { damage: +16 }, { amount: +2, damage: +20 }
+      {}, { damage: +2 }, { areaMul: 1.15 }, { cooldownMul: 0.9 },
+      { duration: +0.6 }, { damage: +3 }, { cooldownMul: 0.88 }, { damage: +3, areaMul: 1.15 },
+      { damage: +4 }, { duration: +0.8, damage: +5 }
     ],
   },
   {
-    id: 'phantom_force', name: 'Phantom Force', type: 'ghost',
-    desc: 'Vanishes, and arrives out of the air directly above something.',
-    behavior: 'projectile', aim: 'toughest', motion: 'fall',
-    sprite: 'proj_claw', palette: 'ghost',
-    damage: 50, cooldown: 2.0, amount: 1, speed: 0, area: 1, pierce: 2, duration: 0.75,
-    r: 13, range: 260, spread: 0, knockback: 30, usesAmount: true,
-    amp: 190, impact: 10, impactColor: '#9af0d8',
-    levels: [
-      {}, { amount: +1 }, { damage: +18 }, { cooldownMul: 0.9 },
-      { amount: +1 }, { damage: +24 }, { areaMul: 1.2 }, { amount: +1, damage: +34 },
-      { damage: +46 }, { amount: +1, damage: +58 }
-    ],
-  },
-  {
-    id: 'soul_link', name: 'Soul Link', type: 'ghost',
-    desc: 'A thread to one enemy that drinks from everything it crosses on the way.',
-    behavior: 'link', aim: 'nearest', motion: 'weave',
+    id: 'curse', name: 'Curse', type: 'ghost',
+    archetype: 'curse',
+    desc: 'Costs you 5% of your health. The cursed foe -- the toughest near you -- loses a large share of its own every half second.',
+    behavior: 'curse', aim: 'toughest', motion: 'anchor',
     sprite: 'fx_wisp', palette: 'ghost',
-    damage: 22, cooldown: 0.9, amount: 1, speed: 0, area: 1, pierce: 0, duration: 0.2,
-    r: 7, range: 200, spread: 0, knockback: 0, usesAmount: false,
-    linkGain: 0.7, weaken: 2.0, arcColor: '#9af0d8',
+    card: { seq: 'fx_eos_ghost', frame: 10, scale: 1.2, tint: true },
+    damage: 4, cooldown: 3.5, amount: 1, speed: 0, area: 1, pierce: 0, duration: 3,
+    r: 6, range: 200, spread: 0, knockback: 0, usesAmount: false,
+    cost: 0.05, share: 0.06, bossShare: 0.01,
     levels: [
-      {}, { damage: +5 }, { areaMul: 1.2 }, { cooldownMul: 0.9 },
-      { damage: +6 }, { areaMul: 1.2 }, { cooldownMul: 0.86 }, { damage: +11, areaMul: 1.25 },
-      { damage: +15 }, { areaMul: 1.25, damage: +19 }
+      {}, { damage: +2 }, { cooldownMul: 0.9 }, { duration: +0.5 },
+      { damage: +2 }, { cooldownMul: 0.9 }, { duration: +0.5 }, { damage: +3 },
+      { cooldownMul: 0.88 }, { damage: +4, duration: +0.5 }
     ],
   },
   {
-    id: 'grudge', name: 'Grudge', type: 'ghost',
-    desc: 'Scatters charms that drift a little way off and wait for company.',
-    behavior: 'mine', aim: 'nearest', motion: 'drift',
+    id: 'hex', name: 'Hex', type: 'ghost',
+    archetype: 'afflict',
+    desc: 'Purple fire bursts on every afflicted foe near you -- burned, slowed, stunned, confused, cursed -- the more afflictions, the worse.',
+    behavior: 'hex', aim: 'nearest', motion: 'anchor',
     sprite: 'proj_seed', palette: 'ghost',
-    damage: 20, cooldown: 2.6, amount: 2, speed: 90, area: 1, pierce: 0, duration: 7.0,
-    r: 8, range: 90, spread: 0, knockback: 60, usesAmount: true,
-    blastRadius: 38, spin: 2, impact: 8, impactColor: '#c8bcf0',
+    card: { seq: 'fx_eos_hexfire', frame: 1, scale: 2.4, tint: true },
+    damage: 18, cooldown: 1.8, amount: 0, speed: 0, area: 1, pierce: 0, duration: 1,
+    r: 6, range: 200, spread: 0, knockback: 0, usesAmount: true,
+    burstBase: 4, perAff: 0.5,
     levels: [
-      {}, { amount: +1 }, { damage: +6 }, { cooldownMul: 0.9 },
-      { amount: +1 }, { damage: +8 }, { areaMul: 1.25 }, { amount: +2, damage: +12 },
-      { damage: +16 }, { amount: +2, damage: +20 }
+      {}, { damage: +5 }, { amount: +1, say: 'bursts on 1 more foe' }, { cooldownMul: 0.9 },
+      { damage: +6 }, { amount: +1, say: 'bursts on 1 more foe' }, { cooldownMul: 0.88 }, { damage: +7 },
+      { amount: +2, say: 'bursts on 2 more foes' }, { damage: +10 }
     ],
   },
 
@@ -755,6 +884,10 @@ export const WEAPONS = [
   // =========================================================================
   {
     id: 'toxic_trail', name: 'Toxic Trail', type: 'poison',
+    archetype: 'trail',
+    // Explorers of Sky's smoke, drawn in poison's purple.
+    zoneAnim: { seq: 'fx_eos_smoke', fps: 6, scale: 0.9, alpha: 0.55, tint: ['#5a2a80', '#a060d0', '#e8c0ff'] },
+    card: { seq: 'fx_eos_smoke', frame: 2, scale: 2, tint: true },
     desc: 'Poison clouds drip off you as you move. Standing still wastes it.',
     behavior: 'trail', aim: 'nearest', motion: 'drift',
     sprite: 'proj_cloud', palette: 'poison',
@@ -769,6 +902,10 @@ export const WEAPONS = [
   },
   {
     id: 'sludge_bomb', name: 'Sludge Bomb', owner: 'gastly', type: 'poison',
+    archetype: 'mine',
+    anim: { seq: 'fx_eos_goo', frame: 4, scale: 0.35 },
+    hitAnim: { seq: 'fx_eos_goo', dur: 0.4, fps: 30, scale: 0.5 },
+    card: { seq: 'fx_eos_goo', frame: 5, scale: 0.9, tint: true },
     desc: 'Lobbed globs that sit where they land until something blunders into one.',
     behavior: 'mine', aim: 'nearest', motion: 'arc',
     sprite: 'proj_cloud', palette: 'poison',
@@ -784,20 +921,24 @@ export const WEAPONS = [
   },
   {
     id: 'acid_spray', name: 'Acid Spray', type: 'poison',
-    desc: 'A fan of acid that keeps creeping along the ground after it lands.',
-    behavior: 'cone', aim: 'nearest', motion: 'crawl',
+    archetype: 'corrode',
+    desc: 'Globs of acid land as puddles. Whatever wades in has its armour melted away for good, a point at a time.',
+    behavior: 'acidSpray', aim: 'nearest', motion: 'anchor',
     sprite: 'proj_bubble', palette: 'poison',
-    damage: 8, cooldown: 0.9, amount: 4, speed: 230, area: 1, pierce: 9999, duration: 1.4,
-    r: 6, range: 140, spread: 0.26, knockback: 6, usesAmount: true,
-    slow: 0.25, trail: 14, trailColor: '#e8b0f8', impact: 4, impactColor: '#b050d0',
+    card: { seq: 'fx_eos_acid', frame: 3, scale: 2.2, tint: true },
+    damage: 6, cooldown: 1.6, amount: 3, speed: 0, area: 1, pierce: 0, duration: 3,
+    r: 6, range: 160, spread: 0, knockback: 0, usesAmount: true,
+    puddleR: 14, meltMax: 6,
     levels: [
-      {}, { amount: +1 }, { damage: +4 }, { cooldownMul: 0.9 },
-      { amount: +1 }, { damage: +5 }, { areaMul: 1.2 }, { amount: +2, damage: +8 },
-      { damage: +11 }, { amount: +2, damage: +14 }
+      {}, { damage: +2 }, { duration: +0.6 }, { cooldownMul: 0.9 },
+      { amount: +1, say: '+1 glob' }, { damage: +2 }, { cooldownMul: 0.88 }, { damage: +3 },
+      { amount: +1, say: '+1 glob' }, { damage: +4 }
     ],
   },
   {
     id: 'toxic_spikes', name: 'Toxic Spikes', type: 'poison',
+    archetype: 'orbit', ownArt: true,
+    card: { atlas: 'proj_toxic_spike', palette: 'poison', scale: 2 },
     desc: 'Lays a ring of barbs around where you are standing and leaves them there.',
     behavior: 'orbit', aim: 'nearest', motion: 'anchor',
     // Its own spike (assets/pmd/toxic_spike.png); the drawn thorn if the file is missing.
@@ -812,35 +953,35 @@ export const WEAPONS = [
     ],
   },
   {
-    id: 'venoshock', name: 'Venoshock', type: 'poison',
-    desc: 'A lobbed flask that skips from body to body and gets fouler with each one.',
-    behavior: 'bouncer', aim: 'nearest', motion: 'arc',
-    sprite: 'proj_bubble', palette: 'poison',
-    damage: 17, cooldown: 1.9, amount: 1, speed: 220, area: 1, pierce: 0, duration: 1.0,
-    r: 7, range: 190, spread: 0.3, knockback: 18, usesAmount: true,
-    bounces: 4, bounceGain: 0.4,
-    pulse: 0.24, trail: 16, trailColor: '#e8b0f8', impact: 7, impactColor: '#b050d0',
+    id: 'clear_smog', name: 'Clear Smog', type: 'poison',
+    archetype: 'cleanse',
+    desc: 'A bubble of smog drifts after the crowd, stripping shields, barriers and haste, and coughing foes out of their attacks.',
+    behavior: 'clearSmog', aim: 'nearest', motion: 'anchor',
+    sprite: 'proj_cloud', palette: 'poison',
+    card: { seq: 'fx_eos_smog', frame: 0, scale: 2.4, tint: true },
+    damage: 8, cooldown: 3.2, amount: 1, speed: 0, area: 1, pierce: 0, duration: 4,
+    r: 6, range: 190, spread: 0, knockback: 0, usesAmount: false,
+    smogR: 26, drift: 34,
     levels: [
-      {}, { bounces: +1 }, { damage: +7 }, { cooldownMul: 0.9 },
-      { bounces: +1 }, { damage: +10 }, { cooldownMul: 0.86 }, { bounces: +2, damage: +15 },
-      { damage: +20 }, { bounces: +2, damage: +26 }
+      {}, { damage: +2 }, { areaMul: 1.15 }, { cooldownMul: 0.9 },
+      { duration: +1 }, { damage: +3 }, { cooldownMul: 0.88 }, { damage: +3, areaMul: 1.15 },
+      { damage: +4 }, { duration: +1, damage: +5 }
     ],
   },
   {
-    id: 'acid_pod', name: 'Acid Pod', type: 'poison',
-    desc: 'A sac that drifts where it was dropped and keeps spitting at whatever comes near.',
-    behavior: 'turret', aim: 'nearest', motion: 'drift',
-    sprite: 'proj_seed', palette: 'poison',
-    damage: 26, cooldown: 5.0, amount: 1, speed: 60, area: 1, pierce: 0, duration: 6.5,
-    r: 0, range: 0, spread: 0, knockback: 0, usesAmount: false,
-    emitGap: 0.5, emitRange: 140, emitSpeed: 200, emitLife: 0.8, emitDamage: 0.8,
-    emitR: 7, emitPierce: 0, emitTrail: 14,
-    emitSprite: 'proj_bubble', emitPalette: 'poison',
-    trailColor: '#e8b0f8', impact: 6, impactColor: '#b050d0',
+    id: 'toxic', name: 'Toxic', type: 'poison',
+    archetype: 'escalate',
+    desc: 'A needle whose poison doubles with every tick: barely a scratch at first, ruinous by the end.',
+    behavior: 'toxic', aim: 'nearest', motion: 'anchor',
+    sprite: 'proj_quill', palette: 'poison',
+    card: { seq: 'fx_needle', frame: 0, scale: 1.3, tint: true },
+    damage: 4, cooldown: 1.4, amount: 1, speed: 0, area: 1, pierce: 0, duration: 3,
+    r: 6, range: 200, spread: 0, knockback: 0, usesAmount: false,
+    doublings: 5,
     levels: [
-      {}, { damage: +9 }, { cooldownMul: 0.9 }, { damage: +11 },
-      { duration: +2 }, { damage: +14 }, { cooldownMul: 0.85 }, { amount: +1, damage: +20 },
-      { damage: +27 }, { amount: +1, damage: +34 }
+      {}, { damage: +0.6 }, { cooldownMul: 0.9 }, { damage: +0.6 },
+      { duration: +0.5 }, { damage: +0.8 }, { cooldownMul: 0.88 }, { damage: +0.8 },
+      { damage: +1 }, { damage: +1.2, cooldownMul: 0.9 }
     ],
   },
 ];
@@ -853,22 +994,26 @@ WEAPONS.push(
   // FIRE -- nothing here kills on impact. It sets things alight and walks away
   // =========================================================================
   {
-    id: 'ember_spit', name: 'Ember Spit', owner: 'vulpix', type: 'fire',
-    desc: 'Guttering embers that flicker off-line as they fly and leave what they touch burning.',
-    behavior: 'projectile', aim: 'nearest', motion: 'weave',
+    id: 'ember', name: 'Ember', owner: 'vulpix', type: 'fire',
+    archetype: 'kindle',
+    desc: 'Embers land and kindle fires on the ground. A fire creeps after the nearest foe and spreads to burning foes near it.',
+    behavior: 'ember', aim: 'nearest', motion: 'anchor',
     sprite: 'proj_spark', palette: 'fire',
-    damage: 11, cooldown: 0.95, amount: 2, speed: 210, area: 1, pierce: 0, duration: 1.2,
-    r: 5, range: 220, spread: 0.22, knockback: 8, usesAmount: true,
-    burn: 9, burnT: 3.0,
-    amp: 16, freq: 13, trail: 12, trailColor: '#f08828', impact: 6, impactColor: '#ffd870',
+    card: { seq: 'fx_eos_flame', frame: 2, scale: 1.1, tint: true },
+    damage: 8, cooldown: 1.2, amount: 2, speed: 0, area: 1, pierce: 0, duration: 3,
+    r: 5, range: 190, spread: 0, knockback: 0, usesAmount: true,
     levels: [
-      {}, { amount: +1 }, { damage: +5 }, { cooldownMul: 0.9 },
-      { amount: +1 }, { damage: +6 }, { cooldownMul: 0.88 }, { amount: +1, damage: +9 },
-      { damage: +12 }, { amount: +1, damage: +15 }
+      {}, { amount: +1, say: '+1 ember' }, { damage: +2 }, { cooldownMul: 0.9 },
+      { duration: +0.8 }, { damage: +3 }, { amount: +1, say: '+1 ember' }, { cooldownMul: 0.88 },
+      { damage: +3 }, { amount: +1, damage: +4, say: '+1 ember' }
     ],
+    evolution: { into: 'fire_blast', needPassive: 'charcoal' },
   },
   {
     id: 'will_o_wisp', name: 'Will-o-Wisp', type: 'fire',
+    archetype: 'swarm',
+    anim: { seq: 'fx_eos_wisporb', fps: 14, scale: 0.7 },
+    card: { seq: 'fx_eos_wisporb', frame: 5, scale: 2.4, tint: true },
     desc: 'Wisps that drift away from you and hang in the air, setting alight whatever wanders in.',
     behavior: 'swarm', aim: 'nearest', motion: 'drift',
     sprite: 'proj_eye', palette: 'fire',
@@ -889,6 +1034,9 @@ WEAPONS.push(
   },
   {
     id: 'heat_wave', name: 'Heat Wave', type: 'fire',
+    archetype: 'nova',
+    zoneAnim: { seq: 'fx_eos_firering', fps: 18, alpha: 0.8 },
+    card: { seq: 'fx_eos_firering', frame: 2, scale: 0.9, tint: true },
     desc: 'A wall of heat that rolls outward from you, igniting everything it washes over.',
     behavior: 'nova', aim: 'facing', motion: 'straight',
     sprite: 'proj_ring', palette: 'fire',
@@ -903,22 +1051,27 @@ WEAPONS.push(
     ],
   },
   {
-    id: 'magma_pool', name: 'Magma Pool', type: 'fire',
-    desc: 'Blobs of magma that creep along the ground toward whatever is nearest, then erupt.',
-    behavior: 'mine', aim: 'nearest', motion: 'crawl',
+    id: 'eruption', name: 'Eruption', type: 'fire',
+    archetype: 'volcano',
+    desc: 'A volcano bursts up at your feet and spews lava bombs every way -- more of them, and harder, the healthier you are.',
+    behavior: 'eruption', aim: 'nearest', motion: 'anchor',
     sprite: 'proj_mine', palette: 'fire',
-    damage: 46, cooldown: 3.6, amount: 2, speed: 34, area: 1, pierce: 0, duration: 6.0,
-    r: 6, range: 150, spread: 0, knockback: 46, usesAmount: true,
-    burn: 20, burnT: 4.0,
-    blastRadius: 40, pulse: 0.5, impact: 12, impactColor: '#ffd870',
+    card: { seq: 'fx_eos_column', frame: 20, scale: 0.42, tint: true },
+    damage: 24, cooldown: 3.6, amount: 3, speed: 0, area: 1, pierce: 0, duration: 1,
+    r: 6, range: 200, spread: 0, knockback: 50, usesAmount: true,
+    spew: 1.2, hpBombs: 4,
     levels: [
-      {}, { amount: +1 }, { damage: +16 }, { cooldownMul: 0.9 },
-      { amount: +1 }, { damage: +20 }, { cooldownMul: 0.86 }, { amount: +1, areaMul: 1.25 },
-      { damage: +27 }, { amount: +1, damage: +34 }
+      {}, { damage: +8 }, { amount: +1, say: '+1 lava bomb' }, { cooldownMul: 0.9 },
+      { damage: +9 }, { areaMul: 1.15 }, { cooldownMul: 0.88 }, { amount: +1, damage: +10, say: '+1 lava bomb' },
+      { damage: +12 }, { amount: +1, damage: +14, say: '+1 lava bomb' }
     ],
   },
   {
     id: 'meteor_fall', name: 'Meteor Fall', type: 'fire',
+    archetype: 'bloom',
+    anim: { seq: 'fx_eos_meteor', fps: 14, scale: 0.8 },
+    hitAnim: { seq: 'fx_eos_boom', dur: 0.35, fps: 18, scale: 0.7 },
+    card: { seq: 'fx_eos_meteor', frame: 3, scale: 1.4, tint: true },
     desc: 'A cinder lobbed high that falls back down and blooms into a much bigger fire than it left as.',
     behavior: 'bloom', aim: 'nearest', motion: 'fall',
     sprite: 'proj_boulder', palette: 'fire',
@@ -934,6 +1087,9 @@ WEAPONS.push(
   },
   {
     id: 'blaze_trail', name: 'Blaze Trail', type: 'fire',
+    archetype: 'trail',
+    zoneAnim: { seq: 'fx_eos_smallflame', fps: 14, n: 3, scale: 0.55, bottom: true, alpha: 0.9 },
+    card: { seq: 'fx_eos_smallflame', frame: 5, scale: 1.4, tint: true },
     desc: 'Fire laid down where you have already been. Every retreat costs whatever follows you.',
     behavior: 'trail', aim: 'facing', motion: 'anchor',
     sprite: 'proj_cloud', palette: 'fire',
@@ -953,6 +1109,9 @@ WEAPONS.push(
   // =========================================================================
   {
     id: 'powder_snow', name: 'Powder Snow', owner: 'delibird', type: 'ice',
+    archetype: 'cone',
+    anim: { seq: 'fx_eos_snow', fps: 14, scale: 0.5 },
+    card: { seq: 'fx_eos_snow', frame: 4, scale: 2, tint: true },
     desc: 'A spray of freezing powder that picks up speed as it goes and leaves the crowd crawling.',
     behavior: 'cone', aim: 'nearest', motion: 'accelerate',
     sprite: 'proj_shard', palette: 'ice',
@@ -968,6 +1127,10 @@ WEAPONS.push(
   },
   {
     id: 'icicle_crash', name: 'Icicle Crash', type: 'ice',
+    archetype: 'split',
+    anim: { seq: 'fx_eos_icicle', rot: true, rotOff: 1.5708, scale: 1.6 },
+    hitAnim: { seq: 'fx_eos_icecrystal', dur: 0.3, fps: 30, scale: 0.6 },
+    card: { seq: 'fx_eos_icicle', frame: 0, scale: 3.2, tint: true },
     desc: 'A spear of ice that shatters into splinters on impact, and swings back to you if it misses.',
     // `orbit` was the obvious home for circling icicles, but every motion `orbit` can actually
     // drive is already spoken for -- it reads orbitA/orbitR/spin and ignores the rest, so the
@@ -986,6 +1149,9 @@ WEAPONS.push(
   },
   {
     id: 'hail_cloud', name: 'Hail Cloud', type: 'ice',
+    archetype: 'turret',
+    emitAnim: { seq: 'fx_eos_icicle', rot: true, rotOff: 1.5708, scale: 1.1 },
+    card: { seq: 'fx_eos_crystal', frame: 0, scale: 1.6, tint: true },
     desc: 'A cloud left hanging where you dropped it, dropping hail on anything that walks under it.',
     behavior: 'turret', aim: 'facing', motion: 'fall',
     sprite: 'proj_cloud', palette: 'ice',
@@ -1001,23 +1167,27 @@ WEAPONS.push(
     ],
   },
   {
-    id: 'frost_ricochet', name: 'Frost Ricochet', type: 'ice',
-    desc: 'A ball of ice that gathers speed off every enemy it bounces from, freezing each in turn.',
-    behavior: 'bouncer', aim: 'nearest', motion: 'accelerate',
+    id: 'avalanche', name: 'Avalanche', type: 'ice',
+    archetype: 'avalanche',
+    desc: 'A wall of snow sweeps out past you and across the field, burying and shoving everything it meets.',
+    behavior: 'avalanche', aim: 'nearest', motion: 'anchor',
     sprite: 'proj_star', palette: 'ice',
-    damage: 21, cooldown: 2.0, amount: 1, speed: 230, area: 1, pierce: 0, duration: 2.6,
-    r: 6, range: 250, spread: 0.2, knockback: 16, usesAmount: false,
-    slow: 0.35,
-    accel: 90, bounces: 4, bounceGain: 0.32, spin: 9, trail: 14, trailColor: '#4a9fd0',
-    impact: 7, impactColor: '#eaffff',
+    card: { seq: 'fx_eos_snowball', frame: 6, scale: 1.4, tint: true },
+    // One wall: it is a screen's width of snow already. The levels make it heavier and longer.
+    damage: 24, cooldown: 3.4, amount: 1, speed: 0, area: 1, pierce: 0, duration: 1.6,
+    r: 6, range: 200, spread: 0, knockback: 0, usesAmount: false,
+    wallLen: 120, sweep: 150,
     levels: [
-      {}, { bounces: +1 }, { damage: +8 }, { cooldownMul: 0.9 },
-      { bounces: +1 }, { damage: +10 }, { cooldownMul: 0.86 }, { amount: +1, damage: +14 },
-      { damage: +19 }, { bounces: +1, damage: +24 }
+      {}, { damage: +6 }, { areaMul: 1.15 }, { cooldownMul: 0.9 },
+      { damage: +7 }, { duration: +0.3 }, { cooldownMul: 0.88 }, { damage: +8, areaMul: 1.15 },
+      { damage: +10 }, { damage: +12, duration: +0.3 }
     ],
   },
   {
     id: 'frost_veil', name: 'Frost Veil', type: 'ice',
+    archetype: 'aura',
+    anim: { seq: 'fx_eos_icering', fps: 10, scale: 0.8 },
+    card: { seq: 'fx_eos_icering', frame: 4, scale: 1, tint: true },
     desc: 'A field of cold that hangs off you and drifts a beat behind wherever you go.',
     behavior: 'aura', aim: 'facing', motion: 'drift',
     sprite: 'proj_ring', palette: 'ice',
@@ -1033,6 +1203,8 @@ WEAPONS.push(
   },
   {
     id: 'frost_chain', name: 'Frost Chain', type: 'ice',
+    archetype: 'chain',
+    card: { seq: 'fx_eos_crystal', frame: 1, scale: 1.8, tint: true },
     desc: 'Cold that jumps from one frozen enemy to the next, hunting down the ones it has not reached.',
     behavior: 'chain', aim: 'nearest', motion: 'homing',
     sprite: 'proj_droplet', palette: 'ice',
@@ -1047,6 +1219,10 @@ WEAPONS.push(
   },
   {
     id: 'quagmire', name: 'Quagmire', evolvedFrom: 'mud_shot', hidden: true, type: 'ground',
+    archetype: 'shot',
+    anim: { seq: 'fx_rs_mud', scale: 0.42 },
+    hitAnim: { seq: 'fx_rs_splash', dur: 0.3, fps: 10, scale: 1.1 },
+    card: { seq: 'fx_rs_mud', frame: 0, scale: 1, tint: true },
     desc: 'A torrent of mud that drowns whole stretches of ground.',
     behavior: 'projectile', aim: 'nearest', motion: 'arc',
     sprite: 'proj_bubble', palette: 'water',
@@ -1057,18 +1233,23 @@ WEAPONS.push(
     levels: [{}],
   },
   {
-    id: 'star_barrage', name: 'Star Barrage', evolvedFrom: 'swift_star', hidden: true, type: 'normal',
-    desc: 'An unending stream of stars, and they all find something.',
-    behavior: 'projectile', aim: 'nearest', motion: 'accelerate',
+    id: 'star_barrage', name: 'Star Barrage', evolvedFrom: 'swift', hidden: true, type: 'normal',
+    archetype: 'converge',
+    card: { seq: 'fx_rs_star', frame: 0, scale: 3.8, tint: true },
+    desc: 'Volley on volley of stars, splitting to converge on three foes at once from every side.',
+    behavior: 'swift', aim: 'nearest', motion: 'anchor',
     sprite: 'proj_star', palette: 'normal',
-    damage: 26, cooldown: 0.34, amount: 5, speed: 280, area: 1.2, pierce: 3, duration: 1.4,
-    r: 4, range: 230, spread: 0.55, knockback: 10, usesAmount: true,
-    spin: 12, trail: 34, trailColor: '#ffffff', impact: 6, impactColor: '#ffffff',
+    damage: 30, cooldown: 0.75, amount: 10, speed: 400, area: 1.2, pierce: 2, duration: 1,
+    r: 6, range: 230, spread: 0, knockback: 10, usesAmount: true,
+    targets: 3,
     levels: [{}],
   },
   {
     id: 'spirit_shackle', name: 'Spirit Shackle', evolvedFrom: 'leaf_arrow', hidden: true, type: 'ghost',
-    desc: 'Arrows that pin whatever they pass through.',
+    archetype: 'shot',
+    anim: { seq: 'fx_shadowarrow', rot: true, scale: 0.8 },
+    card: { seq: 'fx_shadowarrow', frame: 0, scale: 1.2, tint: true },
+    desc: 'Shadow arrows that tear through a whole line of foes.',
     behavior: 'projectile', aim: 'toughest', motion: 'wave',
     sprite: 'proj_leaf', palette: 'ghostly',
     damage: 95, cooldown: 1.05, amount: 3, speed: 360, area: 1.3, pierce: 9, duration: 1.8,
@@ -1087,39 +1268,44 @@ WEAPONS.push(
   // =========================================================================
   {
     id: 'dragon_rage', name: 'Dragon Rage', owner: 'axew', type: 'dragon',
+    archetype: 'pillar',
     // The overload card shows the move as it looks in play (a frame of its sheet animation), not the atlas icon.
     card: { seq: 'fx_rage_ball', frame: 0, scale: 1.6, tint: true },
     desc: 'A spinning fireball that bursts into a pillar of flame. Fixed damage: armour and types do not touch it.',
     behavior: 'rage', aim: 'nearest', motion: 'anchor',
     sprite: 'orb', palette: 'dragon',
-    damage: 40, cooldown: 2.0, amount: 1, speed: 200, area: 1, pierce: 0, duration: 1.1,
-    r: 6, range: 210, spread: 0.35, knockback: 30, usesAmount: true,
+    // One fireball at a time: its pillar is a big sprite, and a fan of them would bury the screen.
+    damage: 56, cooldown: 2.0, amount: 1, speed: 200, area: 1, pierce: 0, duration: 1.1,
+    r: 6, range: 210, spread: 0.35, knockback: 30, usesAmount: false,
     // The pillar: its radius, and how long it stands.
     burstR: 22, burstT: 0.55,
     levels: [
-      {}, { amount: +1 }, { damage: +8 }, { cooldownMul: 0.9 },
-      { amount: +1 }, { damage: +10 }, { cooldownMul: 0.88 }, { areaMul: 1.25, damage: +8 },
-      { damage: +12 }, { amount: +1, damage: +14 }
+      {}, { damage: +12 }, { areaMul: 1.15 }, { cooldownMul: 0.9 },
+      { damage: +14 }, { areaMul: 1.15 }, { cooldownMul: 0.88 }, { areaMul: 1.2, damage: +14 },
+      { damage: +18 }, { damage: +24, cooldownMul: 0.9 }
     ],
   },
   {
     id: 'dragon_pulse', name: 'Dragon Pulse', type: 'dragon',
+    archetype: 'rollingThrob',
     // The overload card shows the move as it looks in play (a frame of its sheet animation), not the atlas icon.
     card: { seq: 'fx_pulse_orb', frame: 3, scale: 1.1, tint: true },
     desc: 'A slow, ringed orb that rolls through the crowd, throbbing out a shockwave every 0.3s as it goes.',
     behavior: 'pulseOrb', aim: 'nearest', motion: 'anchor',
     sprite: 'proj_vortex', palette: 'dragon',
-    damage: 8, cooldown: 2.8, amount: 1, speed: 58, area: 1, pierce: 0, duration: 2.7,
-    r: 26, range: 200, spread: 0.5, knockback: 30, usesAmount: true,
+    // One orb: a big ringed sprite. It throbs faster with the levels instead of multiplying.
+    damage: 17, cooldown: 2.6, amount: 1, speed: 58, area: 1, pierce: 0, duration: 2.7,
+    r: 26, range: 200, spread: 0.5, knockback: 30, usesAmount: false,
     throb: 0.3,
     levels: [
-      {}, { damage: +3 }, { amount: +1 }, { cooldownMul: 0.9 },
-      { damage: +3 }, { areaMul: 1.2 }, { amount: +1 }, { duration: +0.8, damage: +3 },
-      { cooldownMul: 0.86 }, { amount: +1, damage: +5 }
+      {}, { damage: +5 }, { throbCut: 0.04, say: 'throbs faster' }, { cooldownMul: 0.9 },
+      { damage: +5 }, { areaMul: 1.2 }, { throbCut: 0.04, say: 'throbs faster' }, { duration: +0.8, damage: +6 },
+      { cooldownMul: 0.86 }, { damage: +8, throbCut: 0.03, say: 'throbs faster' }
     ],
   },
   {
     id: 'dragon_dance', name: 'Dragon Dance', type: 'dragon',
+    archetype: 'riseDive',
     // The overload card shows the move as it looks in play (a frame of its sheet animation), not the atlas icon.
     card: { seq: 'fx_dance_ring', frame: 0, scale: 1.2, tint: true },
     desc: 'Every cast is a dance step: sparks fly up from your feet and dive onto foes -- three, plus one for every step you are into the dance. Each step leaves you faster for a few seconds.',
@@ -1141,6 +1327,7 @@ WEAPONS.push(
   },
   {
     id: 'dragon_rush', name: 'Dragon Rush', type: 'dragon',
+    archetype: 'carryCharge',
     // The overload card shows the move as it looks in play (a frame of its sheet animation), not the atlas icon.
     card: { seq: 'fx_rush_slash', frame: 1, scale: 0.6, tint: true },
     desc: 'One phantom crescent charges from behind you, through you and on ahead. What it strikes is pinned to its edge, carried along and slammed into the ground where it ends.',
@@ -1161,6 +1348,7 @@ WEAPONS.push(
   },
   {
     id: 'dragon_claw', name: 'Dragon Claw', type: 'dragon',
+    archetype: 'rake',
     // The overload card shows the move as it looks in play (drawn as it is in the field), not the atlas icon.
     card: { draw: 'rake', tint: true },
     desc: 'Three claw rakes across the nearest foe, one after another, trailing sparks. The third always lands a critical hit.',
@@ -1178,23 +1366,26 @@ WEAPONS.push(
   },
   {
     id: 'twister', name: 'Twister', type: 'dragon',
+    archetype: 'wanderLift',
     // The overload card shows the move as it looks in play (drawn as it is in the field), not the atlas icon.
     card: { draw: 'twister', tint: true },
     desc: 'A twister wanders the field on its own, sucking foes in, spinning them helpless in the air, then flinging them out in a heap.',
     behavior: 'twister', aim: 'nearest', motion: 'anchor',
     sprite: 'proj_cloud', palette: 'dragon',
-    damage: 8, cooldown: 4.4, amount: 1, speed: 46, area: 1, pierce: 0, duration: 3.6,
-    r: 34, range: 200, spread: 0, knockback: 230, usesAmount: true,
+    // One storm at a time: it is a tall sprite. The levels let it hold more aloft and last longer.
+    damage: 12, cooldown: 4.4, amount: 1, speed: 46, area: 1, pierce: 0, duration: 3.6,
+    r: 34, range: 200, spread: 0, knockback: 230, usesAmount: false,
     // How many it can hold aloft, and what the throw deals (a share of `damage`).
     lift: 5, throwDmg: 1.3,
     levels: [
-      {}, { damage: +3 }, { areaMul: 1.15 }, { cooldownMul: 0.9 },
-      { amount: +1 }, { damage: +3 }, { duration: +1.0 }, { areaMul: 1.2, damage: +3 },
-      { cooldownMul: 0.86 }, { amount: +1, damage: +5 }
+      {}, { damage: +4 }, { areaMul: 1.15 }, { cooldownMul: 0.9 },
+      { lift: 2, say: 'holds 2 more foes aloft' }, { damage: +4 }, { duration: +1.0 }, { areaMul: 1.2, damage: +4 },
+      { cooldownMul: 0.86 }, { damage: +6, lift: 2, duration: +1.0, say: 'holds 2 more foes aloft' }
     ],
   },
   {
     id: 'spacial_rend', name: 'Spacial Rend', type: 'dragon',
+    archetype: 'tear',
     // The overload card shows the move as it looks in play (a frame of its sheet animation), not the atlas icon.
     card: { seq: 'fx_rend_star', frame: 5, scale: 0.9, tint: true },
     desc: 'Tears space open on a foe. The tear drags the crowd in, then six crescents slash outward and snap back, cutting both ways.',
@@ -1212,6 +1403,7 @@ WEAPONS.push(
   },
   {
     id: 'roar_of_time', name: 'Roar of Time', type: 'dragon',
+    archetype: 'timeStop',
     // The overload card shows the move as it looks in play (a frame of its sheet animation), not the atlas icon.
     card: { seq: 'fx_roar', frame: 3, scale: 0.65, tint: true },
     desc: 'Stops time inside a ring of gears. Foes caught in it freeze, and everything they take is stored and released at once, half again as hard.',
@@ -1265,54 +1457,59 @@ function maxed(base) {
  * its numbers -- more bounces for a bouncer, more jumps for a chain -- so it plays differently.
  */
 const MORE_EVOLUTIONS = [
-  ['ember_spit', 'charcoal', {
+  ['ember', 'charcoal', {
     id: 'fire_blast', name: 'Fire Blast', boost: 1.35,
-    desc: 'A storm of embers that pierce what they burn and set the whole line alight.',
-    add: { amount: 2, pierce: 2 }, mul: { burn: 2.2, r: 1.4 },
-    set: { trailColor: '#fff0a0', impactColor: '#ffffff', trail: 18 },
+    desc: 'Each ember lands as the five-pointed star of Fire Blast: a burst of flame and five fires at once.',
+    add: { amount: 1 },
+    set: { blast: true, archetype: 'kindle', card: { seq: 'fx_eos_fireburst', frame: 6, scale: 0.9, tint: true } },
   }],
   ['powder_snow', 'never_melt_ice', {
     id: 'sheer_cold', name: 'Sheer Cold', boost: 1.35,
     desc: 'A freezing gale that reaches twice as far and leaves the crowd barely moving.',
     // Reach and travel together: a longer aim with the same flight fires shots that die short.
     add: { amount: 3 }, mul: { range: 1.4, duration: 1.45 },
-    set: { slow: 0.6, trailColor: '#ffffff', impactColor: '#ffffff' },
+    set: { slow: 0.6, trailColor: '#ffffff', impactColor: '#ffffff',
+      archetype: 'cone', anim: { seq: 'fx_eos_shards', fps: 16, scale: 0.5 }, card: { seq: 'fx_eos_shards', frame: 8, scale: 1.4, tint: true } },
   }],
   ['sludge_bomb', 'poison_barb', {
     id: 'gunk_shot', name: 'Gunk Shot', boost: 1.4,
     desc: 'Heavy globs that burst wide and leave a pool of poison where they land.',
     add: { amount: 2 }, mul: { blastRadius: 1.5 },
-    set: { zoneOnEnd: { r: 46, life: 3.6, dps: 24, slow: 0.45, color: '#d070f0' }, impactColor: '#ffd0ff' },
+    set: { zoneOnEnd: { r: 46, life: 3.6, dps: 24, slow: 0.45, color: '#d070f0' }, impactColor: '#ffd0ff',
+      archetype: 'mine', anim: { seq: 'fx_eos_gunk', fps: 10, scale: 0.7 }, card: { seq: 'fx_eos_gunk', frame: 1, scale: 2.2, tint: true } },
   }],
-  ['bubble_beam', 'sea_incense', {
+  ['bubble', 'sea_incense', {
     id: 'hydro_cannon', name: 'Hydro Cannon', boost: 1.35,
-    desc: 'A spiral of heavy water that punches through everything it winds past.',
-    add: { amount: 2, pierce: 4 }, mul: { r: 1.3 },
-    set: { trailColor: '#ffffff', impactColor: '#e0f6ff' },
+    desc: 'Great bubbles of heavy water, each holding two foes, that burst like a cannon shot.',
+    add: { carry: 2, hold: 0.8 }, mul: { r: 1.35 },
+    set: { archetype: 'engulf', card: { seq: 'fx_rs_bubble', frame: 0, scale: 2.6, tint: true } },
   }],
   ['spark_chain', 'magnet_item', {
     id: 'thunder_storm', name: 'Thunder', boost: 1.35,
     desc: 'Lightning that jumps further, loses nothing as it goes, and never runs out of targets.',
     add: { jumps: 3 }, mul: { jumpRange: 1.45 },
-    set: { falloff: 0.97, arcColor: '#ffffff' },
+    set: { falloff: 0.97, arcColor: '#ffffff', archetype: 'chain', card: { seq: 'fx_ybolt', frame: 0, scale: 0.9, tint: true } },
   }],
   ['foul_play', 'black_glasses', {
     id: 'night_slash', name: 'Night Slash', boost: 1.3,
-    desc: 'Two skulls that ricochet through the crowd and grow crueller with every bounce.',
+    desc: 'Two crescent blades that ricochet through the crowd and grow crueller with every bounce.',
     add: { amount: 1, bounces: 3 },
-    set: { bounceGain: 0.6, trailColor: '#8060c0', impactColor: '#f0e0ff' },
+    set: { bounceGain: 0.6, trailColor: '#8060c0', impactColor: '#f0e0ff',
+      archetype: 'bouncer', anim: { seq: 'fx_eos_crescent', fps: 16, rot: true, scale: 0.4, tint: ['#2a1a40', '#6a4aa0', '#d0b0ff'] },
+      card: { seq: 'fx_eos_crescent', frame: 1, scale: 1, tint: true } },
   }],
-  ['aerial_ace', 'pretty_wing', {
+  ['drill_peck', 'pretty_wing', {
     id: 'sky_attack', name: 'Sky Attack', boost: 1.35,
-    desc: 'A flight of talons that turn on a feather and cut clean through what they catch.',
-    add: { amount: 2, pierce: 3 },
-    set: { homingTurn: 9, trailColor: '#ffffff', impactColor: '#ffffff' },
+    desc: 'The drill climbs into the sky glowing, then dives on the toughest foe, boring through and making all it hits flinch.',
+    add: { speed: 60 },
+    set: { sky: true, deeper: 0.2, drag: 0.9, archetype: 'drill', card: { seq: 'fx_wings', frame: 0, scale: 1.1, tint: true } },
   }],
   ['shadow_ball', 'spell_tag', {
     id: 'shadow_storm', name: 'Shadow Storm', boost: 1.35,
     desc: 'A knot of shadow that bursts into a swarm the moment it touches anything.',
     add: { shards: 4 }, mul: { area: 1.3, r: 1.3 },
-    set: { trailColor: '#b0a0f0', impactColor: '#ffffff' },
+    set: { trailColor: '#b0a0f0', impactColor: '#ffffff',
+      archetype: 'split', anim: { seq: 'fx_eos_shadowsphere', fps: 16, scale: 0.8 }, card: { seq: 'fx_eos_shadowsphere', frame: 6, scale: 2.2, tint: true } },
   }],
 ];
 

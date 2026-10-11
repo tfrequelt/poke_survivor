@@ -212,6 +212,103 @@ plain damage or projectile bump, no bounce or return (`tools/checkoverloads.mjs`
 Each overload also redraws its weapon's animation in its own palette (a recoloured copy of the
 strip, cached) and sheds its own particles, so the three versions of a move never look alike.
 
+### The unique arsenal
+
+Every type is being given the Dragon treatment: no weapon archetype more than twice in the whole
+game (each weapon carries an `archetype` tag the checker counts), real move animations from the
+sheets instead of drawn pixel shapes, overload cards showing a frame of that animation, and three
+overloads per weapon that are each a mechanic of their own (`move: { <name> }`, implemented in
+`src/moves/<type>.js` through the hooks in `src/mechs.js`). Every type is done: **Dragon,
+Water, Ground, Normal, Electric, Grass, Flying, Ghost, Poison, Fire, Ice and Dark** -- every one of
+the 258 overloads is a mechanic of its own, and none bumps damage or projectiles.
+
+A big move (a beam, a net, a log, a triangle) fires one at a time and grows stronger with its
+levels instead of multiplying. And a move's sprite grows only a little with its area: the hitbox
+follows the area in full, the drawing by under a third of it, never past 1.3x. A field on the
+floor -- a puddle, a pool, a vortex -- is drawn at its true size up to 26px across its radius, then
+by about a third of the rest, and fainter the further it reaches: a maxed field still hits all it
+reaches without a coloured disc over a third of the screen.
+
+| Weapon | What it does | Overloads |
+|---|---|---|
+| **Bubble** (new) | Bubbles drift out, engulf the first foe they touch and float it away helpless until they pop | **Bubble Chain** (pops shed catching bubbles) · **Foam Raft** (the catch circles you, battering foes) · **Pressure Pop** (holds until it bumps a foe; the longer, the bigger) |
+| Hydro Cannon (Bubble's evolution) | Great bubbles that hold two | **Depth Charge** (sunk bubbles erupt under crowds) · **Water Cannon** (the volley fuses into one fast bubble swallowing five) · **Bubble Prison** (the catch draws in and traps its neighbours) |
+| Tidal Surge | A ring of water rolls out | **Undertow** (rolls back in, dragging foes to you) · **Riptide** (three turning rings sweep foes round) · **Tide Pools** (pools that slow foes and heal you) |
+| Whirlpool | A grinding vortex | **Centrifuge** (hurls its catch outward as it closes) · **Wandering Eddy** (drifts after the crowd) · **Drain Whirl** (draws XP and coins to you, a pulse each) |
+| Aqua Jet | Charges while still, releases on the move | **Pressure Washer** (jets shove what they hit along) · **Geyser Release** (geysers under foes instead of jets) · **Slipstream** (standing still builds a shell that blocks a hit) |
+| Rain Dance | A squall over the crowd | **Puddle Run** (puddles that slow foes and speed you) · **Fish Storm** (flopping fish) · **Soak** (soaked foes are slowed; electric hits them 40% harder) |
+| Brine Fang | A hunting shark | **Pack Hunt** (kills call more sharks) · **Sharknado** (it circles you instead) · **Blood in the Water** (bites on one foe stack harder) |
+| Mud Shot | A lobbed glob and its puddle | **Mudslide** (the puddle slides on) · **Clay Coat** (globs near you coat you in clay that halves hits) · **Mud Mask** (muddied foes chase puddles, not you) |
+| Quagmire (Mud Shot's evolution) | Torrents of mud | **Sinkhole** (puddles sink foes until they are stuck) · **Mud Wall** (globs land as walls) · **Clay Golem** (puddles rise as golems) |
+| Rock Orbit | Stones circle you | **Ring Quake** (the re-forming ring quakes) · **Rock Wall** (the ring stands as a wall ahead) · **Geode Bloom** (kills crack into pulsing geodes) |
+| **Earth Power** (new) | Spires erupt one after another in a line toward a foe | **Aftershock** (the line erupts again, back toward you) · **Fault Spiral** (a spiral instead of a line) · **Magma Vent** (spires leave lava-spitting vents) |
+| Sand Tomb | Buried traps | **Quicksand Pit** (blasts leave a pit that swallows the weak) · **Tomb Chain** (one sets off its neighbours) · **Desert Mirage** (mines wear your shape and lure foes) |
+| Bulldoze | A wide swing | **Steamroll** (flattened foes take more) · **Plough** (the swing drags its catch along) · **Rubble Toss** (a ring of rubble foes stumble over) |
+| **Dig** (new) | A mound tunnels to a foe and bursts up beneath it, then on to the next | **Tunnel Network** (holes it leaves all burst first) · **Undermine** (the tunnel caves in) · **Treasure Dig** (bursts turn up coins) |
+| **Swift** (new, Eevee's own) | Stars fan out wide, hang a heartbeat, then converge on one foe from every side | **Supernova** (the convergence bursts) · **Star Shower** (stars rise and fall, one foe each) · **Wish** (every tenth star grants a random wish) |
+| Star Barrage (Swift's evolution) | Volleys split to converge on three foes at once | **Star Well** (a well of stars drags the crowd in) · **Star Shield** (stars circle you and throw enemy shots back) · **Lucky Star** (one golden star a volley: crit and coins) |
+| **Pay Day** (new) | A spray of coins; a foe struck may shake loose a real one | **Jackpot** (every seventh toss: triple coins, all crits) · **Coin Toss** (a carpet of spinning coins) · **Bribe** (five coins and a foe walks away) |
+| **Tri Attack** (reinvented) | A spinning, widening triangle; corners burn, freeze and paralyse | **Prism** (corners fire elemental beams) · **Trinity** (it guards you instead) · **Status Overload** (all three at once erupts) |
+| **Hyper Voice** (new) | Rings of sound roll out ahead, confusing | **Uproar** (louder every cast, until you are hit) · **Round** (rings open all round you) · **Perish Song** (three rings start a count of three) |
+| Fury Swipes | A cloud of claws | **Rampage** (hits on one foe ramp up) · **Slash Trail** (scratches hang in the air) · **Itch** (foes stop to scratch and spread it) |
+| Giga Impact | Charges still, leaps on the move | **Recharge** (a big release blows up, then winds you) · **Body Slam** (you leap yourself, untouchable) · **Shockwave Trail** (cracks erupt behind it) |
+| Spark Chain | Lightning that leaps foe to foe | **Overcharge** (three strikes burst) · **Ball Lightning** (a drifting zapping ball) · **Magnetize** (struck foes drag together and clash) |
+| Thunder (Spark Chain's evolution) | A longer, lossless chain | **Thunderclap** (a sky bolt on the first foe) · **Storm Cell** (a thundercloud drops forking bolts) · **Ionize** (kills arc to three foes) |
+| **Electroweb** (new) | A live net on the crowd: tangled foes share each other's blows | **Live Net** (pulses reel foes in) · **Web Trap** (folded traps at your feet) · **Cling** (the net balls up on its toughest catch) |
+| Volt Coil | A coil that fires on its own | **Tesla** (a beam back to you) · **Hop Coil** (hops after foes) · **Coil Pop** (bursts when spent) |
+| Electro Ball | A caroming sphere | **Speed Spark** (faster than the foe = harder) · **Plasma Orbit** (it circles you) · **Short Circuit** (floor sparks where it strikes) |
+| **Electric Terrain** (new) | A grid of floor tiles lighting up in travelling patterns | **Disco** (shocks quicken the patterns) · **Power Grid** (the grid rides under you) · **Short Fuse** (busy tiles blow) |
+| Live Wire | A cable of current to one foe | **High Voltage** (current ramps on a held foe) · **Jump Rope** (the wire swings on to two more) · **Paralyze** (held long enough, a foe locks up) |
+| Leaf Arrow (Rowlet's own) | A blade that pierces a line | **Leaf Storm** (pierces shed razor leaves) · **Pin Down** (the arrow stands as a rooting stake) · **Overgrowth** (pierced foes sprout buds that burst) |
+| Spirit Shackle (Leaf Arrow's evolution) | Shadow arrows | **Deep Shadow** (a dragging shadow line) · **Soul Tether** (pierced foes are shackled to the spot) · **Haunt** (kills rise as hunting ghosts) |
+| Seed Bomb | Seeds that go off underneath the crowd | **Chain Bloom** (blasts scatter seeds that bloom again) · **Root Mine** (seeds wait until stepped on) · **Pollen** (a cloud that puts foes to sleep) |
+| **Leech Seed** (new) | Seeds root in foes and drain them, mending you; a host's death spreads it | **Vampire** (drains faster as your health drops) · **Seedling** (sown sprouts drain what comes near) · **Parasite** (seeds send runners into neighbours) |
+| **Solar Beam** (new) | Sunlight gathers visibly over you, then a beam pierces a whole line | **Focus Beam** (a lance that sweeps after its foe) · **Solar Flare** (the sun dropped on the crowd) · **Photosynthesis** (burned foes feed you health) |
+| **Grass Knot** (new) | Knots trip the heaviest foes; heavier falls harder, stunned | **Tight Knot** (trips three times) · **Snare** (holds fast and trips passers-by) · **Thorn Knot** (falls leave thorns) |
+| **Wood Hammer** (new) | A great log crashes down on the crowd and rolls on, flattening | **Rolling Log** (rolls further, gathers weight) · **Timber** (splits into three) · **Sapling** (it takes root and lures the crowd) |
+| **Whirlwind** (new) | A blast that blows foes far; a blown foe hurts what it crashes into | **Pinball** (crashes send foes on flying) · **Wind Wall** (a standing wall of wind) · **Dust Devil** (blown foes are confused) |
+| Pin Missile | A spray of needles | **Pin Cushion** (six in one foe burst) · **Needle Rain** (they fall round a foe) · **Quill Shed** (quills on the floor sting) |
+| **Feather Dance** (new) | Feathers drift down; plumed foes are knocked back three times as far by everything | **Downpour** (a constant soft rain of feathers) · **Whirling Feathers** (they whirl round you) · **Tickle** (plumed foes double up, confused) |
+| **Drill Peck** (new) | A drill bores a line, slowing with each foe, harder the deeper | **Excavate** (bursts out where it stops) · **Carom Drill** (turns for new foes, twice) · **Shrapnel** (drilled foes shed shards) |
+| Sky Attack (Drill Peck's evolution) | The drill climbs glowing, dives on the toughest foe, everything flinches | **Skyfall** (a second strike from the sky) · **Aeroblast** (a broad, unslowing blast of wind) · **Plumage** (all it bores through is plumed) |
+| Sky Guard | A hunting companion | **Divebomb** (dives from the sky every 2s) · **Escort** (circles you, eats shots) · **Molt** (sheds healing feathers) |
+| **Tailwind** (new) | Wind streams off your back as you run, battering what follows, and speeds you | **Jetstream** (faster you run, harder it hits) · **Eye of the Storm** (stopping curls it into a ring) · **Crosswind** (foes thrown sideways crash) |
+| Spectral Aura | A field of shadow round you | **Night Shade** (fixed damage by your level) · **Phantom Ring** (a breathing ring that strikes at its edge) · **Spite** (enemy shots fizzle in it; foes slowed) |
+| Shadow Ball | A lobbed knot of shadow that bursts | **Umbra** (+25% taken from everything) · **Nightfall** (falls from the sky into rolling orbs) · **Enthrall** (struck foes may fight for you) |
+| Shadow Storm (Shadow Ball's evolution) | A bigger burst of shadow | **Tempest** (orbs circle the burst, then scatter) · **Black Hole** (swallows the crowd) · **Shadow Surge** (quick bursts build wider) |
+| **Poltergeist** (new) | Rocks lift out of the ground, hover, and are hurled at foes | **Heavy Haunt** (the longer it hovers, the harder; stuns) · **Junk Orbit** (they circle you first) · **Possess** (struck foes are flung as missiles) |
+| **Mean Look** (new) | A great eye over the crowd: nothing in its gaze may leave, and it stares harder the more it holds | **Glare** (paralyses) · **Evil Eye** (it watches over you) · **Nightmare** (holds them asleep, stares harder at sleepers) |
+| **Curse** (new) | Costs you 5% of your health; the toughest foe near you loses a large share of its own every half second | **Lingering Curse** (passes on at death) · **Doom Curse** (banks it all for the end) · **Spite Curse** (the pain spills onto its neighbours) |
+| **Hex** (new) | Purple fire on every afflicted foe near you, worse the more afflictions | **Wild Hex** (leaps on) · **Cursed Flame** (burns on, an affliction itself) · **Spread Hex** (afflictions catch on neighbours) |
+| Toxic Trail | Poison clouds behind you | **Miasma** (clouds drift after foes) · **Smokescreen** (stand in it and the crowd loses you) · **Contagion Cloud** (foes carry it away with them) |
+| Sludge Bomb (Gastly's own) | Lobbed globs that wait for a foe | **Glue** (holds foes and drags in the edge) · **Rolling Sludge** (globs creep after foes) · **Splatter** (droplet puddles) |
+| Gunk Shot (Sludge Bomb's evolution) | Heavy globs that leave poison pools | **Toxic Waste** (pools spread) · **Stench** (pools drive foes off) · **Sludge Quake** (bursts heave the ground, stunning) |
+| **Acid Spray** (reinvented) | Acid puddles that melt foes' armour away for good, a point at a time | **Meltdown** (no armour left: +50% taken) · **Acid Wave** (puddles creep on) · **Corrosive Gas** (fumes melt foes round them) |
+| Toxic Spikes | A ring of barbs (its own art) | **Venom Barbs** (stacking poison) · **Caltrops** (scattered to a wide ring) · **Barbed Wire** (wire strung barb to barb) |
+| **Clear Smog** (new) | A drifting smog bubble that strips shields, barriers and haste, and coughs foes out of their attacks | **Thick Smog** (grows as it drifts) · **Smog Breath** (it hangs in front of you) · **Haze** (foes inside forget themselves) |
+| **Toxic** (new) | A needle whose poison doubles every tick | **Badly Poisoned** (doubles twice more) · **Toxic Bloom** (passes on at death, already grown) · **Toxic Surge** (bursts out at the end) |
+| **Ember** (new, Vulpix's own) | Embers land and kindle fires that creep after foes and spread to burning ones | **Blaze Up** (fires grow hotter) · **Ember Rain** (embers rain round you) · **Kindling** (burning foes make fires flare) |
+| Fire Blast (Ember's evolution) | Each ember lands as the five-pointed star of Fire Blast | **Sunfire** (white-hot fires) · **Blast Wave** (a ring of fire races out) · **Pyre** (burning kills light new fires) |
+| **Eruption** (new) | A volcano at your feet spews lava bombs every way, more and harder the healthier you are | **Magma Surge** (bombs leave magma pools) · **Volcanic Vent** (it stands where it burst) · **Ash Cloud** (ash slows and blinds round you) |
+| Will-o-Wisp | Drifting wisps | **Hellfire** (wisps stoke burns) · **Wisp Lantern** (they circle you) · **Phantom Flame** (burning kills burst) |
+| Heat Wave | A wave of heat rolling out | **Scorch** (cashes in a foe's whole burn) · **Flashpoint** (it bursts out of the crowd) · **Sunstroke** (confuses) |
+| Meteor Fall | A cinder that falls back as a meteor | **Impact Crater** (a molten crater) · **Comet Tail** (a line of fire before it) · **Shatter Meteor** (burning fragments) |
+| Blaze Trail | Fire laid where you have been | **Inferno** (hotter the longer you run) · **Firewall** (foes cannot cross it) · **Cinders** (flames spit at foes) |
+| Powder Snow (Delibird's own) | A spray of freezing powder | **Frostbite** (stacking cold) · **Drifting Snow** (puffs settle as slowing drifts) · **Snowman** (three chills freeze) |
+| Sheer Cold (Powder Snow's evolution) | A freezing gale | **Absolute Zero** (chilled foes below 15% shatter) · **Whiteout** (a blizzard all round) · **Ice Age** (ice pillars) |
+| Icicle Crash | A spear of ice that shatters | **Permafrost** (frost on the ground) · **Glacier** (it lodges as a pillar, then bursts) · **Brittle** (+50% taken) |
+| Hail Cloud | A cloud that drops hail | **Hailstorm** (three stones freeze) · **Drift Cloud** (drifts after foes) · **Thunder Snow** (thunderbolts) |
+| **Avalanche** (new) | A wall of snow sweeps across the field, burying and shoving foes | **Snowball Effect** (gathers itself) · **Ice Slide** (a slick behind it) · **Burial** (still-caught foes are buried, frozen) |
+| Frost Veil | A field of cold round you | **Ice Armor** (blocks a hit every 4s) · **Frost Nova** (a freezing burst every 2s) · **Snow Squall** (snowballs) |
+| Frost Chain | Cold leaping foe to foe | **Ice Bridge** (strands that freeze crossers) · **Shatter Chain** (kills shatter into shards) · **Cold Snap** (strikes again a second later) |
+| Night Daze | A black line to one foe | **Night Blind** (blinds) · **Dark Pulse** (a ring from its end) · **Night Terror** (held foes panic) |
+| **Sucker Punch** (reinvented) | A fist on any foe winding up an attack or cast, knocking the move out of it | **One-Two** (a second punch) · **Counter Stance** (when hit, you punch all round you) · **Low Blow** (winded foes deal less) |
+| Foul Play | A grin that ricochets foe to foe | **Turnabout** (the foe's own attack, five times) · **Skull Orbit** (a skull circles its victims) · **Dirty Trick** (weakens, steals coins) |
+| Night Slash (Foul Play's evolution) | Crescent blades that ricochet | **Gloom Edge** (crits bleed) · **Crescent Storm** (slashes throw crescents) · **Eclipse Cut** (cancels attacks being wound up) |
+| Dark Void | A hole everything slides into | **Abyss** (the middle holds and hurts) · **Void Gate** (opens under the crowd) · **Nightmare Void** (sleep) |
+| **Torment** (new) | The toughest foe near you wells a dark aura that sears its own allies | **Torment Chain** (passes on at death) · **Torment Ring** (drags its allies in) · **Frenzy** (its allies turn on it) |
+| **Feint Attack** (new) | Shadows appear behind foes, stab them in the back and shove them to you | **Backstab** (always crits) · **Shadow Step** (you appear behind the farthest) · **Feint Guard** (a breath untouchable after each) |
+
 Weapons run to **level 10**, passives to five to seven picks, and once that pool finally thins
 out **Mastery** cards appear — uncapped +6% power, +5% area and the like — so a very long run, or
 an endless one, never runs out of things to take.
@@ -225,19 +322,16 @@ warns at boot if two weapons ever end up with the same `behavior` + `motion` pai
 ### Overloads
 
 A weapon at **level 10** turns your next level-up into an **OVERLOAD** draft: its three overloads,
-side by side, and you take **one, for the rest of the run**. Every weapon has its own three — 234
-in all, the eleven evolutions and Substitute included — and each is built around a **signature
-mechanic**, something that changes how the weapon plays rather than a bigger number. No weapon's
-three share a signature, and no signature turns up more than nine times across the 234. Among them:
+side by side, and you take **one, for the rest of the run**. Every weapon has its own three -- 258
+in all, the evolutions and Substitute included -- and each is a **mechanic of its own** (its name in
+an overload's `move` block, its hooks in `src/moves/<type>.js`): something that changes how the
+weapon plays, never a bigger number, an extra projectile, a bounce or a return. No two overloads in
+the game share a mechanic, and `tools/checkoverloads.mjs` refuses any that bump damage or amount.
+The table above lists them weapon by weapon.
 
-| Kind | Signatures |
-|---|---|
-| How shots fly | **Boomerang** (returns through everything), **Orbit Shield** (spent shots circle you), **Ricochet**, **Erases Shots** (destroys enemy projectiles), **Ramping** (faster and harder in flight), **Snowball** (grows with every foe pierced), **Wake** (a line of fire, acid or current behind it), **Mines** (spent shots stay armed), **Echo** (a phantom repeat from where you stood), **Gravity** (drags foes along), **Magnet** (vacuums up orbs and coins) |
-| What hits do | **Rupture** (stacks that burst at N), **Doom** (a countdown that detonates), **Contagion** (statuses jump on death), **Destiny Bond** (bonded foes share damage), **Charm** (foes fight for you), **Polarity** (+ then − discharges), **Overkill** (excess damage carries on), **Deep Freeze** (chill N times, frozen solid, shatters), **Thief** (hits knock coins loose), **Crit Burst** |
-| The weapon's own state | **Overheat** (builds to a huge volley, then vents), **Tide** (alternating fast and huge phases), **Momentum** / **Focus** (moving or standing still), **Pinch** (Blaze, Torrent, Overgrow below half health), **Soul Feed** (permanently grows with kills), **Guard** (kills earn a shield), **Speed Boost**, **Time Warp** (kills leave bubbles where enemy shots crawl), **Lightning Rod**, **Metronome** (a random effect every volley), **Gamble** (twice, or five times) |
-
-The firing patterns (ring, spiral, volley, cross, twin, fan), zones, novas, meteors, vortexes,
-chains and wisps of the first version remain, as the signatures of the overloads they suit.
+The shared vocabulary of the first version (patterns, signatures such as Doom, Echo or Polarity,
+`hit` and `kill` effects) is still read by `src/overload.js` and documented at the top of
+`src/data/overloads.js`, but no overload uses it any more.
 
 An overloaded weapon draws with the **Gravity Circuit particle sprites** — its own trail, hit,
 kill and signature effects — recoloured to its **three-colour palette** (main, trail, accent), and
@@ -636,7 +730,7 @@ screen flags a weapon that is ready. Every type has one:
 | Ember Spit | Charcoal | Fire Blast |
 | Powder Snow | Never-Melt Ice | Sheer Cold |
 | Sludge Bomb | Poison Barb | Gunk Shot |
-| Bubble Beam | Sea Incense | Hydro Cannon |
+| Bubble | Sea Incense | Hydro Cannon |
 | Spark Chain | Magnet | Thunder |
 | Foul Play | Black Glasses | Night Slash |
 | Aerial Ace | Pretty Wing | Sky Attack |

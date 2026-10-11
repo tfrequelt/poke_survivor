@@ -31,6 +31,7 @@ import { hitCtx, zones, orbs, coins, sprFx } from './world.js';
 export const SPR_BUSY = 180;
 import { spawnSpr, burstSpr } from './sprfx.js';
 import { getAttack } from './assets.js';
+import { mechsOf } from './mechs.js';
 
 /** Procs (splash, chain, kill effects, expiry effects) allowed per simulation tick, all weapons. */
 const PROC_BUDGET = 40;
@@ -108,6 +109,7 @@ function register(w) {
     ov._sig = SIG_KEYS.some((k) => ov[k]);
     ov._shot = SHOT_KEYS.some((k) => ov[k]) || !!(ov.fx && ov.fx.spr && ov.fx.spr.trail);
   }
+  mechsOf(ov);                               // works out its mechanics and their flags once
   const proc = damageSourceId(`o:${ov.id}`, ov.name);
   // A proc hits with its weapon's type, like the weapon itself.
   setSrcType(proc, w.def.type);
@@ -121,6 +123,15 @@ export function overloadHit(e, dealt, rec, crit) {
   const d = rec.def;
   if (d.fx && d.fx.spr && d.fx.spr.hit) sprHit(e, rec);
   if (d._sig) signatureHit(e, dealt, rec, crit);
+  // The overload's own mechanics (mechs.js), under its proc source like every proc.
+  const mx = mechsOf(d);
+  for (let i = 0; i < mx.length; i++) {
+    if (!mx[i].h.hit) continue;
+    const prev = getDamageSource();
+    setDamageSource(rec.proc);
+    mx[i].h.hit(e, dealt, rec, crit, mx[i].cfg);
+    setDamageSource(prev);
+  }
   // Metronome: each volley rolled its own effect, and this hit carries whichever came up.
   const h = d.metronome ? METRO[rec.w.metro < 0 ? 0 : rec.w.metro].hit : d.hit;
   if (!h) return;
@@ -412,6 +423,12 @@ export function overloadWeaponTick(w, dt, p) {
   }
   if (d.soul) dmg *= 1 + w.soul;
   w.dynDmg = dmg; w.dynCd = cd; w.dynArea = area;
+  // The overload's own mechanics' clocks; they may scale the live multipliers just set.
+  const mx = mechsOf(d);
+  if (mx.length) {
+    const rec = srcOvl[w.srcId];
+    for (let i = 0; i < mx.length; i++) if (mx[i].h.tick) mx[i].h.tick(w, dt, p, mx[i].cfg, rec);
+  }
   if (w.ventT > 0) w.ventT -= dt;
   if (d.rod) {
     w.rodT -= dt;
@@ -446,6 +463,11 @@ const d_rodRange = 260;
  */
 export function overloadFired(w, st, p) {
   const d = w.ovl;
+  const mx = mechsOf(d);
+  if (mx.length) {
+    const rec = srcOvl[w.srcId];
+    for (let i = 0; i < mx.length; i++) if (mx[i].h.fire) mx[i].h.fire(w, st, p, mx[i].cfg, rec);
+  }
   if (d.polarity) w.pol = -w.pol;
   if (d.metronome) w.metro = (G.rngRun() * METRO.length) | 0;
   if (d.heat) {
@@ -477,6 +499,14 @@ export function overloadKill(e, rec) {
   const d = rec.def;
   if (d.fx && d.fx.spr && d.fx.spr.kill && sprFx.length < SPR_BUSY) spr(rec, 'kill', e.x, e.y - 4, null);
   if (d._sig) signatureKill(e, rec);
+  const mx = mechsOf(d);
+  for (let i = 0; i < mx.length; i++) {
+    if (!mx[i].h.kill) continue;
+    const prev = getDamageSource();
+    setDamageSource(rec.proc);
+    mx[i].h.kill(e, rec, mx[i].cfg);
+    setDamageSource(prev);
+  }
   const k = d.kill;
   if (!k) return;
   if (k.heal && G.rngRun() < k.heal.chance) heal(k.heal.hp);
@@ -554,7 +584,15 @@ function signatureKill(e, rec) {
 
 /** weapons.js calls this when a shot of an overloaded weapon expires, lands or is spent. */
 export function overloadExpire(pr, rec) {
+  if (rec.def._mxExpire) {
+    const mx = mechsOf(rec.def);
+    const prev = getDamageSource();
+    setDamageSource(rec.proc);
+    for (let i = 0; i < mx.length; i++) if (mx[i].h.expire) mx[i].h.expire(pr, rec, mx[i].cfg);
+    setDamageSource(prev);
+  }
   const x = rec.def.expire;
+  if (!x) return;
   if (x.chance !== undefined && G.rngRun() >= x.chance) return;
   if (budget <= 0) return;
   budget--;
@@ -853,6 +891,98 @@ function burstShots(x, y, n, dmg, rec, homing, a0) {
  * can never advertise something the data does not contain. An entry's own `chips` win.
  */
 const _chips = new Map();
+/** The reworked weapons' own mechanics (mechs.js), as a word or two each for the card. */
+const MOVE_WORDS = {
+  // Water
+  bubbleChain: ['CHAIN BUBBLES'], foamRaft: ['ORBITS YOU', 'BATTERS'], pressure: ['HOLDS LONGER', 'BIGGER POP'],
+  depthCharge: ['SUBMERGED', 'AMBUSH'], cannon: ['ONE BIG SHOT', 'SWALLOWS 5'], prison: ['DRAWS FOES IN', 'TRAPS 3'],
+  undertow: ['ROLLS BACK', 'PULLS IN'], riptide: ['STANDING RINGS', 'SWEEPS FOES'], tidePools: ['POOLS', 'HEALS YOU'],
+  centrifuge: ['HURLS OUT'], eddy: ['WANDERS'], drainWhirl: ['DRAWS LOOT', 'PULSES'],
+  washer: ['SHOVES'], geyser: ['GEYSERS', 'STUN'], slipstream: ['BLOCKS A HIT'],
+  puddles: ['PUDDLES', 'SPEEDS YOU'], fishRain: ['FISH'], soak: ['SOAKED', 'ELECTRIC +40%'],
+  pack: ['MORE SHARKS'], sharknado: ['CIRCLES YOU'], frenzy: ['STACKING BITES'],
+  // Ground
+  mudslide: ['SLIDES ON'], clayCoat: ['CLAY ARMOUR'], mudMask: ['LOSES YOU'],
+  sinkhole: ['SINKS FOES'], mudWall: ['WALLS'], golem: ['GOLEM'],
+  ringQuake: ['QUAKE', 'STUN'], rockWall: ['WALL'], geode: ['GEODES'],
+  aftershock: ['ERUPTS TWICE'], spiralLine: ['SPIRAL'], magmaVent: ['LAVA VENTS', 'BURN'],
+  pit: ['QUICKSAND', 'SWALLOWS WEAK'], tombChain: ['CHAIN BLASTS'], mirage: ['LURES FOES'],
+  steamroll: ['FLATTENS', 'STUN'], plough: ['DRAGS FOES'], rubble: ['RUBBLE RING', 'SLOW'],
+  tunnels: ['TUNNELS'], undermine: ['CAVE-IN', 'STUN'], treasure: ['COINS'],
+  // Normal
+  supernova: ['SUPERNOVA'], starShower: ['FALLS FROM ABOVE', 'ONE EACH'], wish: ['WISHES'],
+  starWell: ['STAR WELL', 'PULLS IN'], starShield: ['EATS SHOTS', 'THROWS BACK'], luckyStar: ['GOLD STAR', 'COINS'],
+  jackpot: ['JACKPOT', 'CRIT'], coinToss: ['COIN CARPET'], bribe: ['BUYS FOES OFF'],
+  prism: ['BEAMS'], trinity: ['GUARDS YOU'], statusOverload: ['ALL THREE: BURST'],
+  uproar: ['LOUDER', 'RESETS ON HIT'], round: ['ALL ROUND'], perishSong: ['COUNTDOWN'],
+  rampage: ['RAMPING'], slashTrail: ['LINGERING CUTS'], itch: ['ITCH', 'SPREADS'],
+  recharge: ['BLAST', 'WINDED'], bodySlam: ['YOU LEAP', 'IFRAMES'], shockTrail: ['ERUPTS BEHIND'],
+  // Electric
+  overcharge: ['3 HITS: BURST', 'STUN'], ballLightning: ['BALL LIGHTNING'], magnetize: ['DRAGS TOGETHER'],
+  thunderclap: ['SKY BOLT', 'STUN'], stormCell: ['STORM CLOUD'], ionize: ['ON KILL: ARCS'],
+  liveNet: ['REELS IN'], webTrap: ['TRAPS'], cling: ['CLINGS ON'],
+  tesla: ['BEAM TO YOU'], hopCoil: ['HOPS'], coilPop: ['BURSTS', 'STUN'],
+  speedSpark: ['SPEED = POWER'], plasmaOrbit: ['ORBITS YOU'], shortCircuit: ['FLOOR SPARKS'],
+  disco: ['SPEEDS UP'], powerGrid: ['FOLLOWS YOU'], shortFuse: ['TILES BLOW'],
+  highVoltage: ['RAMPING'], jumpRope: ['SWINGS ON'], paralyze: ['PARALYSE'],
+  // Grass
+  leafStorm: ['RAZOR LEAVES'], pinDown: ['STAKES', 'ROOTS'], overgrowth: ['BUDS BURST'],
+  deepShadow: ['SHADOW LINE', 'SLOW'], soulTether: ['SHACKLED'], haunt: ['GHOSTS'],
+  chainBloom: ['BLOOMS AGAIN'], rootMine: ['MINES'], pollen: ['SLEEP'],
+  vampire: ['LOW HP: FASTER'], seedling: ['SPROUTS'], parasite: ['SPREADS'],
+  focusBeam: ['SWEEPS'], solarFlare: ['SUN DROP', 'BURN'], photosynthesis: ['HEALS YOU'],
+  tightKnot: ['TRIPS x3'], snare: ['HOLDS FAST'], thornKnot: ['THORNS'],
+  rollingLog: ['GATHERS WEIGHT'], timber: ['SPLITS IN 3'], sapling: ['LURES FOES'],
+  // Flying
+  pinball: ['CHAIN CRASHES'], windWall: ['WALL'], dustDevil: ['CONFUSE'],
+  pinCushion: ['6 PINS: BURST'], needleRain: ['FALLS FROM ABOVE'], quillShed: ['QUILLS'],
+  downpour: ['MORE FEATHERS'], whirlFeathers: ['CIRCLES YOU'], tickle: ['CONFUSE', 'FLINCH'],
+  excavate: ['BURSTS OUT'], caromDrill: ['TURNS x2'], shrapnel: ['SHARDS'],
+  skyfall: ['SECOND STRIKE'], aeroblast: ['WIDE', 'THROWS ASIDE'], plumage: ['FEATHERWEIGHT'],
+  divebomb: ['DIVES', 'STUN'], escort: ['EATS SHOTS'], molt: ['HEALS YOU'],
+  jetstream: ['SPEED = POWER'], eyeOfStorm: ['RING ON STOP'], crosswind: ['SIDEWAYS', 'CRASHES'],
+  // Ghost
+  nightShade: ['FIXED DAMAGE'], phantomRing: ['BREATHING RING'], spite: ['EATS SHOTS', 'SLOW'],
+  umbra: ['+25% TAKEN'], nightfall: ['FALLS FROM ABOVE'], enthrall: ['CHARM'],
+  tempest: ['ORBS'], blackHole: ['BLACK HOLE', 'PULLS IN'], shadowSurge: ['SURGING'],
+  heavyHaunt: ['HEAVIER', 'STUN'], junkOrbit: ['CIRCLES YOU'], possess: ['FOES AS MISSILES'],
+  glare: ['PARALYSE'], evilEye: ['OVER YOU'], nightmare: ['SLEEP'],
+  lingeringCurse: ['PASSES ON'], doomCurse: ['BANKS IT ALL'], spiteCurse: ['SPILLS OVER'],
+  wildHex: ['LEAPS'], cursedFlame: ['BURNS ON'], spreadHex: ['SPREADS STATUS'],
+  // Poison
+  miasma: ['DRIFTS'], smokescreen: ['LOSES YOU'], contagionCloud: ['SPREADS'],
+  glue: ['GLUED', 'PULLS IN'], rollingSludge: ['CREEPS'], splatter: ['PUDDLES'],
+  toxicWaste: ['SPREADS'], stench: ['REPELS'], sludgeQuake: ['QUAKE', 'STUN'],
+  meltdown: ['+50% TAKEN'], acidWave: ['WAVE'], corrosiveGas: ['FUMES'],
+  venomBarbs: ['STACKING POISON'], caltrops: ['WIDE RING'], barbedWire: ['WIRE'],
+  thickSmog: ['GROWS'], smogBreath: ['IN FRONT OF YOU'], haze: ['CONFUSE'],
+  badlyPoisoned: ['x128'], toxicBloom: ['PASSES ON'], toxicSurge: ['BURSTS'],
+  // Fire
+  blazeUp: ['HOTTER'], emberRain: ['RAINS DOWN'], kindling: ['FLARES'],
+  sunfire: ['WHITE-HOT'], blastWave: ['RING OF FIRE'], pyre: ['PYRES'],
+  magmaSurge: ['MAGMA POOLS'], volcanicVent: ['STANDS', 'MORE BOMBS'], ashCloud: ['ASH', 'SLOW'],
+  hellfire: ['STOKES BURN'], wispLantern: ['CIRCLES YOU'], phantomFlame: ['ON KILL: BURST'],
+  scorch: ['CASHES BURN'], flashpoint: ['IN THE CROWD'], sunstroke: ['CONFUSE'],
+  impactCrater: ['CRATER'], cometTail: ['FIRE LINE'], shatterMeteor: ['FRAGMENTS'],
+  inferno: ['RAMPING'], firewall: ['WALL'], cinders: ['CINDERS'],
+  // Ice
+  frostbite: ['STACKING COLD'], driftingSnow: ['DRIFTS', 'SLOW'], snowman: ['FREEZE'],
+  absoluteZero: ['SHATTERS'], whiteout: ['ALL ROUND'], iceAge: ['ICE PILLARS'],
+  permafrost: ['FROST GROUND'], glacier: ['PILLAR'], brittle: ['+50% TAKEN'],
+  hailstorm: ['FREEZE'], driftCloud: ['DRIFTS'], thunderSnow: ['THUNDER'],
+  iceArmor: ['BLOCKS A HIT'], frostNova: ['FREEZING BURST'], snowSquall: ['SNOWBALLS'],
+  iceBridge: ['ICE STRANDS'], shatterChain: ['ON KILL: SHARDS'], coldSnap: ['STRIKES AGAIN'],
+  snowballEffect: ['GROWS'], iceSlide: ['ICE SLICK'], burial: ['BURIES', 'FREEZE'],
+  // Dark
+  nightBlind: ['BLIND'], darkPulse: ['RING'], nightTerror: ['PANIC', '+33% TAKEN'],
+  oneTwo: ['DOUBLE PUNCH'], counterStance: ['COUNTERS'], lowBlow: ['WEAKEN'],
+  turnabout: ['FOE ATTACK x5'], skullOrbit: ['ORBITING SKULL'], dirtyTrick: ['WEAKEN', 'COINS'],
+  gloomEdge: ['BLEED'], crescentStorm: ['CRESCENTS'], eclipseCut: ['CANCELS ATTACKS'],
+  abyss: ['+50% TAKEN'], voidGate: ['IN THE CROWD'], nightmareVoid: ['SLEEP'],
+  tormentChain: ['PASSES ON'], tormentRing: ['PULLS IN'], frenzyTorment: ['ALLIES TURN'],
+  backstab: ['ALWAYS CRIT'], shadowStep: ['YOU TELEPORT'], feintGuard: ['IFRAMES'],
+};
+
 export function chipsFor(ov) {
   if (ov.chips) return ov.chips;
   let c = _chips.get(ov);
@@ -943,13 +1073,14 @@ export function chipsFor(ov) {
   // The Dragon weapons' own mechanics, one word or two each.
   const DRAGON_WORDS = {
     wildfire: 'CREEPING FLAME', grudge: '% MAX HP', revenge: 'REVENGE', heartbeat: 'HEARTBEAT',
-    resonator: 'RESONATES', mirror: ov.dragon && ov.dragon.mirror && ov.dragon.mirror.swap ? 'SWAPS SIDES' : 'REFLECTS SHOTS',
+    resonator: 'RESONATES', mirror: 'REFLECTS SHOTS', mirrorSpace: 'SWAPS SIDES',
     finale: 'COMET FINALE', afterimage: 'AFTERIMAGE', static: 'SHOCK PRINTS', meteor: 'CRATER',
     lane: 'YANK BACK', wake: 'DASH', crosshatch: 'X SCARS', gale: 'LONG RAKES', tail: 'TELEPORTS FOES',
     debris: 'FOES AS MISSILES', merge: 'MERGE', bramble: 'ROOTS', fault: 'RIFTS', anchor: 'CHAINS',
     aging: 'AGES FOES', gears: 'SAW GEARS', dilation: 'FASTER WEAPONS',
   };
   for (const k of Object.keys(ov.dragon || {})) if (DRAGON_WORDS[k]) c.push(DRAGON_WORDS[k]);
+  for (const k of Object.keys(ov.move || {})) if (MOVE_WORDS[k]) c.push(...MOVE_WORDS[k]);
   _chips.set(ov, c);
   return c;
 }

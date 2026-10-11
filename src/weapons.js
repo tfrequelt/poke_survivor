@@ -25,6 +25,8 @@ import { WEAPONS, WEAPON_BY_ID } from './data/weapons.js';
 import { OVL_PARTICLES, ovlColor, ovlSprColor } from './data/overloads.js';
 import { spriteBase, spriteDirs, angleSlot } from './sprites.js';
 import { ZONE, ROLE } from './fx.js';
+import { mechsOf } from './mechs.js';
+import { spawnSeq } from './seqfx.js';
 
 // Four, not six. With ~6 weapons available per type, four slots make the draft a real choice
 // every run instead of a formality where you eventually hold everything.
@@ -442,6 +444,7 @@ const BEHAVIOR = {
     z.tick = 0;
     z.slow = def.slow || 0;
     z.kind = 2;
+    z.anim = def.zoneAnim || null;
     z.color = def.zoneColor || '#b050d0';
     z.hitId = 0;
     z.burn = (def.burn || 0) * G.stats.power;
@@ -485,6 +488,7 @@ const BEHAVIOR = {
     z.tick = 0;
     z.slow = def.slow || 0;
     z.kind = anchored ? ZONE.NOVA_STATIC : ZONE.NOVA;
+    z.anim = def.zoneAnim || null;
     z.color = def.zoneColor || '#ffffff';
     z.hitId = nextHitId();
     z.burn = 0;
@@ -691,6 +695,7 @@ const BEHAVIOR = {
     z.tick = 0;
     z.slow = def.slow || 0;
     z.kind = ZONE.VORTEX;
+    z.anim = def.zoneAnim || null;
     z.color = def.zoneColor || '#5ab6ef';
     z.hitId = 0;
     z.burn = 0;
@@ -975,6 +980,8 @@ function zoneKnobs(w, st, z, nova) {
   if (!ov) return;
   // An overloaded weapon's ground takes the overload's colour, so the field shows what it is.
   z.color = ov.color;
+  const mx = mechsOf(ov);
+  for (let i = 0; i < mx.length; i++) if (mx[i].h.lay) mx[i].h.lay(z, w, st, mx[i].cfg);
   const k = ov.zone;
   if (!k) return;
   if (k.r) { if (nova) z.pull *= k.r; else z.r *= k.r; }
@@ -1029,6 +1036,10 @@ function ovlShot(w, pr) {
   if (ov.metronome && w.metro >= 0 && ovlHooks.metroColor) { const c = ovlHooks.metroColor(w.metro); pr.trailColor = c; pr.impactColor = c; }
   if (ov.polarity) { const c = w.pol > 0 ? '#ff6a5a' : '#5ab6ff'; pr.trailColor = c; pr.impactColor = c; }
   if (ov.grow) pr.grow = ov.grow;
+  if (ov._mxSpawn) {
+    const mx = mechsOf(ov);
+    for (let i = 0; i < mx.length; i++) if (mx[i].h.spawn) mx[i].h.spawn(pr, w, mx[i].cfg);
+  }
   // Homing is a motion, so it only takes over motions that are a plain line to begin with.
   if (ov.homing && (pr.motion === MOTION_STRAIGHT || pr.motion === MOTION_ACCEL)) {
     pr.motion = MOTION_HOMING;
@@ -1141,6 +1152,7 @@ function spawnFor(w, st, p) {
   pr.burnT = def.burnT || 3;
   pr.slow = def.slow || 0;
   pr.knockback *= st.knock;
+  pr.anim = def.anim || null;
   ovlShot(w, pr);
   return pr;
 }
@@ -1203,6 +1215,7 @@ function fireProjectile(w, st, p, angle, targetIdx, hitId) {
   pr.burnT = def.burnT || 3;
   pr.slow = def.slow || 0;
   pr.knockback *= st.knock;
+  pr.anim = def.anim || null;
   ovlShot(w, pr);
   return pr;
 }
@@ -1648,6 +1661,11 @@ export function updateProjectiles(dt) {
     if (!pr.hostile) {
       rec = srcOvl[pr.src];
       if (rec !== undefined && rec.def._shot && ovlFlight(pr, rec, i, dt)) continue;
+      if (rec !== undefined && rec.def._mxShot && mechFlight(pr, rec, dt)) {
+        dropEndZone(pr);
+        despawn('projectiles', projectiles, i);
+        continue;
+      }
     } else if (warpZones && inWarp(pr)) {
       // An enemy shot inside a time bubble crawls: undo most of this tick's movement.
       pr.x -= pr.vx * dt * 0.7; pr.y -= pr.vy * dt * 0.7; pr.life -= dt * 0.7;
@@ -1712,6 +1730,14 @@ function hitsDecoy(pr) {
   return false;
 }
 
+/** An overload mechanic's hold on a shot in flight (mechs.js). True if the mechanic ended it. */
+function mechFlight(pr, rec, dt) {
+  const mx = mechsOf(rec.def);
+  let end = false;
+  for (let i = 0; i < mx.length; i++) if (mx[i].h.shot && mx[i].h.shot(pr, rec, dt, mx[i].cfg)) end = true;
+  return end;
+}
+
 /** An emplacement firing on its own clock. */
 function updateTurret(pr, dt) {
   const def = WEAPONS[pr.weapon];
@@ -1774,6 +1800,7 @@ function emitShot(pr, def, ov, kt, a, idx) {
   shot.burn = def.emitBurn || 0;
   shot.burnT = def.burnT || 3;
   shot.slow = def.slow || 0;
+  shot.anim = def.emitAnim || null;
   // An overloaded emplacement's shots carry its signature like any other shot of the weapon.
   if (ov) { shot.ovBase = shot.dmg; shot.ovRic = ov.ricochet ? ov.ricochet.n : 0; shot.ovErase = ov.erase ? ov.erase.n : 0; shot.ovSnow = ov.snowball ? 0 : -1; }
 }
@@ -1788,7 +1815,7 @@ function detonate(pr) {
   // A mine's blast is its end, and the end is where an overload's aftermath lands.
   if (pr.gen === ROLE.MINE && ovlHooks.expire) {
     const ov = srcOvl[pr.src];
-    if (ov !== undefined && ov.def.expire) ovlHooks.expire(pr, ov);
+    if (ov !== undefined && (ov.def.expire || ov.def._mxExpire)) ovlHooks.expire(pr, ov);
   }
   if (impactFx) impactFx(pr.x, pr.y, 10, pr.impactColor || '#ffffff');
   if (blastFx) blastFx(pr.x, pr.y, r, pr.impactColor || '#ffffff');
@@ -1800,9 +1827,18 @@ function dropEndZone(pr) {
   // the turret emplacement itself, or a single trigger pull would end a dozen times.
   if (pr.gen !== ROLE.SHARD && pr.gen !== ROLE.TURRET && ovlHooks.expire) {
     const ov = srcOvl[pr.src];
-    if (ov !== undefined && ov.def.expire) ovlHooks.expire(pr, ov);
+    if (ov !== undefined && (ov.def.expire || ov.def._mxExpire)) ovlHooks.expire(pr, ov);
   }
   const def = pr.weapon >= 0 ? WEAPONS[pr.weapon] : null;
+  // Its own impact, from the weapon's sheet (a splash, a crumble of stone).
+  if (def && def.hitAnim) {
+    const h = def.hitAnim;
+    // The hit grows with the area by under a third, never past 1.3x (moves/core.js vk).
+    const k = Math.min(1.3, 1 + Math.max(0, (pr.area || 1) - 1) * 0.3);
+    if (h.spr) spawnSpr(h.spr, pr.x, pr.y - 4, h.color || '#ffffff', (h.scale || 1) * k);
+    else spawnSeq(h.seq, pr.x, pr.y, { dur: h.dur || 0.3, fps: h.fps || 12, scale: (h.scale || 1) * k });
+    if (h.dust) spawnSpr('dust', pr.x, pr.y, h.dust, 0.9);
+  }
   const z0 = def && def.zoneOnEnd;
   if (!z0) return;
   const z = spawn('zones');
@@ -1962,6 +1998,7 @@ function fork(pr) {
     shard.orbitA = 0; shard.orbitR = 0;
     shard.z = 0; shard.bounces = 0; shard.fuse = 0; shard.emitT = 0;
     shard.gen = ROLE.SHARD; shard.payload = 0; shard.t = 0;
+    shard.anim = pr.anim;
   }
 }
 
