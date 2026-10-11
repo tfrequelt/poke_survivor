@@ -568,6 +568,9 @@ forty). Run it again after adding or changing an `fx_eos_*` entry.
 | `fx_eos_column`, `fx_eos_lavabomb`, `fx_eos_meteor`, `fx_eos_blast`, `fx_eos_boom`, `fx_eos_smallflame` | 0036, 0034, 0101, 0024, 0253, 0070 | Eruption, Meteor Fall, Blaze Trail, fire impacts |
 | `fx_eos_snow`, `fx_eos_icicle`, `fx_eos_icecrystal`, `fx_eos_hail`, `fx_eos_snowball`, `fx_eos_icering`, `fx_eos_shards`, `fx_eos_crystal` | 0023, 0127, 0141, 0257, 0175, 0020, 0173, 0013 | Powder Snow, Icicle Crash, Hail Cloud, Avalanche, Frost Veil, Sheer Cold, Frost Chain |
 | `fx_eos_fist`, `fx_eos_punchstar`, `fx_eos_grin`, `fx_eos_claws`, `fx_eos_crescent`, `fx_eos_void`, `fx_eos_shade`, `fx_eos_slashes` | 0221, 0243, 0064, 0219, 0100, 0092, 0184, 0179 | Sucker Punch, Torment and Foul Play, Night Slash, Dark Void, Feint Attack |
+| `fx_eos_lbolt`, `fx_eos_lspark`, `fx_eos_greyrock`, `fx_eos_bluecres`, `fx_eos_flamecres` | 0119, 0215, 0139, 0158, 0030 | the legendaries' `bolt`, `spark`, `rock`, `crescent` and `firestar` looks (no longer shared with partner weapons) |
+| `fx_eos_twinicicle`, `fx_eos_iceburst`, `fx_eos_embers`, `fx_eos_zapsphere`, `fx_eos_rockburst` | 0026, 0192, 0028, 0222, 0140 | Articuno's Ice Shard Rain, Moltres's Ember Storm, Zapdos's Zap Sphere, Regirock's Rock Wrecker |
+| `fx_eos_blizzard`, `fx_eos_gyroball`, `fx_eos_firepillar`, `fx_eos_elecfang`, `fx_eos_watersplash` | 0045, 0231, 0090, 0152, 0021 | Regice's Blizzard Wall, Registeel's Gyro Spikes, Entei's Flame Pillars, Raikou's Spark Fang, Suicune's Water Pulse |
 
 **`diamond_pearl_moves/`** (spriters-resource.com/ds_dsi/pokemondiamondpearl/asset/21068, named
 attack sheets) and **`pokemon_rangers_moves/`** (spriters-resource.com/ds_dsi/

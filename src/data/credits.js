@@ -38,7 +38,7 @@ const RIPS = [
  */
 const EXPLORERS_RIPS = [
   ['pokemonmysterydungeonexplorersofsky', '131094', 'SUBSTITUTE', 'substitute weapon'],
-  ['pokemonmysterydungeonexplorersofsky', '85692', 'MOVE EFFECTS', 'ghost, poison, fire, ice and dark weapons'],
+  ['pokemonmysterydungeonexplorersofsky', '85692', 'MOVE EFFECTS', 'weapons, legendary attacks'],
   ['pokemonmysterydungeonexplorersofsky', '59283', 'DUNGEON MAPS', 'stage select map'],
   ['pokemonmysterydungeonexplorersofsky', '84937', 'DUNGEON FONT', 'floor title card'],
   ['pokemonmysterydungeonexplorersofsky', '86310', 'ICE TILESET', 'bundled'],

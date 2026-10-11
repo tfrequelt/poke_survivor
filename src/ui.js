@@ -1127,8 +1127,13 @@ function drawLockedCard(c, x, w, px, selected, t, chars, j) {
   ctx.fillRect(px - bw / 2 - 1, py - 1, bw + 2, bh + 2);
   ctx.fillStyle = selected ? '#9a86e8' : '#5a4a98';
   ctx.fillRect(px - bw / 2 - 1, py - 1, bw + 2, Math.round((bh + 2) * 0.5));
-  const sil = c.sprId >= 0 ? silhouetteOf(c.sprId + walkFrame(c, 0)) : null;
-  if (sil) {
+  // A partner with its own hidden portrait (<id>_hidden: Axew's) shows that instead of an outline.
+  const hid = getPortrait(`${c.id}_hidden`);
+  const sil = !hid && c.sprId >= 0 ? silhouetteOf(c.sprId + walkFrame(c, 0)) : null;
+  if (hid) {
+    const hk = Math.max(1, Math.min(2, Math.floor(bw / hid.w)));
+    ctx.drawImage(hid.canvas, 0, 0, hid.w, hid.h, Math.round(px - (hid.w * hk) / 2), py + Math.round((bh - hid.h * hk) / 2), hid.w * hk, hid.h * hk);
+  } else if (sil) {
     const s = Math.max(1, Math.min(2, Math.floor((bh - 4) / sil.height)));
     ctx.globalAlpha = 0.85 + Math.sin(t * 3) * 0.15;
     ctx.drawImage(sil, Math.round(px - (sil.width * s) / 2), Math.round(py + bh - 2 - sil.height * s), sil.width * s, sil.height * s);

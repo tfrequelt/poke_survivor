@@ -164,10 +164,24 @@ const MOTION = {
       const d = Math.hypot(dx, dy) || 1;
       const sp = Math.hypot(pr.vx, pr.vy) || 1;
       const k = 0.4 + ((pr.t - half) / half) * 1.4;  // accelerating home
-      pr.x += (dx / d) * sp * k * dt;
-      pr.y += (dy / d) * sp * k * dt;
+      const step = sp * k * dt;
       // Coming home re-arms the hit id, so the return leg can hit the same enemies again.
       if (!pr.crit) { pr.crit = true; pr.hitId = nextHitId(); }
+      // Caught. A full stride every frame overshot the player once it arrived, turned, overshot
+      // again, and shook back and forth on top of them until its life ran out.
+      if (d <= step || d < 10 + pr.r) {
+        pr.x = p.x; pr.y = p.y;
+        pr.life = pr.maxLife;                         // spent: updateProjectiles despawns it this tick
+        return;
+      }
+      pr.x += (dx / d) * step;                         // never further than it has left to go
+      pr.y += (dy / d) * step;
+      // Pointing home rather than spinning; the heading cannot flip, the flight ends at the catch.
+      let da = Math.atan2(dy, dx) - pr.angle;
+      while (da > Math.PI) da -= Math.PI * 2;
+      while (da < -Math.PI) da += Math.PI * 2;
+      pr.angle += da * Math.min(1, 12 * dt);
+      return;
     }
     pr.angle += pr.spin * dt;
   },

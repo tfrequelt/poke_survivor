@@ -1423,6 +1423,9 @@ function impactTime(look) {
   if (key === 'ice_block') return 0.9;
   if (key === 'outrage') return 0.7;
   if (key === 'roar') return 0.5;
+  if (key === 'ember_shower' || key === 'fire_pillar') return 0.55;
+  if (key === 'zap_sphere' || key === 'water_burst') return 0.45;
+  if (key === 'ice_burst' || key === 'rock_burst' || key === 'elec_fang') return 0.4;
   return 0.3;
 }
 const LOOK_NAMES = ['', ...Object.keys(LOOKS)];

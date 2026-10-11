@@ -735,6 +735,7 @@ function startRun(character, q, stageId) {
   clearWorld();
   resetRunState();
   resetDirector();
+  heldBosses = [];
   resetProps();
   resetTraps();
   resetAttacks();
@@ -1022,6 +1023,8 @@ function swapFloor() {
   // Taken the way down without a scratch on this floor.
   unlockIf('untouchable', G.trk && !G.trk.hitThisFloor);
   if (G.trk) G.trk.hitThisFloor = false;
+  // A boss still standing follows you down.
+  const bosses = holdLiveBosses();
   clearWorld();
   resetProps();
   // A new floor is new ground: the traps you already found do not come with you.
@@ -1048,6 +1051,7 @@ function swapFloor() {
   G.banner.t = 2.4;
   // A new floor is a new roll for a portal.
   rollPortal();
+  releaseHeldBosses(bosses);
 }
 
 function updateDescent(dt) {
@@ -1211,6 +1215,30 @@ let portalAt = -1;
 /** The legendary behind the portal, from the moment it is entered until you are back out. */
 let secretDef = null;
 let secretHadStairs = false;
+// Timed bosses that were alive when the floor was left (by a portal or the stairs), as
+// [{ tier, hp }] with hp their share of health left. clearWorld() wipes them without killing them,
+// and the director fires each boss once, so without this a boss alive at the portal was gone for
+// good -- and with it, at 20:00, the run's win.
+let heldBosses = [];
+
+/** The live timed bosses, to bring back on the next ground. Endless bosses respawn on their own. */
+function holdLiveBosses() {
+  const out = [];
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i];
+    if (!e.alive || !e.boss || e.legend || e.endlessGen > 0 || !e.bossTier) continue;
+    out.push({ tier: e.bossTier, hp: Math.max(0.05, e.hp / e.maxHp) });
+  }
+  return out;
+}
+
+/** Bring held bosses back, with the health they had left. */
+function releaseHeldBosses(list) {
+  for (const b of list) {
+    const e = spawnMiniboss(b.tier, true);
+    if (e) e.hp = Math.max(1, Math.round(e.maxHp * b.hp));
+  }
+}
 /** Clock time the way back opens after the boss falls, and where. */
 let portalBackAt = -1;
 const portalBackSpot = { x: 0, y: 0 };
@@ -1309,6 +1337,9 @@ function debugPortal() {
 /** Into the secret floor, at the darkest point of the fade. */
 function enterSecret() {
   const def = secretDef;
+  // Held aside, not queued: the boss queue drains in the secret room too, and a mini-boss
+  // must not walk into the legendary's arena.
+  heldBosses = holdLiveBosses();
   clearWorld();
   resetTraps();
   secretHadStairs = G.stairs.active;
@@ -1355,6 +1386,8 @@ function leaveSecret() {
   secretHadStairs = false;
   relocateTotems();
   G.banner = { text: floorLabel(), sub: 'BACK FROM THE SECRET FLOOR', t: 2.4 };
+  releaseHeldBosses(heldBosses);
+  heldBosses = [];
 }
 
 /** Drop the legendary's fight state and free its sheets. Safe to call when there is none. */
@@ -2520,7 +2553,8 @@ function drainBossQueue() {
   }
 }
 
-function spawnMiniboss(tier) {
+/** `quiet`: a boss brought back after a floor change, so no arrival banner or roar over the floor's own. */
+function spawnMiniboss(tier, quiet = false) {
   // Named, not "whatever is fifth in the stage list": that made the mini-boss silently change
   // identity every time the roster was reordered, which is a bug you only notice by accident.
   //
@@ -2553,6 +2587,7 @@ function spawnMiniboss(tier) {
   e.coinChance = 1;
   e.bossTier = tier;
 
+  if (quiet) { if (audioReady() && tier >= 4 && !pickMusic(G.stage.id)) playTrack(BOSS); return e; }
   sfx('boss');
   // Only switch to the chiptune boss theme if this stage has no supplied music -- cutting from a
   // streamed track to a synthesised one mid-fight is jarring.

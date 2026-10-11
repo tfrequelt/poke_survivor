@@ -65,11 +65,12 @@ export const LOOKS = {
   fireball: { seq: 'fx_flamethrower', scale: 1, rot: false, fps: 24, loop: 11, glow: '#ffb050' },
   fire_dome: { seq: 'fx_firedome', scale: 0.8, anchor: 'bottom' },
   flame: { seq: 'fx_flame', scale: 0.6, anchor: 'bottom', order: [0, 1, 2, 3, 2, 3, 2, 1, 0], loopFrom: 2 },
-  bolt: { seq: 'fx_bolt', scale: 1, anchor: 'bottom' },
-  spark: { seq: 'fx_spark', scale: 1, rot: false, fps: 18, glow: '#fff0a0' },
+  // Explorers of Sky's lightning column (the Thunderbolt sheet's bolt is the partners' Thunder).
+  bolt: { seq: 'fx_eos_lbolt', scale: 0.85, anchor: 'bottom' },
+  spark: { seq: 'fx_eos_lspark', scale: 0.45, rot: false, fps: 18, glow: '#fff0a0' },
   bubble: { seq: 'fx_bubble', scale: 1, rot: false, fps: 0, glow: '#a8e4ff' },
   geyser: { seq: 'fx_geyser', scale: 0.7, anchor: 'bottom', order: [0, 1, 2, 3, 2, 3, 1, 0] },
-  rock: { seq: 'fx_rock', scale: 1.2, rot: false, fps: 14 },
+  rock: { seq: 'fx_eos_greyrock', scale: 0.5, rot: false, fps: 14 },
   spire: { seq: 'fx_spire', scale: 0.8, anchor: 'bottom', order: [0, 1, 2, 3, 3, 3, 2, 1, 0] },
   boulder: { seq: 'fx_boulder', scale: 0.45, rot: false, fps: 0 },
   shard: { seq: 'fx_shard', scale: 0.6, rot: true, fps: 0, glow: '#e8e8f0' },
@@ -77,8 +78,8 @@ export const LOOKS = {
   tornado: { seq: 'fx_tornado', scale: 0.9, anchor: 'bottom', fps: 12, loop: 4 },
   // From the sheets the first pass left alone: Dialga and Palkia's moves in dragon_moves.png, the
   // Thunder Wave rings in dark_moves.png, the blue zigzag bolts in thunderbolt.png.
-  crescent: { seq: 'fx_crescent', scale: 1.6, rot: false, fps: 16, glow: '#ffffff' },
-  firestar: { seq: 'fx_firestar', scale: 0.8, rot: false, fps: 18, glow: '#ffb050' },
+  crescent: { seq: 'fx_eos_bluecres', scale: 0.42, rot: false, fps: 16, glow: '#ffffff' },
+  firestar: { seq: 'fx_eos_flamecres', scale: 0.8, rot: false, fps: 14, glow: '#ffb050' },
   ring: { seq: 'fx_ring', scale: 1, ring: true },
   zigzag: { seq: 'fx_zigzag', scale: 0.8, anchor: 'bottom', fps: 14 },
   outrage: { seq: 'fx_outrage', scale: 0.75, anchor: 'bottom', order: [0, 1, 2, 3, 2, 3, 4, 5] },
@@ -89,6 +90,17 @@ export const LOOKS = {
   bigbubble: { seq: 'fx_bigbubble', scale: 0.55, rot: false, fps: 0 },
   // Roar of Time's shockwave: the burst when a boss makes its last stand.
   roar: { seq: 'fx_roar', scale: 2.2 },
+  // Explorers of Sky's move effects, one new attack per legendary (assets/README.md lists them).
+  twin_icicle: { seq: 'fx_eos_twinicicle', scale: 1, fps: 12 },
+  ice_burst: { seq: 'fx_eos_iceburst', scale: 0.75 },
+  ember_shower: { seq: 'fx_eos_embers', scale: 0.55, anchor: 'bottom' },
+  zap_sphere: { seq: 'fx_eos_zapsphere', scale: 0.42 },
+  rock_burst: { seq: 'fx_eos_rockburst', scale: 0.7 },
+  blizzard_spike: { seq: 'fx_eos_blizzard', scale: 0.38, rot: true, fps: 0, glow: '#e8f4ff' },
+  gyro_ball: { seq: 'fx_eos_gyroball', scale: 0.55, rot: false, spin: 10, fps: 0, glow: '#c8d0e0' },
+  fire_pillar: { seq: 'fx_eos_firepillar', scale: 0.8, anchor: 'bottom' },
+  elec_fang: { seq: 'fx_eos_elecfang', scale: 0.6 },
+  water_burst: { seq: 'fx_eos_watersplash', scale: 0.9, anchor: 'bottom' },
 };
 
 /** Index 0 is "none". Projectiles carry these as plain numbers to keep their shape monomorphic. */
@@ -147,6 +159,10 @@ export const LEGENDS = [
       { id: 'air_slash', kind: 'fan', anim: 'Attack', windup: 0.45, cd: 1.0, weight: 3,
         count: 4, rageCount: 6, spread: 1.2, speed: 135, dmg: 12, volleys: 3, gap: 0.28, curve: 1.3,
         look: 'crescent' },
+      // Ice Shard Rain: twin icicles drop out of the sky onto where you stand, and shatter.
+      { id: 'ice_shard_rain', kind: 'strikes', anim: 'Charge', windup: 0.5, cd: 1.2, weight: 3,
+        pattern: 'follow', count: 4, rageCount: 6, delay: 0.75, stagger: 0.4, r: 18, dmg: 18,
+        look: 'twin_icicle', impact: 'ice_burst', fall: true, status: 'chill' },
     ],
     // Ice Body: every chunk of health it loses comes back at you as a shard of ice.
     trait2: { kind: 'shed', every: 0.025, speed: 150, dmg: 11, look: 'ice_shard', status: 'chill' },
@@ -180,6 +196,10 @@ export const LEGENDS = [
       // Fire stars thrown wide that turn round and come back to it -- dodge them twice.
       { id: 'fire_shuriken', kind: 'boomerang', anim: 'Shoot', windup: 0.45, cd: 1.1, weight: 3,
         count: 5, rageCount: 7, spread: 1.6, speed: 175, dmg: 13, out: 0.75, look: 'firestar', status: 'burn' },
+      // Ember Storm: showers of embers burst round you.
+      { id: 'ember_storm', kind: 'strikes', anim: 'Shoot', windup: 0.5, cd: 1.2, weight: 3,
+        pattern: 'random', count: 7, rageCount: 10, radius: 90, delay: 0.85, r: 16, dmg: 16,
+        look: 'ember_shower', status: 'burn' },
     ],
     // Heat: too close to it and you start to burn.
     trait2: { kind: 'heat', r: 78, status: 'burn' },
@@ -216,6 +236,10 @@ export const LEGENDS = [
       { id: 'thunder_wave', kind: 'waves', anim: 'Charge', windup: 0.5, cd: 1.2, weight: 3,
         count: 3, rageCount: 5, radius: 95, r1: 70, delay: 0.7, dur: 0.45, dmg: 14,
         look: 'ring', status: 'para' },
+      // Zap Sphere: balls of lightning swell where you stand and burst.
+      { id: 'zap_sphere', kind: 'strikes', anim: 'Charge', windup: 0.5, cd: 1.3, weight: 2,
+        pattern: 'follow', count: 3, rageCount: 4, delay: 0.9, stagger: 0.5, r: 26, dmg: 24,
+        look: 'zap_sphere', status: 'para' },
     ],
     // Static Storm: stand still too long and the lightning finds you.
     trait2: { kind: 'still', after: 1.2, delay: 0.65, r: 18, dmg: 22, look: 'bolt', status: 'para' },
@@ -258,6 +282,10 @@ export const LEGENDS = [
       { id: 'rock_tomb', kind: 'tomb', anim: 'RearUp', windup: 0.5, cd: 1.4, weight: 2,
         radius: 72, count: 14, fallDelay: 0.6, life: 3.2, dmg: 16, look: 'boulder_s',
         then: { count: 5, delay: 0.9, r: 14, dmg: 18, look: 'rock' } },
+      // Rock Wrecker: a boulder hurled high that lands in a burst of shattered stone.
+      { id: 'rock_wrecker', kind: 'lob', anim: 'Attack', windup: 0.55, cd: 1.4, weight: 2, rage: true,
+        flight: 1.0, r: 30, dmg: 28, look: 'boulder', impact: 'rock_burst',
+        burst: { count: 10, speed: 110, dmg: 10, look: 'rock' } },
     ],
     // Seismic Stomp: every few seconds of walking, the ground around it bursts.
     trait2: { kind: 'stomp', every: 3.0, r: 88, dur: 0.35, dmg: 16, look: 'dust' },
@@ -294,6 +322,10 @@ export const LEGENDS = [
       // Avalanche: blocks of ice slide across the room in lanes, each lane shown first.
       { id: 'avalanche', kind: 'avalanche', anim: 'Charge', windup: 0.5, cd: 1.3, weight: 2,
         lanes: 4, rageLanes: 6, speed: 190, warn: 0.9, r: 16, dmg: 20, look: 'ice_block_s', status: 'chill' },
+      // Blizzard Wall: fans of freezing spikes driven at you.
+      { id: 'blizzard_wall', kind: 'fan', anim: 'Shoot', windup: 0.5, cd: 1.1, weight: 3,
+        count: 6, rageCount: 9, spread: 0.9, speed: 140, dmg: 13, volleys: 2, gap: 0.35,
+        look: 'blizzard_spike', status: 'chill' },
     ],
     // Frostbite: stay near it and the cold builds in you until you freeze solid.
     trait2: { kind: 'frostbite', r: 85, build: 2.5, freeze: 1.5, dmg: 14 },
@@ -330,6 +362,9 @@ export const LEGENDS = [
       // Gyro Rend: steel blades spun off its body in a widening, curling spiral.
       { id: 'gyro_rend', kind: 'spiral', anim: 'Rotate', windup: 0.5, cd: 1.2, weight: 2,
         dur: 1.6, rate: 6, rageRate: 9, arms: 4, turn: 3.0, speed: 120, curve: 1.5, dmg: 13, look: 'crescent' },
+      // Gyro Spikes: rings of spiked steel balls spun out of it.
+      { id: 'gyro_spikes', kind: 'ring', anim: 'Rotate', windup: 0.5, cd: 1.2, weight: 3,
+        count: 12, waves: 2, rageWaves: 3, gap: 0.4, speed: 110, dmg: 12, look: 'gyro_ball' },
     ],
     // Magnet Pull: on a clock, it drags you toward it. Walk against it.
     trait2: { kind: 'magnet', every: 9, warn: 0.8, dur: 1.6, pull: 85 },
@@ -370,6 +405,10 @@ export const LEGENDS = [
       { id: 'sacred_fire', kind: 'line', anim: 'SpAttack', windup: 0.6, cd: 1.4, weight: 2,
         count: 9, step: 36, gap: 0.07, delay: 0.6, r: 18, dmg: 24, lines: 4, fan: 1.5708,
         look: 'outrage', status: 'burn' },
+      // Flame Pillars: columns of fire erupt in a ring round you.
+      { id: 'flame_pillars', kind: 'strikes', anim: 'SpAttack', windup: 0.55, cd: 1.2, weight: 3,
+        pattern: 'around', count: 6, rageCount: 9, radius: 75, delay: 0.85, waves: 1, rageWaves: 2,
+        wave: 0.5, r: 18, dmg: 20, look: 'fire_pillar', status: 'burn' },
     ],
     // Volcanic Roar: it roars, hurling you back, and every patch of burning ground explodes.
     trait2: { kind: 'roar', every: 9, r: 100, push: 150, bursts: 8, dmg: 18 },
@@ -406,6 +445,10 @@ export const LEGENDS = [
       // Volt Chase: bolts that crawl along the ground after you.
       { id: 'volt_chase', kind: 'tornado', anim: 'Shock', windup: 0.45, cd: 1.2, weight: 2,
         count: 3, rageCount: 5, speed: 62, life: 4.5, r: 11, dmg: 15, look: 'zigzag', status: 'para' },
+      // Spark Fang: electric jaws snap shut where you stand, one after another.
+      { id: 'spark_fang', kind: 'strikes', anim: 'QuickStrike', windup: 0.4, cd: 1.1, weight: 3,
+        pattern: 'follow', count: 3, rageCount: 5, delay: 0.6, stagger: 0.3, r: 20, dmg: 22,
+        look: 'elec_fang', status: 'para' },
     ],
     // Electric Terrain: patches of floor around you charge up, then crackle.
     trait2: { kind: 'terrain', every: 7, count: 5, size: 36, radius: 90, warn: 1.2, life: 2.5, dmg: 12, status: 'para' },
@@ -443,6 +486,10 @@ export const LEGENDS = [
       { id: 'hydro_sphere', kind: 'sphere', anim: 'Shoot', windup: 0.5, cd: 1.2, weight: 2,
         speed: 70, life: 2.4, dmg: 20, look: 'bigbubble',
         burst: { count: 16, rageCount: 22, speed: 120, dmg: 10, look: 'bubble', status: 'chill' } },
+      // Water Pulse: rings of water bursting out of the ground, wave on wave.
+      { id: 'water_pulse', kind: 'strikes', anim: 'Charge', windup: 0.6, cd: 1.2, weight: 3,
+        pattern: 'rings', rings: [[50, 8], [95, 13], [140, 18]], rageRings: 3, baseRings: 2,
+        delay: 0.6, ringGap: 0.35, r: 14, dmg: 17, look: 'water_burst', fromBoss: true },
     ],
     // Aurora Veil: on a clock, a shimmering veil -- whatever you hit it with comes back as bubbles.
     trait2: { kind: 'veil', every: 11, dur: 3, per: 0.012, speed: 130, dmg: 10, look: 'bubble', status: 'chill' },
