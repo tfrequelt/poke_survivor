@@ -25,13 +25,14 @@ const SPAWN_INTERVAL = 0.5;               // the director ticks twice a second
 const SPS_BASE = 1.6, SPS_LIN = 0.55, SPS_QUAD = 0.03;
 const HP_LIN = 0.10, HP_QUAD = 0.018;
 const DMG_LIN = 0.06, DMG_QUAD = 0.004;
-const SPD_LIN = 0.012, SPD_MAX = 1.30;
+// Everything starts 15% quicker than it used to, and quickens faster over the run.
+const SPD_BASE = 1.15, SPD_LIN = 0.018, SPD_MAX = 1.45;
 const CAP_BASE = 25, CAP_SLOPE = 13, CAP_MAX = 280;
 
 export const sps = (m) => SPS_BASE + SPS_LIN * m + SPS_QUAD * m * m;
 export const hpMult = (m) => 1 + HP_LIN * m + HP_QUAD * m * m;
 export const dmgMult = (m) => 1 + DMG_LIN * m + DMG_QUAD * m * m;
-export const spdMult = (m) => Math.min(SPD_MAX, 1 + SPD_LIN * m);
+export const spdMult = (m) => SPD_BASE * Math.min(SPD_MAX, 1 + SPD_LIN * m);
 export const aliveCap = (m) => Math.min(CAP_MAX, CAP_BASE + CAP_SLOPE * m);
 
 // Set pieces, by run time in seconds.

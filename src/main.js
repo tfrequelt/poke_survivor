@@ -52,7 +52,7 @@ import {
 } from './successes.js';
 import { SUCCESSES } from './data/successes.js';
 import { createPlayer, updatePlayer, setReviveFx, setLegendTouch, clearStatuses, setBagRevive, setRoughSkinHook } from './player.js';
-import { initEnemyDefs, updateEnemies, spawnEnemy, ringPoint, resetAttacks, aiIndex } from './enemies.js';
+import { initEnemyDefs, updateEnemies, spawnEnemy, ringPoint, resetAttacks, aiIndex, endlessGrowth } from './enemies.js';
 import {
   legend, hazards, fx as legendFx, beginLegend, clearLegend, endLegend, updateLegend,
   legendEnemyDef, legendTouched,
@@ -854,6 +854,7 @@ function secretStage() {
 function startEndless() {
   stopJingle();
   G.endless = true;
+  G.endlessAt = G.runTime;       // endless's own clock: what everything grows by (enemies.js)
   G.victoryT = 0;
   G.banner = { text: 'THE DUNGEON DOES NOT END', sub: 'BOSSES EVERY TWO MINUTES', t: 3 };
   endlessStairsAt = G.runTime + 20;
@@ -2586,6 +2587,7 @@ function spawnMiniboss(tier, quiet = false) {
   e.knockResist = 0.92;
   e.coinChance = 1;
   e.bossTier = tier;
+  endlessGrowth(e, false);
 
   if (quiet) { if (audioReady() && tier >= 4 && !pickMusic(G.stage.id)) playTrack(BOSS); return e; }
   sfx('boss');

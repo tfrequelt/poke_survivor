@@ -54,6 +54,13 @@ export const luckOf = () => {
 /** Luck as a 0..1 fraction of the cap, which is what most of the rolls actually want. */
 export const luckK = () => luckOf() / LUCK_CAP;
 
+/**
+ * Every run starts below par, whoever the partner: less damage, slower attacks and feet, less
+ * experience. It multiplies the finished stat, so it holds for every form (each brings its own
+ * base), and the Kecleon Shop sells more ranks to buy it back and past it (data/shop.js).
+ */
+const START = { power: 0.85, attackSpeed: 0.88, moveSpeed: 0.92, xpGain: 0.85 };
+
 // Pre-allocated scratch. Resolving must not allocate, because evolutions resolve mid-frame.
 const _flat = {};
 const _inc = {};
@@ -115,7 +122,7 @@ export function resolveStats() {
   const form = (G.form && G.form.stats) || null;
   for (const k of STAT_KEYS) {
     const base = form && form[k] !== undefined ? form[k] : BASE[k];
-    s[k] = (base + _flat[k]) * (1 + _inc[k]) * _more[k];
+    s[k] = (base + _flat[k]) * (1 + _inc[k]) * _more[k] * (START[k] || 1);
   }
 
   // All clamps live here, in one place, so no caller has to remember them.

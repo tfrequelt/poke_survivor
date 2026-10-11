@@ -6,7 +6,8 @@
 // `mods` is the same shape the level-up cards use in upgrades.js, so addMods() consumes it
 // unchanged -- one rank of Might here and one Might card in a run are the same modifier. The
 // values are deliberately smaller than the in-run cards: this is a head start, not a shortcut
-// past the run itself.
+// past the run itself. A run starts below par (stats.js BASE), so the stat rows run longer than
+// they used to -- the first few ranks buy the start back, the rest are the head start.
 //
 // Three rows are not stats at all. REROLLS / BANISHES / SKIPS set the level-up screen's starting
 // charges, which main.js hardcoded to one until this table existed. They carry `start` instead
@@ -25,37 +26,37 @@ const stat = (id, name, desc, stats, base, ranks, mods) => ({
 
 export const SHOP_ITEMS = [
   // --- offence ---
-  stat('s_power', 'MIGHT', '+8% attack power', 'OFFENCE', 120, 7,
+  stat('s_power', 'MIGHT', '+8% attack power', 'OFFENCE', 120, 12,
     [{ stat: 'power', op: 'inc', value: 0.08 }]),
-  stat('s_haste', 'HASTE', '+6% attack speed', 'OFFENCE', 120, 7,
+  stat('s_haste', 'HASTE', '+6% attack speed', 'OFFENCE', 120, 12,
     [{ stat: 'attackSpeed', op: 'inc', value: 0.06 }]),
-  stat('s_area', 'REACH', '+7% area of effect', 'OFFENCE', 100, 7,
+  stat('s_area', 'REACH', '+7% area of effect', 'OFFENCE', 100, 10,
     [{ stat: 'area', op: 'inc', value: 0.07 }]),
-  stat('s_amount', 'MULTISHOT', '+1 projectile', 'OFFENCE', 400, 5,
+  stat('s_amount', 'MULTISHOT', '+1 projectile', 'OFFENCE', 400, 6,
     [{ stat: 'amount', op: 'flat', value: 1 }]),
-  stat('s_crit', 'FOCUS', '+3% critical chance', 'OFFENCE', 110, 7,
+  stat('s_crit', 'FOCUS', '+3% critical chance', 'OFFENCE', 110, 10,
     [{ stat: 'crit', op: 'flat', value: 0.03 }]),
-  stat('s_cooldown', 'ATTUNEMENT', '-4% ability cooldown', 'OFFENCE', 150, 7,
+  stat('s_cooldown', 'ATTUNEMENT', '-4% ability cooldown', 'OFFENCE', 150, 10,
     [{ stat: 'cooldown', op: 'inc', value: -0.04 }]),
 
   // --- survival ---
-  stat('s_hp', 'VITALITY', '+10 max HP', 'SURVIVAL', 90, 7,
+  stat('s_hp', 'VITALITY', '+10 max HP', 'SURVIVAL', 90, 10,
     [{ stat: 'maxHp', op: 'flat', value: 10 }]),
-  stat('s_armor', 'HIDE', '+1 armour', 'SURVIVAL', 140, 7,
+  stat('s_armor', 'HIDE', '+1 armour', 'SURVIVAL', 140, 10,
     [{ stat: 'armor', op: 'flat', value: 1 }]),
-  stat('s_speed', 'SWIFTNESS', '+5% movement speed', 'SURVIVAL', 130, 6,
+  stat('s_speed', 'SWIFTNESS', '+5% movement speed', 'SURVIVAL', 130, 10,
     [{ stat: 'moveSpeed', op: 'inc', value: 0.05 }]),
   stat('s_revive', 'REVIVE', 'Get up once at half health', 'SURVIVAL', 900, 4,
     [{ stat: 'revives', op: 'flat', value: 1 }]),
 
   // --- fortune ---
-  stat('s_xp', 'SCHOLAR', '+7% experience gained', 'FORTUNE', 110, 7,
+  stat('s_xp', 'SCHOLAR', '+7% experience gained', 'FORTUNE', 110, 12,
     [{ stat: 'xpGain', op: 'inc', value: 0.07 }]),
-  stat('s_greed', 'GREED', '+10% gold gained', 'FORTUNE', 130, 7,
+  stat('s_greed', 'GREED', '+10% gold gained', 'FORTUNE', 130, 10,
     [{ stat: 'greed', op: 'inc', value: 0.10 }]),
-  stat('s_magnet', 'MAGNETISM', '+12% pickup range', 'FORTUNE', 80, 6,
+  stat('s_magnet', 'MAGNETISM', '+12% pickup range', 'FORTUNE', 80, 8,
     [{ stat: 'magnet', op: 'inc', value: 0.12 }]),
-  stat('s_luck', 'LUCK', '+5% luck', 'FORTUNE', 160, 6,
+  stat('s_luck', 'LUCK', '+5% luck', 'FORTUNE', 160, 8,
     [{ stat: 'luck', op: 'flat', value: 0.05 }]),
 
   // --- draft charges: not stats, read by startRun ---

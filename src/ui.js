@@ -1630,9 +1630,10 @@ export function shopRows() {
 
 /** Rank pips, so an owned rank reads at a glance without a number to parse. */
 function drawRanks(x, y, owned, max, color) {
+  const step = max > 7 ? 3 : 5, w = max > 7 ? 2 : 3;
   for (let i = 0; i < max; i++) {
     ctx.fillStyle = i < owned ? color : '#24386e';
-    ctx.fillRect(x + i * 5, y + 1, 3, 5);
+    ctx.fillRect(x + i * step, y + 1, w, 5);
   }
 }
 

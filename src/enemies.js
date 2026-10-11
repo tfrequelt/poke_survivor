@@ -500,7 +500,24 @@ export function spawnEnemy(def, x, y, opts) {
   e.sprBase = elite ? def.sprEliteBase : def.sprBase;
   e.nd = def.sprDirs;
   e.nf = def.sprFrames;
+  endlessGrowth(e, true);
   return e;
+}
+
+/**
+ * Endless mode's climb, by minutes since it began: every foe and boss spawned gets more health
+ * (+15% a minute, quickening), a point of armour every 2 minutes, up to 60% more speed, and
+ * knockback resistance rising to 95%. spawnMiniboss() calls it again with `hp` false after it
+ * sets a boss's own speed and weight, so a boss climbs too without its health counted twice.
+ */
+export function endlessGrowth(e, hp) {
+  if (!G.endless || e.legend || e.prop) return;
+  const t = Math.max(0, (G.runTime - (G.endlessAt || 0)) / 60);
+  if (t <= 0) return;
+  if (hp) e.maxHp = e.hp = Math.max(1, Math.round(e.maxHp * (1 + 0.15 * t + 0.01 * t * t)));
+  e.speed *= 1 + Math.min(0.6, 0.03 * t);
+  e.armor = (e.def.armor || 0) + Math.min(20, Math.floor(t / 2));
+  e.knockResist = Math.min(0.95, Math.max(e.knockResist, (e.def.knockResist || 0) + Math.min(0.8, 0.06 * t)));
 }
 
 // --- Update -----------------------------------------------------------------

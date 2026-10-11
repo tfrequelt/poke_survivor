@@ -532,6 +532,9 @@ down.
 - **They escalate:** each endless boss has +35% health, +15% damage and two more shots in every
   volley than the one before, and attacks a little faster (down to half its cooldown). From the
   third on, it calls in the stage's own Pokémon, more of them and more often each time.
+- **Everything grows with time in endless,** bosses and ordinary Pokémon alike, by the minutes
+  since endless began: about +15% health a minute (and faster later on), +1 armour every two
+  minutes, up to 60% more speed, and knockback resistance rising to 95%.
 - **Stairs and portals still work:** a staircase appears 20 seconds into endless and again three
   minutes after each one you take (down to the last floor), and the legendary portal can still
   open. No endless boss follows you onto a legendary's floor.
@@ -623,6 +626,11 @@ title screen (`S`). Everything there is permanent and applies to every run after
 | Survival | Vitality, Hide, Swiftness, Revive (a second chance at half health) |
 | Fortune | Scholar, Greed, Magnetism, Luck |
 | Draft | Extra rerolls, banishes and skips on the level-up screen |
+
+Every run starts **below par**: 85% damage, 88% attack speed, 92% movement speed and 85%
+experience, whoever the partner. The shop's stat rows run longer to make up for it -- Might, Haste
+and Scholar have 12 ranks, most others 10 -- so the first ranks buy the start back and the rest go
+past it.
 
 Ranks stack by repetition rather than by scaling, so five ranks of a +8% upgrade read as +40% and
 not x1.47 -- the same way five Might cards do in a run. **Reset Progress** refunds every coin ever
