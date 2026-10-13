@@ -86,7 +86,14 @@
     "fraxure": "assets/sprites/pokemon_base/fraxure",
     "shiny_fraxure": "assets/sprites/shiny/shiny_fraxure",
     "haxorus": "assets/sprites/pokemon_base/haxorus",
-    "shiny_haxorus": "assets/sprites/shiny/shiny_haxorus"
+    "shiny_haxorus": "assets/sprites/shiny/shiny_haxorus",
+    "tropius": "assets/sprites/pokemon_base/tropius",
+    "paras": "assets/sprites/pokemon_base/paras",
+    "parasect": "assets/sprites/pokemon_base/parasect",
+    "shellos": "assets/sprites/pokemon_base/shellos",
+    "gastrodon": "assets/sprites/pokemon_base/gastrodon",
+    "glimmet": "assets/sprites/pokemon_base/glimmet",
+    "glimmora": "assets/sprites/pokemon_base/glimmora"
   },
   "portraits": {
     "dartrix": "assets/portraits/dartrix_portrait.png",
@@ -12382,7 +12389,14 @@
     "baltoy",
     "claydol",
     "wingull",
-    "pelipper"
+    "pelipper",
+    "tropius",
+    "paras",
+    "parasect",
+    "shellos",
+    "gastrodon",
+    "glimmet",
+    "glimmora"
   ],
   "particles": "assets/pmd/particles.json"
 }

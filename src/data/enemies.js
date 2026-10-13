@@ -412,6 +412,65 @@ export const ENEMIES = [
     attack: { kind: 'burst', count: 5, spread: 0.8, range: 270, cooldown: 3.2, windup: 0.6, damage: 12, speed: 180 }, coinChance: 0.20, armor: 3, knockResist: 0.7,
     stages: ['beach'], from: 14, to: 20, weight: 4,
   },
+  // --- Later additions: a poisonous grass line, Tropius, Shellos's line and Glimmet's -------
+  //
+  // `touch` is a status a contact hit leaves on the player (player.js), as long as the hit landed.
+  {
+    id: 'paras', name: 'Paras', dex: 50,
+    shape: 'paras', fallback: 'bug', palette: 'grub',
+    // Its mushrooms' spores: a bite poisons you for a few seconds.
+    hp: 22, dmg: 6, speed: 20, r: 4.5, mass: 1.2, xp: 2,
+    ai: 'chase', coinChance: 0.06, touch: 'poison',
+    stages: ['grass'], from: 2, to: 12, weight: 7,
+  },
+  {
+    id: 'parasect', name: 'Parasect', dex: 51,
+    shape: 'parasect', fallback: 'bug', palette: 'poison',
+    hp: 95, dmg: 13, speed: 18, r: 6, mass: 3, xp: 5,
+    ai: 'chase', coinChance: 0.12, touch: 'poison', armor: 1,
+    stages: ['grass'], from: 8, to: 20, weight: 5,
+  },
+  {
+    id: 'tropius', name: 'Tropius', dex: 52,
+    shape: 'tropius', fallback: 'quad_small', palette: 'ground',
+    // The late grass stage's big flyer: slow to fall, and it glides in over the crowd.
+    hp: 170, dmg: 16, speed: 30, r: 7, mass: 4, xp: 8,
+    ai: 'sine', flying: true, coinChance: 0.16, knockResist: 0.5,
+    stages: ['grass'], from: 10, to: 20, weight: 4,
+  },
+  {
+    id: 'shellos', name: 'Shellos', dex: 53,
+    shape: 'shellos', fallback: 'round_big', palette: 'water',
+    hp: 20, dmg: 6, speed: 18, r: 4.5, mass: 1.2, xp: 1,
+    swims: true, ai: 'chase', coinChance: 0.06,
+    stages: ['beach'], from: 1, to: 11, weight: 8,
+  },
+  {
+    id: 'gastrodon', name: 'Gastrodon', dex: 54,
+    shape: 'gastrodon', fallback: 'round_big', palette: 'water',
+    // Slow and soft-bodied, but it spits mud from range.
+    hp: 120, dmg: 14, speed: 18, r: 6.5, mass: 4, xp: 6,
+    swims: true, ai: 'chase', coinChance: 0.14,
+    attack: { kind: 'shot', range: 200, cooldown: 3.2, windup: 0.5, damage: 9, speed: 120 },
+    stages: ['beach'], from: 9, to: 20, weight: 5,
+  },
+  {
+    id: 'glimmet', name: 'Glimmet', dex: 55,
+    shape: 'glimmet', fallback: 'round_big', palette: 'rock',
+    // A poisonous crystal: from five minutes, and its touch poisons.
+    hp: 40, dmg: 9, speed: 22, r: 4.5, mass: 1.5, xp: 3,
+    ai: 'chase', coinChance: 0.08, armor: 2, touch: 'poison',
+    stages: ['cave'], from: 5, to: 14, weight: 6,
+  },
+  {
+    id: 'glimmora', name: 'Glimmora', dex: 56,
+    shape: 'glimmora', fallback: 'round_big', palette: 'poison',
+    // Glimmet grown: from ten minutes, it scatters toxic crystals and its touch poisons too.
+    hp: 150, dmg: 16, speed: 20, r: 6.5, mass: 4, xp: 7,
+    ai: 'chase', coinChance: 0.16, armor: 4, knockResist: 0.6, touch: 'poison',
+    attack: { kind: 'burst', count: 5, spread: 1.2, range: 210, cooldown: 3.6, windup: 0.6, damage: 10, speed: 120 },
+    stages: ['cave'], from: 10, to: 20, weight: 4,
+  },
 ];
 
 /**

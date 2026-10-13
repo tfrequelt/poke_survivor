@@ -6,7 +6,7 @@ import { G } from './state.js';
 import { moveAxis } from './input.js';
 import { dist2, clampToBounds } from './util.js';
 import { enemies, cellRange, cellStart, cellItems, GW } from './world.js';
-import { damagePlayer, burnPlayer } from './combat.js';
+import { damagePlayer, burnPlayer, statusPlayer } from './combat.js';
 
 /** Set by main.js: Rough Skin's counter-hit, under its own damage source. */
 let roughSkinHook = null;
@@ -257,6 +257,8 @@ function contactDamage(p, dt) {
         const dmg = (e.weakenT > 0 ? e.dmg * 0.7 : e.dmg) * (G.stats.contactMult || 1) * (e.aged ? 0.7 : 1);
         if (damagePlayer(dmg)) {
           e.contactCd = CONTACT_CD;
+          // A foe whose touch leaves a status (Paras's spores, Glimmet's poison).
+          if (e.def.touch) statusPlayer(e.def.touch);
           if (e.legend && onLegendTouch) onLegendTouch(e);
           // Haxorus's Rough Skin: whatever touched you is cut on the scales.
           if (G.roughSkin && roughSkinHook) roughSkinHook(e);

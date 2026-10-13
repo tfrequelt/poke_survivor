@@ -695,12 +695,14 @@ three different places rather than one roster reskinned:
 
 | Stage | Lines |
 |---|---|
-| **Grass** (14) | Rattata→Raticate, Caterpie→Metapod→Butterfree, Spearow→Fearow, Pidgey→Pidgeotto→Pidgeot, Applin→Flapple *and* Appletun, Tauros |
-| **Cave** (13) | Zubat→Crobat, Diglett→Dugtrio, Geodude→Graveler, Roggenrola→Boldore→Gigalith, Aron→Lairon→Aggron, Skarmory |
-| **Beach** (11) | Marill→Azumarill, Poliwag→Poliwhirl→Poliwrath, Zigzagoon→Linoone, Poochyena→Mightyena, Sandygast→Palossand |
+| **Grass** (14) | Rattata→Raticate, Caterpie→Metapod→Butterfree, Spearow→Fearow, Pidgey→Pidgeotto→Pidgeot, Applin→Flapple *and* Appletun, Tauros, Paras→Parasect, Tropius |
+| **Cave** (13) | Zubat→Crobat, Diglett→Dugtrio, Geodude→Graveler, Roggenrola→Boldore→Gigalith, Aron→Lairon→Aggron, Skarmory, Glimmet→Glimmora |
+| **Beach** (11) | Marill→Azumarill, Poliwag→Poliwhirl→Poliwrath, Zigzagoon→Linoone, Poochyena→Mightyena, Sandygast→Palossand, Shellos→Gastrodon |
 
 Skarmory and Tauros spawn only in the last few minutes, so you meet each as a mini-boss first and
-as a regular enemy afterwards.
+as a regular enemy afterwards. Tropius glides in from minute ten, Glimmet from minute five and
+Glimmora from ten. **Paras, Parasect, Glimmet and Glimmora are poisonous**: a hit from one leaves
+you poisoned for a few seconds (an enemy's `touch` status in `src/data/enemies.js`).
 
 **Nine of the thirty-eight shoot back**, all of them late forms — Graveler, Gigalith, Aggron,
 Skarmory, Fearow, Pidgeot, Butterfree, Poliwrath and Palossand — so nothing ranged turns up before
