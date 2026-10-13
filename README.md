@@ -337,7 +337,7 @@ An overloaded weapon draws with the **Gravity Circuit particle sprites** — its
 kill and signature effects — recoloured to its **three-colour palette** (main, trail, accent), and
 about twenty-five overloads fade through their colours as they fire. Its marks show on the enemies
 (rupture pips, a doom ring, polarity signs, charm hearts, ice), and an overload with a state
-(heat, tide, momentum, souls, guard, pinch) gets a small bar bottom right. Its procs have their own
+(heat, tide, momentum, souls, guard, pinch) gets a small bar bottom right, above the minimap. Its procs have their own
 line in the damage breakdown, under the overload's name. Reroll and banish do not apply to an
 overload draft; skip puts it off to the next level-up. An overloaded weapon keeps its overload when
 it evolves; one that evolves first offers its evolved form's own three.
@@ -659,6 +659,14 @@ a result that already exists. Trading a move in opens a second page showing ever
 plus **Keep Everything**, which is a real option and still pays out. The offered move always
 respects your type gating, and if there is nothing legal left to offer the wheel pays in stats
 instead of handing over an empty menu.
+
+## Minimap
+
+A small square in the bottom-right corner shows the whole floor: its ground and ponds, the part of
+it on screen, and you. On it are marked what the screen-edge arrows point at -- the strange portal
+(a cyan ring), totems that still have something to give (a diamond in the totem's colour), the
+stairs once a Luminous Orb reveals them (a little staircase) -- and any boss or legendary, as a
+pulsing red dot. The ground and water are drawn once per floor, so it costs nothing to keep up.
 
 ## Pickups and systems
 

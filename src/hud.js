@@ -25,6 +25,7 @@ import { KIND_KEYS } from './pickups.js';
 import { TOTEM_KINDS } from './data/totems.js';
 import { activeTrial, fortuneCost } from './totems.js';
 import { FORTUNE_USES } from './data/totems.js';
+import { waterAtWorld, pondsActive } from './terrain.js';
 
 const PAD = 6;
 
@@ -38,6 +39,7 @@ export function drawHud() {
   drawRelics();
   drawLegendBar();
   drawPortalMarker();
+  drawMinimap();
   drawBag();
   drawBuffs();
   drawOverloadStates();
@@ -57,7 +59,8 @@ export function drawHud() {
 // pinch that is live. Its weapon's own sprite, a label and a bar in the overload's colour.
 
 function drawOverloadStates() {
-  let y = VH - 14;
+  // Stacked above the minimap, which owns the corner.
+  let y = VH - MINI - PAD - 12;
   for (let i = G.weapons.length - 1; i >= 0; i--) {
     const w = G.weapons[i];
     const d = w.ovl;
@@ -393,6 +396,123 @@ export function drawEdgeMarker(wx, wy, color) {
   ctx.closePath();
   ctx.fill();
   ctx.globalAlpha = 1;
+}
+
+// --- The minimap ---------------------------------------------------------------
+//
+// Bottom right: the whole floor in a small square -- its ground and ponds, the part you can see,
+// and you -- with what the edge arrows point at marked on it: the strange portal, totems that
+// still have something to give, the stairs once a Luminous Orb shows them, and any boss.
+
+const MINI = 68;
+let miniCanvas = null, miniKey = '';
+
+/** The floor's ground and water, drawn once per floor into a small canvas. */
+function miniGround(b, w, h) {
+  const key = `${G.seed}:${G.floor}:${G.secret}:${b.minX}:${b.maxX}:${b.minY}:${b.maxY}:${G.stage && G.stage.id}`;
+  if (miniCanvas && miniKey === key) return miniCanvas;
+  miniKey = key;
+  if (!miniCanvas) miniCanvas = document.createElement('canvas');
+  miniCanvas.width = w; miniCanvas.height = h;
+  const g = miniCanvas.getContext('2d');
+  const ground = G.stage && G.stage.ground;
+  g.fillStyle = G.secret ? '#1c1830' : (ground && ground.base) || '#2f4a3a';
+  g.fillRect(0, 0, w, h);
+  if (!G.secret && pondsActive()) {
+    g.fillStyle = '#2c6cc0';
+    const sx = (b.maxX - b.minX) / w, sy = (b.maxY - b.minY) / h;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (waterAtWorld(b.minX + (x + 0.5) * sx, b.minY + (y + 0.5) * sy)) g.fillRect(x, y, 1, 1);
+      }
+    }
+  }
+  return miniCanvas;
+}
+
+function drawMinimap() {
+  const b = G.bounds, p = G.player;
+  if (!b || !p || G.runOver) return;
+  const bw = b.maxX - b.minX, bh = b.maxY - b.minY;
+  // The floor's shape, fitted into the square.
+  const k = MINI / Math.max(bw, bh);
+  const w = Math.max(8, Math.round(bw * k)), h = Math.max(8, Math.round(bh * k));
+  const x0 = VW - PAD - MINI + Math.round((MINI - w) / 2), y0 = VH - PAD - MINI + Math.round((MINI - h) / 2);
+  const mx = (wx) => x0 + (wx - b.minX) * k, my = (wy) => y0 + (wy - b.minY) * k;
+
+  ctx.fillStyle = 'rgba(6,10,26,0.75)';
+  ctx.fillRect(x0 - 2, y0 - 2, w + 4, h + 4);
+  ctx.globalAlpha = 0.8;
+  ctx.drawImage(miniGround(b, w, h), x0, y0);
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = '#7a8ac8';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x0 - 1.5, y0 - 1.5, w + 3, h + 3);
+
+  // What is on screen right now.
+  ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+  ctx.strokeRect(Math.round(mx(G.cam.x - VW / 2)) + 0.5, Math.round(my(G.cam.y - VH / 2)) + 0.5,
+    Math.max(2, Math.round(VW * k)), Math.max(2, Math.round(VH * k)));
+
+  const blink = (Math.sin(G.clock * 6) + 1) * 0.5;
+  // Bosses: a red dot that pulses.
+  for (let i = 0; i < enemies.length; i++) {
+    const e = enemies[i];
+    if (!e.alive || !(e.boss || e.legend)) continue;
+    miniDot(mx(e.x), my(e.y), 2, blink > 0.5 ? '#ff4a4a' : '#a01818');
+  }
+  if (!G.secret) {
+    // Totems still worth a visit: a diamond in the totem's colour.
+    if (G.totems) {
+      for (const t of G.totems) {
+        if (t.state === 'idle' || t.state === 'awake' || t.state === 'trial') miniDiamond(mx(t.x), my(t.y), TOTEM_KINDS[t.kind].color);
+      }
+    }
+    // The strange portal: a ring that breathes.
+    if (G.portal.active) miniRing(mx(G.portal.x), my(G.portal.y), 2 + blink, '#a8f0ff');
+    // The stairs, once a Luminous Orb shows the way.
+    if (G.lumFloor && G.stairs.active) miniStairs(mx(G.stairs.x), my(G.stairs.y));
+  }
+  // You: a white arrow toward where you face.
+  const px = Math.round(mx(p.x)), py = Math.round(my(p.y));
+  ctx.fillStyle = '#101018';
+  ctx.fillRect(px - 2, py - 2, 5, 5);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(px - 1, py - 1, 3, 3);
+  const fx = p.dir ? 1 : -1;
+  ctx.fillRect(px + fx * 2, py, 1, 1);
+}
+
+function miniDot(x, y, r, color) {
+  ctx.fillStyle = '#101018';
+  ctx.fillRect(Math.round(x) - r - 1, Math.round(y) - r - 1, r * 2 + 2, r * 2 + 2);
+  ctx.fillStyle = color;
+  ctx.fillRect(Math.round(x) - r, Math.round(y) - r, r * 2, r * 2);
+}
+
+function miniDiamond(x, y, color) {
+  x = Math.round(x); y = Math.round(y);
+  ctx.fillStyle = '#101018';
+  ctx.fillRect(x - 1, y - 3, 3, 7); ctx.fillRect(x - 3, y - 1, 7, 3);
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y - 2, 1, 5); ctx.fillRect(x - 2, y, 5, 1); ctx.fillRect(x - 1, y - 1, 3, 3);
+}
+
+function miniRing(x, y, r, color) {
+  ctx.strokeStyle = '#101018';
+  ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(Math.round(x) + 0.5, Math.round(y) + 0.5, r, 0, Math.PI * 2); ctx.stroke();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(Math.round(x) + 0.5, Math.round(y) + 0.5, r, 0, Math.PI * 2); ctx.stroke();
+}
+
+function miniStairs(x, y) {
+  x = Math.round(x); y = Math.round(y);
+  ctx.fillStyle = '#101018';
+  ctx.fillRect(x - 3, y - 3, 7, 7);
+  ctx.fillStyle = '#ffe14a';
+  ctx.fillRect(x - 2, y + 1, 5, 1); ctx.fillRect(x - 1, y - 1, 4, 1); ctx.fillRect(x, y - 2, 2, 1);
 }
 
 // --- The Explorer's Bag --------------------------------------------------------
